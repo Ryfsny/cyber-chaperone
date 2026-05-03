@@ -1,0 +1,117 @@
+import { useListTrips } from "@workspace/api-client-react";
+import { Link } from "wouter";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { AlertCircle, CheckCircle2, AlertTriangle, MessageSquare, Clock } from "lucide-react";
+
+export default function Dashboard() {
+  const { data: trips = [], isLoading } = useListTrips();
+
+  const sortedTrips = [...trips].sort((a, b) => {
+    const order = { red: 0, amber: 1, green: 2 };
+    if (order[a.status] !== order[b.status]) {
+      return order[a.status] - order[b.status];
+    }
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  });
+
+  return (
+    <div className="flex-1 flex flex-col h-full overflow-hidden">
+      <header className="h-16 px-8 flex items-center border-b border-border bg-card shrink-0">
+        <h1 className="text-lg uppercase tracking-widest font-bold text-foreground">Active Operations</h1>
+      </header>
+
+      <div className="flex-1 overflow-auto p-8">
+        {isLoading ? (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-48 border border-border bg-card animate-pulse rounded-sm" />
+            ))}
+          </div>
+        ) : trips.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+            <div className="w-16 h-16 border-2 border-dashed border-muted-foreground/30 flex items-center justify-center mb-4">
+              <CheckCircle2 className="w-8 h-8 opacity-50" />
+            </div>
+            <p className="uppercase tracking-widest text-sm">No active operations</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
+            {sortedTrips.map((trip) => {
+              const StatusIcon = 
+                trip.status === 'red' ? AlertCircle :
+                trip.status === 'amber' ? AlertTriangle : CheckCircle2;
+
+              return (
+                <Link key={trip.id} href={`/trips/${trip.id}`} className="block group">
+                  <div className={cn(
+                    "border transition-colors h-full bg-card hover:bg-secondary",
+                    trip.status === 'red' ? "border-status-red" :
+                    trip.status === 'amber' ? "border-status-amber" : "border-status-green/30"
+                  )}>
+                    <div className={cn(
+                      "px-4 py-2 border-b flex justify-between items-center",
+                      trip.status === 'red' ? "bg-status-red/10 border-status-red" :
+                      trip.status === 'amber' ? "bg-status-amber/10 border-status-amber" : "bg-status-green/10 border-status-green/30"
+                    )}>
+                      <div className="flex items-center gap-2">
+                        <StatusIcon className={cn(
+                          "w-4 h-4",
+                          trip.status === 'red' ? "text-status-red" :
+                          trip.status === 'amber' ? "text-status-amber" : "text-status-green"
+                        )} />
+                        <span className={cn(
+                          "uppercase text-xs font-bold tracking-widest",
+                          trip.status === 'red' ? "text-status-red" :
+                          trip.status === 'amber' ? "text-status-amber" : "text-status-green"
+                        )}>{trip.status}</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-muted-foreground text-xs uppercase tracking-wider">
+                        <div className="flex items-center gap-1">
+                          <MessageSquare className="w-3 h-3" />
+                          <span>{trip.messageCount}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          <span>{format(new Date(trip.updatedAt), 'HH:mm')}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 space-y-4">
+                      <div>
+                        <h3 className="text-xl font-bold text-foreground mb-1 group-hover:text-primary transition-colors">
+                          {trip.title}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {trip.travelerName} &middot; {trip.travelerPhone}
+                        </p>
+                      </div>
+
+                      {(trip.nextAction || trip.operatorNotes) && (
+                        <div className="pt-4 border-t border-border space-y-3">
+                          {trip.nextAction && (
+                            <div>
+                              <span className="text-[10px] uppercase tracking-widest text-muted-foreground block mb-1">Next Action</span>
+                              <p className="text-sm text-foreground line-clamp-2">{trip.nextAction}</p>
+                            </div>
+                          )}
+                          {trip.operatorNotes && !trip.nextAction && (
+                            <div>
+                              <span className="text-[10px] uppercase tracking-widest text-muted-foreground block mb-1">Notes</span>
+                              <p className="text-sm text-foreground line-clamp-2">{trip.operatorNotes}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

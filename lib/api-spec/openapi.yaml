@@ -3,13 +3,20 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Cyber Chaperone Situation Room API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: trips
+    description: Trip situation room records
+  - name: messages
+    description: Incoming WhatsApp messages
+  - name: webhook
+    description: Twilio webhook
+
 paths:
   /healthz:
     get:
@@ -24,6 +31,207 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /webhook/twilio:
+    post:
+      operationId: twilioWebhook
+      tags: [webhook]
+      summary: Receive Twilio WhatsApp message
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                Body:
+                  type: string
+                From:
+                  type: string
+                To:
+                  type: string
+                MessageSid:
+                  type: string
+      responses:
+        "200":
+          description: TwiML response
+          content:
+            text/xml:
+              schema:
+                type: string
+
+  /trips:
+    get:
+      operationId: listTrips
+      tags: [trips]
+      summary: List all trips
+      responses:
+        "200":
+          description: List of trips
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trip"
+    post:
+      operationId: createTrip
+      tags: [trips]
+      summary: Create a new trip
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTripBody"
+      responses:
+        "201":
+          description: Created trip
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+
+  /trips/{id}:
+    get:
+      operationId: getTrip
+      tags: [trips]
+      summary: Get trip by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trip details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateTrip
+      tags: [trips]
+      summary: Update trip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTripBody"
+      responses:
+        "200":
+          description: Updated trip
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteTrip
+      tags: [trips]
+      summary: Delete trip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /trips/{id}/messages:
+    get:
+      operationId: getTripMessages
+      tags: [trips]
+      summary: Get messages for a trip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+
+  /messages:
+    get:
+      operationId: listMessages
+      tags: [messages]
+      summary: List all incoming messages
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+
+  /messages/{id}:
+    patch:
+      operationId: updateMessage
+      tags: [messages]
+      summary: Update message (e.g. assign to trip)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMessageBody"
+      responses:
+        "200":
+          description: Updated message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +242,133 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Trip:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        travelerName:
+          type: string
+        travelerPhone:
+          type: string
+        status:
+          type: string
+          enum: [green, amber, red]
+        evidenceNotes:
+          type: ["string", "null"]
+        inferenceNotes:
+          type: ["string", "null"]
+        nextAction:
+          type: ["string", "null"]
+        operatorNotes:
+          type: ["string", "null"]
+        messageCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - travelerName
+        - travelerPhone
+        - status
+        - evidenceNotes
+        - inferenceNotes
+        - nextAction
+        - operatorNotes
+        - messageCount
+        - createdAt
+        - updatedAt
+
+    CreateTripBody:
+      type: object
+      properties:
+        title:
+          type: string
+        travelerName:
+          type: string
+        travelerPhone:
+          type: string
+        status:
+          type: string
+          enum: [green, amber, red]
+        evidenceNotes:
+          type: ["string", "null"]
+        inferenceNotes:
+          type: ["string", "null"]
+        nextAction:
+          type: ["string", "null"]
+        operatorNotes:
+          type: ["string", "null"]
+      required:
+        - title
+        - travelerName
+        - travelerPhone
+
+    UpdateTripBody:
+      type: object
+      properties:
+        title:
+          type: string
+        travelerName:
+          type: string
+        travelerPhone:
+          type: string
+        status:
+          type: string
+          enum: [green, amber, red]
+        evidenceNotes:
+          type: ["string", "null"]
+        inferenceNotes:
+          type: ["string", "null"]
+        nextAction:
+          type: ["string", "null"]
+        operatorNotes:
+          type: ["string", "null"]
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: integer
+        fromNumber:
+          type: string
+        toNumber:
+          type: string
+        body:
+          type: string
+        messageSid:
+          type: ["string", "null"]
+        tripId:
+          type: ["integer", "null"]
+        receivedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - fromNumber
+        - toNumber
+        - body
+        - messageSid
+        - tripId
+        - receivedAt
+
+    UpdateMessageBody:
+      type: object
+      properties:
+        tripId:
+          type: ["integer", "null"]
