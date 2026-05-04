@@ -119,10 +119,11 @@
   --sidebar-accent-foreground: 240 10% 6%;
   --sidebar-ring: 240 10% 6%;
 
-  /* Strong signal green — punchy on white */
-  --status-green: 142 72% 29%;
-  --status-amber: 38 90% 40%;
-  --status-red: 0 78% 48%;
+  /* eblockwatch brand signal colours */
+  --status-green: 131 86% 37%;
+  --status-amber: 38 97% 45%;
+  --status-red: 1 66% 52%;
+  --brand-blue: 222 100% 34%;
 
   --chart-1: 220 70% 46%;
   --chart-2: 142 60% 38%;

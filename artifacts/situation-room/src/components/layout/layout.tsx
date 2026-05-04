@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Activity, MessageSquare, Plus, Shield } from "lucide-react";
+import { MessageSquare, Plus, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -13,11 +13,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-background text-foreground selection:bg-primary selection:text-primary-foreground font-mono">
       <aside className="w-64 border-r border-border bg-card flex flex-col shrink-0">
-        <div className="h-16 flex items-center px-6 border-b border-border">
-          <div className="flex items-center gap-2 text-primary">
-            <Activity className="w-5 h-5" />
-            <span className="font-bold tracking-wider uppercase text-sm">Chaperone</span>
-          </div>
+        <div className="h-16 flex items-center px-5 border-b border-border">
+          <img
+            src="/eblockwatch-logo.png"
+            alt="eblockwatch"
+            className="h-8 w-auto object-contain"
+          />
         </div>
         <nav className="flex-1 p-4 space-y-2">
           {navItems.map((item) => {
