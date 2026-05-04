@@ -19,6 +19,7 @@ export const TripStatus = {
   green: "green",
   amber: "amber",
   red: "red",
+  completed: "completed",
 } as const;
 
 export interface Trip {
@@ -71,6 +72,7 @@ export const UpdateTripBodyStatus = {
   green: "green",
   amber: "amber",
   red: "red",
+  completed: "completed",
 } as const;
 
 export interface UpdateTripBody {

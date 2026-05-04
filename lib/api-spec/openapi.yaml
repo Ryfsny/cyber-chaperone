@@ -263,7 +263,7 @@ components:
           type: string
         status:
           type: string
-          enum: [green, amber, red]
+          enum: [green, amber, red, completed]
         evidenceNotes:
           type: ["string", "null"]
         inferenceNotes:
@@ -330,7 +330,7 @@ components:
           type: string
         status:
           type: string
-          enum: [green, amber, red]
+          enum: [green, amber, red, completed]
         evidenceNotes:
           type: ["string", "null"]
         inferenceNotes:

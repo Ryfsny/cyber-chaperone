@@ -12,4 +12,5 @@ export const TripStatus = {
   green: "green",
   amber: "amber",
   red: "red",
+  completed: "completed",
 } as const;
