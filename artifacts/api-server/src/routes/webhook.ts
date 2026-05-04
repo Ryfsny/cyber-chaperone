@@ -151,18 +151,23 @@ interface MemberInfo {
 }
 
 async function lookupMember(whatsappNumber: string): Promise<MemberInfo | null> {
-  const [member] = await db
-    .select()
-    .from(membersTable)
-    .where(eq(membersTable.whatsappNumber, whatsappNumber))
-    .limit(1);
-  if (!member) return null;
-  return {
-    displayName: member.displayName,
-    role: member.role,
-    memberStatus: member.memberStatus,
-    isKnown: member.memberStatus === "verified",
-  };
+  try {
+    const [member] = await db
+      .select()
+      .from(membersTable)
+      .where(eq(membersTable.whatsappNumber, whatsappNumber))
+      .limit(1);
+    if (!member) return null;
+    return {
+      displayName: member.displayName,
+      role: member.role,
+      memberStatus: member.memberStatus,
+      isKnown: member.memberStatus === "verified",
+    };
+  } catch {
+    // Members table may not exist yet in production — treat as unknown
+    return null;
+  }
 }
 
 interface MemberHistory {
@@ -172,28 +177,32 @@ interface MemberHistory {
 }
 
 async function getMemberHistory(whatsappNumber: string): Promise<MemberHistory> {
-  const [msgRow] = await db
-    .select({ total: count() })
-    .from(messagesTable)
-    .where(eq(messagesTable.fromNumber, whatsappNumber));
+  try {
+    const [msgRow] = await db
+      .select({ total: count() })
+      .from(messagesTable)
+      .where(eq(messagesTable.fromNumber, whatsappNumber));
 
-  const [tripRow] = await db
-    .select({ total: count() })
-    .from(tripsTable)
-    .where(eq(tripsTable.travelerPhone, whatsappNumber));
+    const [tripRow] = await db
+      .select({ total: count() })
+      .from(tripsTable)
+      .where(eq(tripsTable.travelerPhone, whatsappNumber));
 
-  const [lastTrip] = await db
-    .select({ status: tripsTable.status })
-    .from(tripsTable)
-    .where(eq(tripsTable.travelerPhone, whatsappNumber))
-    .orderBy(desc(tripsTable.id))
-    .limit(1);
+    const [lastTrip] = await db
+      .select({ status: tripsTable.status })
+      .from(tripsTable)
+      .where(eq(tripsTable.travelerPhone, whatsappNumber))
+      .orderBy(desc(tripsTable.id))
+      .limit(1);
 
-  return {
-    totalMessages: Number(msgRow?.total ?? 0),
-    totalTrips: Number(tripRow?.total ?? 0),
-    lastTripStatus: lastTrip?.status ?? null,
-  };
+    return {
+      totalMessages: Number(msgRow?.total ?? 0),
+      totalTrips: Number(tripRow?.total ?? 0),
+      lastTripStatus: lastTrip?.status ?? null,
+    };
+  } catch {
+    return { totalMessages: 0, totalTrips: 0, lastTripStatus: null };
+  }
 }
 
 // ── Active trip lookup ────────────────────────────────────────────────────────
