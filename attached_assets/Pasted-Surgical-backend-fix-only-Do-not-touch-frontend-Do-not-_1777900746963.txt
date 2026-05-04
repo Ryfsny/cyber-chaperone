@@ -1,0 +1,150 @@
+Surgical backend fix only.
+
+Do not touch frontend.
+Do not touch dashboard styling.
+Do not change Twilio config.
+Do not change webhook URL.
+Do not import members.
+Do not add Rukus.
+Do not add route ticks yet.
+Do not redesign anything.
+
+Fix two verified production gaps in /api/webhook/twilio.
+
+Current verified state:
+- Trip-start works.
+- Green / Amber / Red works.
+- Arrival close works.
+- Operator Mirror works.
+- Unknown member messages are saved and mirrored to Andre but the member gets no reply.
+- WhatsApp native location pins arrive with Body empty and the system does not read Latitude / Longitude / Address / Label.
+
+ISSUE 1 — Unknown member messages must receive a reply
+
+Current problem:
+When a member sends a message that is classified as unknown, the webhook saves it and sends Andre an operator mirror, but does not send the member any reply.
+
+Required fix:
+In the unknown branch, send a simple member acknowledgement.
+
+Default unknown reply:
+"Update received. Your trip is still being monitored. Please send ETA changes, delays, arrival, or help if needed."
+
+If the message contains guidance/location wording such as:
+- what should I do
+- send location
+- location
+- pin
+- where am I
+- current location
+
+Then reply:
+"Yes. Please send your current WhatsApp location pin or Google Maps location link. We will add it to your active trip."
+
+Keep the trip status unchanged unless the message contains Amber or Red keywords.
+
+ISSUE 2 — Capture WhatsApp native location pins
+
+Current problem:
+A WhatsApp location pin arrived with Body = "".
+The webhook did not read Latitude, Longitude, Address, or Label.
+The operator mirror showed Message: "" and the location was lost.
+
+Required fix:
+Read location fields from Twilio req.body:
+- Latitude
+- Longitude
+- Address
+- Label
+
+If Latitude and Longitude exist:
+1. Treat the inbound message as a location update.
+2. Link it to the latest active trip.
+3. Update updatedAt / lastUpdateTime.
+4. Add clean evidence note:
+   [timestamp] LOCATION received: lat,lon [label/address if available]
+5. Send member reply:
+   "Location received. We have added it to your active trip."
+6. Send Andre Operator Mirror:
+   Title: CYBER CHAPERONE — LOCATION UPDATE
+   Include:
+   - member WhatsApp number
+   - trip title
+   - trip ID
+   - latitude
+   - longitude
+   - address/label if available
+   - Google Maps link created from the coordinates
+   - status
+
+Do not store empty evidence notes like:
+Update received: ""
+
+If Body is empty and no location fields exist:
+- save as unknown empty message
+- mirror to Andre as "Empty message received"
+- do not crash
+
+For plain Google Maps links sent as text:
+- if Body contains maps.google.com, google.com/maps, or a URL with q=lat,long
+- treat it as a location link update
+- save clean evidence note:
+  [timestamp] LOCATION LINK received: "<short URL/excerpt>"
+- send member reply:
+  "Location link received. We have added it to your active trip."
+- mirror to Andre with the link visible.
+
+Important:
+- Do not change the database schema unless absolutely required.
+- For now, storing the location in clean evidence notes and operator mirror is acceptable.
+- Later we may add a proper trip_locations table, but not now.
+
+Dev tests required before publishing:
+
+A. Unknown message:
+"Thank you for looking after me"
+Expected:
+- linked to active trip
+- status unchanged
+- evidence note clean
+- member acknowledgement sent
+- Andre mirror sent
+
+B. Guidance message:
+"What should I do now . Send you my location"
+Expected:
+- linked to active trip
+- status unchanged
+- member receives instruction to send location pin/link
+- Andre mirror sent
+
+C. Native location pin simulation:
+Body=""
+Latitude="-26.04754066467285"
+Longitude="28.040624618530273"
+Address="Test Location"
+Label="Andre current location"
+Expected:
+- linked to active trip
+- classified as location update
+- evidence note contains coordinates
+- member receives location received reply
+- Andre mirror shows coordinates and Google Maps link
+- no empty Update received note
+
+D. Plain Google Maps link:
+"https://maps.google.com/maps?q=-26.04754066467285%2C28.040624618530273&z=17&hl=en"
+Expected:
+- linked to active trip
+- classified as location link update
+- member receives location link received reply
+- Andre mirror shows the link
+
+Report before publishing:
+1. Files changed.
+2. Exact location fields read from Twilio.
+3. Exact member replies added.
+4. Example Andre mirror for location update.
+5. Dev test results A–D.
+6. Confirmation no frontend, Twilio config, webhook URL, Rukus, member import, route ticks, or database schema changed.
+Do not publish until dev tests pass.

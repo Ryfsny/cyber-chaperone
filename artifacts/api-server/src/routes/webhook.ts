@@ -22,6 +22,11 @@ const DELAY_WORDS = [
 
 const ETA_PATTERN = /(?:new\s+)?eta\s+(?:changed\s+to\s+)?(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)/i;
 
+const LOCATION_GUIDANCE_PATTERN =
+  /what should i do|send.{0,20}location|send.{0,20}pin|\blocation\b|\bpin\b|where am i|current location/i;
+
+const GOOGLE_MAPS_PATTERN = /maps\.google\.com|google\.com\/maps/i;
+
 type MessageClass = "distress" | "arrival" | "delay" | "eta" | "unknown";
 
 function classifyMessage(text: string): MessageClass {
@@ -180,14 +185,14 @@ async function sendReply(from: string, to: string, replyBody: string): Promise<v
 
 // ── Operator mirror ───────────────────────────────────────────────────────────
 
-type MirrorKind = "trip-start" | "amber" | "red" | "arrival" | "eta" | "unknown";
+type MirrorKind = "trip-start" | "amber" | "red" | "arrival" | "eta" | "location" | "unknown";
 
 function mirrorEnabled(kind: MirrorKind): boolean {
   const operatorNumber = process.env.OPERATOR_WHATSAPP_NUMBER;
   const mode = (process.env.OPERATOR_MIRROR_MODE ?? "off").toLowerCase();
   if (!operatorNumber || mode === "off") return false;
   if (mode === "all") return true;
-  if (mode === "critical") return kind === "amber" || kind === "red" || kind === "unknown";
+  if (mode === "critical") return kind === "amber" || kind === "red" || kind === "location" || kind === "unknown";
   return false;
 }
 
@@ -234,6 +239,12 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
   const to = req.body?.To ?? "";
   const messageSid = req.body?.MessageSid ?? null;
 
+  // Location fields sent by Twilio for WhatsApp native location pins
+  const latitude: string = req.body?.Latitude ?? "";
+  const longitude: string = req.body?.Longitude ?? "";
+  const address: string = req.body?.Address ?? "";
+  const label: string = req.body?.Label ?? "";
+
   req.log.info({ from, messageSid: messageSid ? "[redacted]" : null }, "Incoming WhatsApp message");
 
   try {
@@ -243,7 +254,13 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
     const hasHeadingTo = /\b(?:heading|going)\s+to\b/i.test(normalisedForLog);
     const hasEta = /\beta\s+\d{1,2}:\d{2}/i.test(normalisedForLog);
     req.log.info(
-      { normalisedBody: normalisedForLog.slice(0, 200), hasLeaving, hasHeadingTo, hasEta },
+      {
+        normalisedBody: normalisedForLog.slice(0, 200),
+        hasLeaving,
+        hasHeadingTo,
+        hasEta,
+        hasLatLon: latitude !== "" && longitude !== "",
+      },
       "parser-diagnostics",
     );
 
@@ -357,159 +374,78 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
           "Message received, but there is no active trip open. Please start a new trip with: Leaving [start] heading to [destination]. ETA [time].",
         );
       } else {
-        const kind = classifyMessage(body);
         const ts = nowUtc();
-        req.log.info({ tripId: activeTrip.id, kind }, "Follow-up message classified");
 
-        if (kind === "distress") {
-          const note = appendNote(
-            activeTrip.evidenceNotes,
-            `[${ts}] DISTRESS received: "${excerpt(body)}"`,
-          );
+        // ── Location pin (native WhatsApp location) ─────────────────────────
+        const hasNativeLocation = latitude !== "" && longitude !== "";
+
+        // ── Google Maps link sent as text ───────────────────────────────────
+        const isGoogleMapsLink = GOOGLE_MAPS_PATTERN.test(body);
+
+        if (hasNativeLocation) {
+          const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
+          const locationDesc = [label, address].filter(Boolean).join(" — ");
+          const noteEntry = locationDesc
+            ? `[${ts}] LOCATION received: ${latitude},${longitude} — ${locationDesc}`
+            : `[${ts}] LOCATION received: ${latitude},${longitude}`;
+
+          const note = appendNote(activeTrip.evidenceNotes, noteEntry);
           await db
             .update(tripsTable)
-            .set({
-              status: "red",
-              evidenceNotes: note,
-              nextAction: "Immediate human review required.",
-            })
+            .set({ evidenceNotes: note })
             .where(eq(tripsTable.id, activeTrip.id));
 
-          await sendReply(
-            from,
-            to,
-            "Help message received. Stay as safe as possible. Your trip has been marked RED for immediate human review.",
-          );
-          req.log.info({ tripId: activeTrip.id }, "Trip escalated to RED — distress keyword");
+          await sendReply(from, to, "Location received. We have added it to your active trip.");
 
-          await sendOperatorMirror(
-            to,
-            [
-              `CYBER CHAPERONE — RED`,
-              `Member: ${from}`,
-              `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
-              `Distress message: "${excerpt(body, 100)}"`,
-              `Status: RED`,
-              `Next action: Immediate human review required.`,
-            ].join("\n"),
-            "red",
+          req.log.info(
+            { tripId: activeTrip.id, latitude, longitude, address, label },
+            "Native location pin received and recorded",
           );
 
-        } else if (kind === "arrival") {
+          const mirrorLines = [
+            `CYBER CHAPERONE — LOCATION UPDATE`,
+            `Member: ${from}`,
+            `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+            `Latitude: ${latitude}`,
+            `Longitude: ${longitude}`,
+          ];
+          if (locationDesc) mirrorLines.push(`Location: ${locationDesc}`);
+          mirrorLines.push(`Maps: ${mapsLink}`);
+          mirrorLines.push(`Status: ${activeTrip.status.toUpperCase()}`);
+
+          await sendOperatorMirror(to, mirrorLines.join("\n"), "location");
+
+        } else if (isGoogleMapsLink) {
+          // ── Google Maps link sent as plain text ───────────────────────────
+          const linkExcerpt = excerpt(body, 200);
           const note = appendNote(
             activeTrip.evidenceNotes,
-            `[${ts}] ARRIVAL confirmed: "${excerpt(body)}"`,
-          );
-          await db
-            .update(tripsTable)
-            .set({
-              status: "completed",
-              evidenceNotes: note,
-            })
-            .where(eq(tripsTable.id, activeTrip.id));
-
-          await sendReply(
-            from,
-            to,
-            "Received. Your arrival has been recorded and the trip is closed.",
-          );
-          req.log.info({ tripId: activeTrip.id }, "Trip closed — arrival keyword");
-
-          await sendOperatorMirror(
-            to,
-            [
-              `CYBER CHAPERONE — TRIP CLOSED`,
-              `Member: ${from}`,
-              `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
-              `Status: COMPLETED`,
-              `Arrival: "${excerpt(body, 100)}"`,
-            ].join("\n"),
-            "arrival",
-          );
-
-        } else if (kind === "delay") {
-          const note = appendNote(
-            activeTrip.evidenceNotes,
-            `[${ts}] DELAY reported: "${excerpt(body)}"`,
-          );
-          await db
-            .update(tripsTable)
-            .set({
-              status: "amber",
-              evidenceNotes: note,
-              nextAction: "Quiet monitor — await next update from traveler.",
-            })
-            .where(eq(tripsTable.id, activeTrip.id));
-
-          await sendReply(
-            from,
-            to,
-            "Update received. We have marked the trip Amber for monitoring. Please send another update when you move again or arrive.",
-          );
-          req.log.info({ tripId: activeTrip.id }, "Trip set to AMBER — delay keyword");
-
-          await sendOperatorMirror(
-            to,
-            [
-              `CYBER CHAPERONE — AMBER`,
-              `Member: ${from}`,
-              `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
-              `Reason: delay / traffic`,
-              `Status: AMBER`,
-              `Next action: Quiet monitor — await next update from traveler.`,
-              `---`,
-              excerpt(body, 120),
-            ].join("\n"),
-            "amber",
-          );
-
-        } else if (kind === "eta") {
-          const etaMatch = body.match(ETA_PATTERN);
-          const newEta = etaMatch?.[1] ?? "unknown";
-          const note = appendNote(
-            activeTrip.evidenceNotes,
-            `[${ts}] ETA update: "${excerpt(body)}"`,
-          );
-          await db
-            .update(tripsTable)
-            .set({
-              evidenceNotes: note,
-              inferenceNotes: `ETA updated to ${newEta}.`,
-            })
-            .where(eq(tripsTable.id, activeTrip.id));
-
-          await sendReply(
-            from,
-            to,
-            "ETA update received. We are still monitoring the trip.",
-          );
-          req.log.info({ tripId: activeTrip.id, newEta }, "Trip ETA updated — ETA keyword");
-
-          await sendOperatorMirror(
-            to,
-            [
-              `CYBER CHAPERONE — ETA UPDATE`,
-              `Member: ${from}`,
-              `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
-              `New ETA: ${newEta}`,
-              `Status: ${activeTrip.status.toUpperCase()}`,
-              `---`,
-              excerpt(body, 120),
-            ].join("\n"),
-            "eta",
-          );
-
-        } else {
-          const note = appendNote(
-            activeTrip.evidenceNotes,
-            `[${ts}] Update received: "${excerpt(body)}"`,
+            `[${ts}] LOCATION LINK received: "${linkExcerpt}"`,
           );
           await db
             .update(tripsTable)
             .set({ evidenceNotes: note })
             .where(eq(tripsTable.id, activeTrip.id));
 
-          req.log.info({ tripId: activeTrip.id }, "General update appended to evidence notes");
+          await sendReply(from, to, "Location link received. We have added it to your active trip.");
+
+          req.log.info({ tripId: activeTrip.id }, "Google Maps location link received and recorded");
+
+          await sendOperatorMirror(
+            to,
+            [
+              `CYBER CHAPERONE — LOCATION LINK`,
+              `Member: ${from}`,
+              `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+              `Link: ${linkExcerpt}`,
+              `Status: ${activeTrip.status.toUpperCase()}`,
+            ].join("\n"),
+            "location",
+          );
+
+        } else if (body.trim() === "") {
+          // ── Empty body, no location fields ────────────────────────────────
+          req.log.info({ tripId: activeTrip.id }, "Empty message received — no body, no location fields");
 
           await sendOperatorMirror(
             to,
@@ -517,11 +453,187 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
               `CYBER CHAPERONE — UPDATE`,
               `Member: ${from}`,
               `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
-              `Message: "${excerpt(body, 120)}"`,
+              `Message: (empty — possible unsupported media type)`,
               `Status: ${activeTrip.status.toUpperCase()}`,
             ].join("\n"),
             "unknown",
           );
+
+        } else {
+          // ── Normal text follow-up — classify ──────────────────────────────
+          const kind = classifyMessage(body);
+          req.log.info({ tripId: activeTrip.id, kind }, "Follow-up message classified");
+
+          if (kind === "distress") {
+            const note = appendNote(
+              activeTrip.evidenceNotes,
+              `[${ts}] DISTRESS received: "${excerpt(body)}"`,
+            );
+            await db
+              .update(tripsTable)
+              .set({
+                status: "red",
+                evidenceNotes: note,
+                nextAction: "Immediate human review required.",
+              })
+              .where(eq(tripsTable.id, activeTrip.id));
+
+            await sendReply(
+              from,
+              to,
+              "Help message received. Stay as safe as possible. Your trip has been marked RED for immediate human review.",
+            );
+            req.log.info({ tripId: activeTrip.id }, "Trip escalated to RED — distress keyword");
+
+            await sendOperatorMirror(
+              to,
+              [
+                `CYBER CHAPERONE — RED`,
+                `Member: ${from}`,
+                `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+                `Distress message: "${excerpt(body, 100)}"`,
+                `Status: RED`,
+                `Next action: Immediate human review required.`,
+              ].join("\n"),
+              "red",
+            );
+
+          } else if (kind === "arrival") {
+            const note = appendNote(
+              activeTrip.evidenceNotes,
+              `[${ts}] ARRIVAL confirmed: "${excerpt(body)}"`,
+            );
+            await db
+              .update(tripsTable)
+              .set({
+                status: "completed",
+                evidenceNotes: note,
+              })
+              .where(eq(tripsTable.id, activeTrip.id));
+
+            await sendReply(
+              from,
+              to,
+              "Received. Your arrival has been recorded and the trip is closed.",
+            );
+            req.log.info({ tripId: activeTrip.id }, "Trip closed — arrival keyword");
+
+            await sendOperatorMirror(
+              to,
+              [
+                `CYBER CHAPERONE — TRIP CLOSED`,
+                `Member: ${from}`,
+                `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+                `Status: COMPLETED`,
+                `Arrival: "${excerpt(body, 100)}"`,
+              ].join("\n"),
+              "arrival",
+            );
+
+          } else if (kind === "delay") {
+            const note = appendNote(
+              activeTrip.evidenceNotes,
+              `[${ts}] DELAY reported: "${excerpt(body)}"`,
+            );
+            await db
+              .update(tripsTable)
+              .set({
+                status: "amber",
+                evidenceNotes: note,
+                nextAction: "Quiet monitor — await next update from traveler.",
+              })
+              .where(eq(tripsTable.id, activeTrip.id));
+
+            await sendReply(
+              from,
+              to,
+              "Update received. We have marked the trip Amber for monitoring. Please send another update when you move again or arrive.",
+            );
+            req.log.info({ tripId: activeTrip.id }, "Trip set to AMBER — delay keyword");
+
+            await sendOperatorMirror(
+              to,
+              [
+                `CYBER CHAPERONE — AMBER`,
+                `Member: ${from}`,
+                `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+                `Reason: delay / traffic`,
+                `Status: AMBER`,
+                `Next action: Quiet monitor — await next update from traveler.`,
+                `---`,
+                excerpt(body, 120),
+              ].join("\n"),
+              "amber",
+            );
+
+          } else if (kind === "eta") {
+            const etaMatch = body.match(ETA_PATTERN);
+            const newEta = etaMatch?.[1] ?? "unknown";
+            const note = appendNote(
+              activeTrip.evidenceNotes,
+              `[${ts}] ETA update: "${excerpt(body)}"`,
+            );
+            await db
+              .update(tripsTable)
+              .set({
+                evidenceNotes: note,
+                inferenceNotes: `ETA updated to ${newEta}.`,
+              })
+              .where(eq(tripsTable.id, activeTrip.id));
+
+            await sendReply(
+              from,
+              to,
+              "ETA update received. We are still monitoring the trip.",
+            );
+            req.log.info({ tripId: activeTrip.id, newEta }, "Trip ETA updated — ETA keyword");
+
+            await sendOperatorMirror(
+              to,
+              [
+                `CYBER CHAPERONE — ETA UPDATE`,
+                `Member: ${from}`,
+                `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+                `New ETA: ${newEta}`,
+                `Status: ${activeTrip.status.toUpperCase()}`,
+                `---`,
+                excerpt(body, 120),
+              ].join("\n"),
+              "eta",
+            );
+
+          } else {
+            // ── Unknown — save note, send member reply, mirror Andre ────────
+            const note = appendNote(
+              activeTrip.evidenceNotes,
+              `[${ts}] Update received: "${excerpt(body)}"`,
+            );
+            await db
+              .update(tripsTable)
+              .set({ evidenceNotes: note })
+              .where(eq(tripsTable.id, activeTrip.id));
+
+            req.log.info({ tripId: activeTrip.id }, "General update appended to evidence notes");
+
+            const isLocationGuidance = LOCATION_GUIDANCE_PATTERN.test(body);
+            const memberReply = isLocationGuidance
+              ? "Yes. Please send your current WhatsApp location pin or Google Maps location link. We will add it to your active trip."
+              : "Update received. Your trip is still being monitored. Please send ETA changes, delays, arrival, or help if needed.";
+
+            await sendReply(from, to, memberReply);
+
+            await sendOperatorMirror(
+              to,
+              [
+                `CYBER CHAPERONE — UPDATE`,
+                `Member: ${from}`,
+                `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+                `Message: "${excerpt(body, 120)}"`,
+                `Status: ${activeTrip.status.toUpperCase()}`,
+              ].join("\n"),
+              "unknown",
+            );
+          }
         }
       }
     }
