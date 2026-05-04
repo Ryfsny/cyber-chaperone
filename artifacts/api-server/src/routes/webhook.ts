@@ -301,6 +301,17 @@ function memberNoteLine(member: MemberInfo | null, phone: string): string {
 // ── Webhook handler ───────────────────────────────────────────────────────────
 
 router.post("/webhook/twilio", async (req, res): Promise<void> => {
+  // ── Ignore Twilio status callbacks (outbound delivery notifications) ────────
+  // Status callbacks POST MessageStatus / SmsStatus fields. They are NOT
+  // inbound messages — processing them as such causes false distress alerts.
+  const messageStatus: string = req.body?.MessageStatus ?? req.body?.SmsStatus ?? "";
+  if (messageStatus) {
+    req.log.info({ messageStatus }, "Twilio status callback — ignoring");
+    res.set("Content-Type", "text/xml");
+    res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+    return;
+  }
+
   const body = req.body?.Body ?? "";
   const from = req.body?.From ?? "";
   const to = req.body?.To ?? "";
