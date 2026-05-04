@@ -1,0 +1,137 @@
+Surgical backend fix only.
+
+Do not redesign the dashboard.
+Do not add new pages.
+Do not touch frontend styling.
+Do not manually insert fake trip rows.
+Do not delete existing data.
+Do not change the trip-start flow unless required for compatibility.
+Do not change Twilio setup or webhook URL.
+
+Fix the real follow-up message problem in /api/webhook/twilio.
+
+Current verified problem:
+- Trip-start messages work.
+- Follow-up messages are saved, but they are linked unreliably because the code uses:
+  SELECT * FROM trips WHERE travelerPhone = from LIMIT 1
+- There is no ORDER BY.
+- There is no active-trip filter.
+- Arrived, delayed, ETA update, and help messages do not change trip status.
+- No outbound WhatsApp acknowledgement is sent.
+
+Required fix:
+
+1. When a non-trip-start message arrives, find the latest active trip for that WhatsApp number.
+   Use a safe query:
+   - same travelerPhone
+   - not completed / not closed
+   - order by latest created/updated/id descending
+   - LIMIT 1
+
+2. Link the inbound message to that latest active trip.
+
+3. Update lastUpdateTime / updatedAt for the active trip.
+
+4. Add simple keyword handling:
+
+A. Arrival / safe arrival
+Trigger words:
+- arrived
+- arrived safely
+- safe
+- at destination
+- reached
+- home safe
+
+Action:
+- mark trip as completed/closed
+- status should no longer be active Green
+- save evidence note: member reported arrival
+- reply to member:
+  "Received. Your arrival has been recorded and the trip is closed."
+
+B. Delay / stopped / traffic
+Trigger words:
+- delayed
+- running late
+- traffic
+- stopped
+- stop
+- stuck
+- waiting
+
+Action:
+- set trip status to AMBER
+- save evidence note: member reported delay/stop/traffic
+- set next action: quiet monitor / await next update
+- reply to member:
+  "Update received. We have marked the trip Amber for monitoring. Please send another update when you move again or arrive."
+
+C. ETA update
+Trigger patterns:
+- ETA changed to 13:50
+- ETA 13:50
+- New ETA 13:50
+
+Action:
+- update ETA if the field exists
+- keep status Green unless wording also indicates delay/traffic/stopped
+- save evidence note: member updated ETA
+- reply to member:
+  "ETA update received. We are still monitoring the trip."
+
+D. Help / distress
+Trigger words:
+- help
+- sos
+- emergency
+- danger
+- accident
+- hijack
+- hijacked
+- crash
+- police
+- ambulance
+- urgent
+
+Action:
+- set trip status to RED
+- save evidence note: distress/help keyword received
+- set next action: immediate human review
+- reply to member:
+  "Help message received. Stay as safe as possible. Your trip has been marked RED for immediate human review."
+
+Important:
+- Do not claim emergency services have been dispatched unless the system actually does that.
+- Do not create a complicated NLP system.
+- Use simple, visible, testable keyword rules.
+- Keep this MVP simple and operator-focused.
+
+5. If no active trip is found for that WhatsApp number:
+- save the message
+- do not attach it to a random old trip
+- reply:
+  "Message received, but there is no active trip open. Please start a new trip with: Leaving [start] heading to [destination]. ETA [time]."
+
+6. After coding, run live verification using my WhatsApp number +27825611065.
+
+Test messages:
+1. "ETA changed to 13:50. Traffic is slower than expected."
+Expected: message linked to active trip, ETA updated if possible, status Amber if traffic keyword triggers.
+
+2. "I have stopped at Hyde Park for 20 minutes."
+Expected: message linked to active trip, status Amber, dashboard updates.
+
+3. "I have arrived safely at Rosebank Mall."
+Expected: trip completed/closed, removed from Active Trips, shown under Completed Trips.
+
+4. "I need help."
+Expected: active trip becomes Red, dashboard shows Red, reply sent, no silent failure.
+
+Report back:
+- files changed
+- exact logic added
+- database fields updated
+- result of each test
+- confirmation that old random-trip linking is fixed
+- confirmation that no frontend styling, Twilio setup, or webhook URL was changed
