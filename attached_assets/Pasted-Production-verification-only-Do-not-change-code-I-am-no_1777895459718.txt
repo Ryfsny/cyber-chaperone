@@ -1,0 +1,94 @@
+Production verification only. Do not change code.
+
+I am now going to test the live WhatsApp flow from my phone number:
+
++27825611065
+
+Please monitor production logs and database only.
+
+Do not build anything new.
+Do not change frontend.
+Do not change backend.
+Do not change Twilio settings.
+Do not change webhook URL.
+Do not change database schema.
+Do not manually insert or edit trip rows.
+Verification only.
+
+I will send these live WhatsApp messages one by one.
+
+TEST 1 — Start new trip:
+"TEST LIVE — Leaving Fourways now heading to Rosebank Mall. ETA 14:40."
+
+Expected:
+- POST /api/webhook/twilio received
+- new active trip created
+- sender = whatsapp:+27825611065
+- start = Fourways
+- destination = Rosebank Mall
+- ETA = 14:40
+- status = GREEN
+- previous active GREEN trip closed if applicable
+
+TEST 2 — ETA / traffic update:
+"ETA changed to 15:00. Traffic is slower than expected."
+
+Expected:
+- message saved
+- message linked to latest active trip, not old completed trip
+- status changes to AMBER because of traffic keyword
+- evidence note updated
+- Twilio reply sent to member
+
+TEST 3 — stopped update:
+"I have stopped at Rosebank for 10 minutes."
+
+Expected:
+- message saved
+- message linked to the same active trip
+- status remains AMBER
+- evidence note updated
+- Twilio reply sent to member
+
+TEST 4 — arrival:
+"I have arrived safely at Rosebank Mall."
+
+Expected:
+- message saved
+- message linked to the same active trip
+- trip marked completed/closed
+- trip removed from Active Trips
+- trip appears in Completed Trips
+- Twilio reply sent to member
+
+TEST 5 — Red test:
+First I will send:
+"TEST RED — Leaving Fourways now heading to Sandton City. ETA 15:30."
+
+Expected:
+- new active GREEN trip created
+
+Then I will send:
+"I need help."
+
+Expected:
+- help message saved
+- message linked to latest active trip
+- trip status changes to RED
+- dashboard shows RED
+- evidence note says distress/help keyword received
+- next action = immediate human review
+- Twilio reply sent
+- no claim that emergency services were dispatched
+
+Final report required:
+1. Trip ID for each test.
+2. Message ID for each live WhatsApp message.
+3. Status before and after each update.
+4. Confirmation each follow-up linked to the latest active trip.
+5. Confirmation no message attached to an old completed trip.
+6. Confirmation each expected Twilio reply was sent.
+7. Confirmation no frontend, Twilio config, webhook URL, or database schema was changed.
+8. Any failure or silent failure found.
+
+Do not fix anything yet. Report only.
