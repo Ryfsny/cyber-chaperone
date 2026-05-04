@@ -1,0 +1,67 @@
+Do not redesign the UI.
+Do not build new features.
+Do not manually insert trip rows.
+Do not fake an automated result.
+
+Fix only the real automated server-side pipe.
+
+Verified current state:
+- Twilio POST /api/webhook/twilio works.
+- Incoming WhatsApp messages are saved to messagesTable.
+- Current webhook.ts only links a message to the first trip found for the same travelerPhone.
+- It does not parse the message body.
+- It does not create trips.
+- It does not update start, destination, or ETA.
+- There is no trip-processor.ts in this project.
+
+Required fix:
+
+1. Keep the existing Twilio webhook route:
+   POST /api/webhook/twilio
+
+2. In routes/webhook.ts, after receiving the Twilio message body, add parsing for clear trip-start messages like:
+
+   TEST 21:15 — Leaving Fourways now heading to Rosebank Mall. ETA 21:50.
+   Leaving Fourways now heading to Rosebank Mall. ETA 21:50.
+   Leaving home now heading to Sandton City. ETA 09:40.
+
+3. Extract:
+   - startLocation
+   - destination
+   - eta
+
+4. If the incoming message is a clear trip-start message, create a NEW trip row automatically.
+
+5. Do not attach the new trip-start message to an old trip just because the phone number matches.
+
+6. Link the saved message to the newly created trip.
+
+7. Set the new trip status to GREEN by default.
+
+8. Add evidence/inference notes if those fields exist:
+   - evidence: original WhatsApp message body
+   - inference: “Freeform WhatsApp trip-start message detected.”
+
+9. If the message is NOT a clear trip-start message:
+   - keep current behavior for now
+   - link it to an existing trip for that phone number if one exists
+
+10. After the fix, run one real verification using this message:
+
+   TEST 09:15 — Leaving Fourways now heading to Rosebank Mall. ETA 09:50.
+
+11. Report back:
+   - Did POST /api/webhook/twilio receive the message?
+   - Was the message saved?
+   - Was a NEW trip row created?
+   - What trip ID was created?
+   - What startLocation was saved?
+   - What destination was saved?
+   - What ETA was saved?
+   - Was the message linked to the new trip?
+   - Does it appear in Active Trips?
+
+Do not change the dashboard design.
+Do not create manual test trips.
+Do not add unrelated features.
+Only implement automatic trip creation from clear WhatsApp trip-start messages.
