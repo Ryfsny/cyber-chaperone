@@ -150,6 +150,21 @@ interface MemberInfo {
   isKnown: boolean;
 }
 
+/**
+ * Pilot-phase hardcoded member list.
+ * Used as a fallback when the members table does not yet exist in production.
+ * Database lookup always runs first and takes priority.
+ * Remove entries here once the members table is populated in production.
+ */
+const PILOT_MEMBERS: Record<string, MemberInfo> = {
+  "whatsapp:+27825611065": {
+    displayName: "Andre Snyman",
+    role: "Founder / test operator",
+    memberStatus: "verified",
+    isKnown: true,
+  },
+};
+
 async function lookupMember(whatsappNumber: string): Promise<MemberInfo | null> {
   try {
     const [member] = await db
@@ -157,17 +172,19 @@ async function lookupMember(whatsappNumber: string): Promise<MemberInfo | null> 
       .from(membersTable)
       .where(eq(membersTable.whatsappNumber, whatsappNumber))
       .limit(1);
-    if (!member) return null;
-    return {
-      displayName: member.displayName,
-      role: member.role,
-      memberStatus: member.memberStatus,
-      isKnown: member.memberStatus === "verified",
-    };
+    if (member) {
+      return {
+        displayName: member.displayName,
+        role: member.role,
+        memberStatus: member.memberStatus,
+        isKnown: member.memberStatus === "verified",
+      };
+    }
   } catch {
-    // Members table may not exist yet in production — treat as unknown
-    return null;
+    // Members table may not exist yet in production — fall through to pilot list
   }
+  // Fallback: pilot hardcoded list (active until members table is in production)
+  return PILOT_MEMBERS[whatsappNumber] ?? null;
 }
 
 interface MemberHistory {
