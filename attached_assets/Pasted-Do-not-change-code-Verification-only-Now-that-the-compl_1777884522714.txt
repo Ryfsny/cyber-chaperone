@@ -1,0 +1,147 @@
+Do not change code.
+Verification only.
+
+Now that the completed-status enum fix is published, verify production only:
+
+Does GET /api/trips return HTTP 200?
+Does the JSON include Trip ID 5 with status "green"?
+Does the JSON include Trip IDs 1, 2, 3, and 4 with status "completed"?
+Does the dashboard show Trip ID 5 Hyde Park Corner → Sandton under Active Trips?
+Does the dashboard show Trip IDs 1–4 under Completed Trips?
+Does Active Trips count show 1?
+Are Green/Amber/Red counters excluding completed trips?
+Confirm webhook.ts was not changed.
+Confirm Twilio configuration was not changed.
+Confirm database schema was not changed.
+Evidence only.
+No fixes.
+
+
+Show more
+5 minutes ago
+
+1 message & 5 actions
+
+Worked for 20 seconds
+Do not build anything.
+Do not change code.
+Do not change database.
+Do not change Twilio.
+Do not send test POSTs.
+Do not insert test data.
+
+Final clean checkpoint report only.
+
+We have confirmed the Cyber Chaperone Situation Room MVP is working in production.
+
+Please produce a final stable checkpoint report covering:
+
+Current production URL
+
+Dashboard URL
+API base URL
+Twilio webhook URL
+Current confirmed working flow
+
+WhatsApp message
+Twilio Sandbox
+POST /api/webhook/twilio
+message saved
+trip parsed
+new GREEN trip created
+previous GREEN trips completed
+dashboard updated
+Current production trip state
+
+Active GREEN trip
+Completed trips
+Total messages
+Current working message format
+Example:
+Leaving Sandton now heading to OR Tambo. ETA 11:30.
+
+Files changed during this working version
+
+webhook logic
+dashboard split
+API enum/status fix
+deployment config fix if relevant
+Confirm what was NOT changed
+
+Twilio URL
+database schema
+live production data
+dashboard design beyond active/completed split
+Known limitations still outstanding
+
+Sandbox only
+arrival confirmation not built
+ETA drift not built
+Amber/Red automation not built
+member name matching not built
+duplicate message protection not built
+live location not built
+Recommended next task
+Give one next task only.
+It must be small and controlled.
+Do not recommend a redesign.
+
+End with:
+“Stable checkpoint confirmed. No further work performed.”
+
+
+Show more
+4 minutes ago
+
+1 message & 1 action
+Add a Close Trip button to the trip detail page.
+
+2 minutes ago
+
+4 actions
+Everything I need is clear. The useUpdateTrip hook is already imported and used. I need to:
+
+Add handleCloseTrip — calls updateTrip with status: "completed"
+Add the Close Trip button in the header, visible only when trip is not already completed
+Handle completed in the header colour and status badge (currently falls through to green styling)
+
+4 actions
+Now fix the header colours and status badge for completed, and add the Close Trip button.
+
+
+4 actions
+Now add the Close Trip button alongside the status buttons, hidden when already completed.
+
+
+4 actions
+Hot reload is clean — no errors. Let me screenshot the active trip detail to confirm the button renders correctly.
+
+
+2 actions
+Trip ID 5 only exists in production. Let me screenshot a dev trip that exists there instead.
+
+
+3 actions
+Both screenshots confirm the button is rendering correctly — Green | Amber | Red | Close Trip in the header of every active trip. No errors in the console.
+
+The button is separated from the status controls by a divider, shows a spinner while saving, and disappears entirely on completed trips. Ready to publish.
+
+
+Waiting for publish confirmation
+Once you click Publish the Close Trip button will be live in production. After publishing, open any active trip — you'll see Green | Amber | Red | Close Trip in the header. Clicking Close Trip sets the status to completed, moves it to the Completed section on the dashboard, and hides the status controls for that trip.
+
+
+Checkpoint made
+just now
+
+Worked for 1 minute
+Republish
+
+See progress
+Andre is publishing 7 minutes ago
+Visibility:
+Public
+
+Publishing
+
+Scroll to latest
