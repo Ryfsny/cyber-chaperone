@@ -56,6 +56,26 @@ Method: **POST** — paste this into Twilio Sandbox "WHEN A MESSAGE COMES IN"
 - `TWILIO_ACCOUNT_SID` — Twilio Account SID (starts with AC...)
 - `TWILIO_AUTH_TOKEN` — Twilio Auth Token
 
+## MVP Production Proof — 2026-05-04
+
+**Cyber Chaperone Situation Room MVP — Production proof passed.**
+
+Live WhatsApp number +27825611065 successfully tested end-to-end:
+
+1. Messy trip-start message created a GREEN trip.
+2. Traffic update changed the trip to AMBER.
+3. Arrival message completed the trip.
+4. TEST RED trip-start created a new GREEN trip correctly.
+5. "I need help" escalated the active trip to RED.
+6. Twilio replies were sent for every message.
+7. Evidence notes remained clean (structured timestamps only, no raw chat contamination).
+8. No message was linked to an old completed trip.
+
+Parser fix summary: replaced single fragile optional-group regex with a two-pass normalise-then-match approach. Em/en dashes, smart quotes, and whitespace are normalised before matching. A 5-case self-test runs at every server startup (5/5 passed). Per-message diagnostic logging added for all future failures.
+
+Production URL: `https://cyber-chaperone-r--ryfsny.replit.app`
+Twilio webhook: `POST /api/webhook/twilio`
+
 ## Important Notes
 
 - `lib/api-zod/src/index.ts` only exports from `./generated/api` (not `./generated/types`) to avoid duplicate export conflicts — orval config has `indexFiles: false` for the zod output
