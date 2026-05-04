@@ -27,6 +27,8 @@ router.post("/members", async (req, res): Promise<void> => {
         memberStatus: parsed.data.memberStatus ?? "active",
         role: parsed.data.role,
         notes: parsed.data.notes,
+        iceContactName: parsed.data.iceContactName ?? null,
+        iceContactPhone: parsed.data.iceContactPhone ?? null,
       },
     })
     .returning();
