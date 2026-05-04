@@ -1,0 +1,149 @@
+Important addition before publishing.
+
+Do not publish the previous unknown-message/location-pin fix yet.
+Add this requirement to the same surgical backend fix.
+
+Do not touch frontend styling.
+Do not change Twilio config.
+Do not change webhook URL.
+Do not add Rukus.
+Do not import members.
+Do not add route ticks yet.
+Do not redesign the dashboard.
+
+New required behaviour:
+
+1. Every trip-start reply must ask for the member’s current WhatsApp location pin.
+
+Current trip-start reply should change from:
+"Trip started. We are monitoring: Fourways → Rosebank Mall. ETA 16:30. Reply with updates along the way."
+
+To:
+"Trip started. We are monitoring: Fourways → Rosebank Mall. ETA 16:30.
+
+Please send your current WhatsApp location pin now so we can confirm your start point and route."
+
+2. When a location pin is received after a trip-start:
+- link it to the latest active trip
+- treat it as the verified current start position
+- record Latitude and Longitude
+- create a Google Maps link from the coordinates
+- convert the coordinates into a human-readable address if possible
+- store a clean evidence note
+- send Andre an Operator Mirror with both the human-readable address and the map link
+- send the member a confirmation reply
+
+3. Member reply after location pin:
+"Location received. We have added it to your active trip and will use it to confirm your route."
+
+4. Andre Operator Mirror for location pin must show:
+
+CYBER CHAPERONE — LOCATION UPDATE
+Member: [WhatsApp number]
+Trip: [start] → [destination] (ID: [trip ID])
+Current location: [human-readable address if available]
+Coordinates: [lat], [lon]
+Map: https://maps.google.com/?q=[lat],[lon]
+Status: GREEN
+Next action: Confirm route and monitor.
+
+5. If Google Maps / address lookup is available in the existing app:
+- use the current Google Maps API integration to reverse-geocode the coordinates into a human-readable address
+- do not expose the API key
+- do not fail the trip if address lookup fails
+
+6. If address lookup fails:
+- still store the coordinates
+- still create the Google Maps link
+- show:
+  Current location: Address unavailable — use map link
+- do not crash
+- do not block the member reply
+
+7. If route calculation is available in the existing app:
+- use the verified current location pin as origin
+- use the trip destination as destination
+- calculate estimated travel time / ETA
+- update the trip evidence or inference notes with:
+  [timestamp] ROUTE confirmed: current location → destination, ETA [time/duration]
+- send Andre an Operator Mirror:
+  CYBER CHAPERONE — ROUTE CONFIRMED
+  Include origin address, destination, estimated travel time, ETA, and map link.
+
+8. If route calculation is not available or fails:
+- do not crash
+- keep the member-provided ETA
+- set nextAction:
+  "Location received. Route calculation unavailable. Quiet monitor using member ETA."
+- log the failure safely without exposing secrets.
+
+9. Keep evidence notes clean.
+
+Good evidence format:
+[timestamp] LOCATION received: [human address] ([lat],[lon])
+[timestamp] ROUTE confirmed: [origin] → [destination], ETA [time/duration]
+
+Bad evidence format:
+Update received: ""
+Raw dump of Twilio request
+Long developer text
+
+10. Do not change database schema unless absolutely necessary.
+For this step, it is acceptable to store the location, address, map link, and route confirmation in evidence notes / inference notes / nextAction.
+
+Dev tests required before publishing:
+
+A. Trip-start:
+"TEST LOCATION — Leaving Fourways now heading to Rosebank Mall. ETA 16:30."
+Expected:
+- new GREEN trip created
+- member reply asks for current WhatsApp location pin
+- Andre mirror shows NEW TRIP
+
+B. Native location pin:
+Body=""
+Latitude="-26.04754066467285"
+Longitude="28.040624618530273"
+Address="Test Address"
+Label="Andre current location"
+Expected:
+- linked to active trip
+- location treated as verified current start point
+- member receives location confirmation reply
+- Andre mirror shows human-readable location, coordinates, and Google Maps link
+- evidence notes clean
+- no empty Update received note
+
+C. Address lookup failure simulation:
+Latitude and Longitude present, but no Address or Label.
+Expected:
+- coordinates stored
+- Google Maps link created
+- Current location shows "Address unavailable — use map link"
+- member still receives confirmation
+- no crash
+
+D. Route calculation:
+If existing route calculation is available:
+- use location pin as origin
+- use trip destination as destination
+- calculate ETA / travel duration
+- update evidence or inference notes
+- send Andre ROUTE CONFIRMED mirror
+
+If route calculation is not available:
+- report that clearly
+- do not build a monster system
+- keep the trip working with location and member ETA
+
+Final report required:
+1. Files changed.
+2. Exact trip-start reply wording.
+3. Exact location confirmation reply.
+4. Whether reverse-geocoding/address lookup was implemented or deferred.
+5. Whether route calculation from location pin to destination was implemented or deferred.
+6. Example Andre LOCATION UPDATE mirror.
+7. Example ROUTE CONFIRMED mirror if available.
+8. Dev test results A–D.
+9. Confirmation no frontend, Twilio config, webhook URL, Rukus, member import, route ticks, or dashboard redesign was changed.
+Do not publish until dev tests pass.

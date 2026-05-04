@@ -332,7 +332,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
       await sendReply(
         from,
         to,
-        `Trip started. We are monitoring: ${parsed.startLocation} → ${parsed.destination}.${etaNote} Reply with updates along the way.`,
+        `Trip started. We are monitoring: ${parsed.startLocation} → ${parsed.destination}.${etaNote}\n\nPlease send your current WhatsApp location pin now so we can confirm your start point and route.`,
       );
 
       await sendOperatorMirror(
@@ -384,36 +384,53 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
 
         if (hasNativeLocation) {
           const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
-          const locationDesc = [label, address].filter(Boolean).join(" — ");
-          const noteEntry = locationDesc
-            ? `[${ts}] LOCATION received: ${latitude},${longitude} — ${locationDesc}`
-            : `[${ts}] LOCATION received: ${latitude},${longitude}`;
 
+          // Human-readable address: WhatsApp/Twilio supplies Address and Label
+          // with the native location pin — use them directly.
+          // No external geocoding API is configured; if both fields are absent,
+          // fall back gracefully without failing the member flow.
+          const humanAddress = [label, address].filter(Boolean).join(", ") || "Address unavailable — use map link";
+
+          const noteEntry = `[${ts}] LOCATION received: ${humanAddress} (${latitude},${longitude})`;
           const note = appendNote(activeTrip.evidenceNotes, noteEntry);
+
+          // Route calculation is deferred — no Directions API key is configured.
+          // Record this cleanly so the operator knows to monitor using member ETA.
+          const routeNote = "Location received. Route calculation unavailable. Quiet monitor using member ETA.";
+
           await db
             .update(tripsTable)
-            .set({ evidenceNotes: note })
+            .set({
+              evidenceNotes: note,
+              nextAction: routeNote,
+            })
             .where(eq(tripsTable.id, activeTrip.id));
 
-          await sendReply(from, to, "Location received. We have added it to your active trip.");
+          await sendReply(
+            from,
+            to,
+            "Location received. We have added it to your active trip and will use it to confirm your route.",
+          );
 
           req.log.info(
-            { tripId: activeTrip.id, latitude, longitude, address, label },
+            { tripId: activeTrip.id, latitude, longitude, humanAddress },
             "Native location pin received and recorded",
           );
 
-          const mirrorLines = [
-            `CYBER CHAPERONE — LOCATION UPDATE`,
-            `Member: ${from}`,
-            `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
-            `Latitude: ${latitude}`,
-            `Longitude: ${longitude}`,
-          ];
-          if (locationDesc) mirrorLines.push(`Location: ${locationDesc}`);
-          mirrorLines.push(`Maps: ${mapsLink}`);
-          mirrorLines.push(`Status: ${activeTrip.status.toUpperCase()}`);
-
-          await sendOperatorMirror(to, mirrorLines.join("\n"), "location");
+          await sendOperatorMirror(
+            to,
+            [
+              `CYBER CHAPERONE — LOCATION UPDATE`,
+              `Member: ${from}`,
+              `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+              `Current location: ${humanAddress}`,
+              `Coordinates: ${latitude}, ${longitude}`,
+              `Map: ${mapsLink}`,
+              `Status: ${activeTrip.status.toUpperCase()}`,
+              `Next action: Confirm route and monitor.`,
+            ].join("\n"),
+            "location",
+          );
 
         } else if (isGoogleMapsLink) {
           // ── Google Maps link sent as plain text ───────────────────────────
