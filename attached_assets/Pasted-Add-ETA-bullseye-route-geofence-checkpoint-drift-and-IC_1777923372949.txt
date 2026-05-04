@@ -1,0 +1,134 @@
+Add ETA bullseye, route geofence, checkpoint drift, and ICE escalation logic to Cyber Chaperone.
+
+Do not touch the webhook MessageStatus / SmsStatus guard.
+Do not change dashboard styling.
+Do not break the current menu flow.
+Do not re-add the reason-for-trip question.
+
+Core principle:
+The member-provided ETA is the bullseye. The system must monitor variance from that ETA.
+
+Trip route intelligence must store:
+- originalMemberEta
+- calculatedGoogleEta
+- etaDriftMinutes
+- routePolyline
+- routeCorridorRadiusMeters
+- checkpointList
+- expectedCheckpointTimes
+- lastKnownLocation
+- lastKnownLocationTime
+- lastMemberCheckInTime
+- currentRouteConfidence: GREEN / AMBER / RED
+- iceContactName
+- iceContactPhone
+- iceEscalationStatus
+
+Route geofence:
+Use the Google route polyline to create a route corridor.
+When a member sends a location pin, compare the pin to the expected route corridor.
+If near route and on time = GREEN.
+If delayed or outside tolerance = AMBER.
+If off-route + no reply or repeated missed check-ins = RED / human review.
+
+Checkpoint logic:
+Generate checkpoints based on route length and duration.
+Each checkpoint must have:
+- checkpoint name / area
+- expected time
+- tolerance window
+- status: pending / confirmed / missed
+
+ETA drift logic:
+If ETA drift is minor, keep GREEN.
+If ETA drift exceeds 15 minutes, send member check-in.
+If ETA drift exceeds 30 minutes or repeats, mark AMBER.
+If ETA drift + no reply, escalate to operator.
+If distress words appear, mark RED immediately.
+
+Member check-in message:
+"Andre, Cyber Chaperone check-in.
+
+Your ETA appears to have shifted.
+
+According to our route calculation, you should be near:
+[checkpoint/area]
+
+Please reply:
+
+1. I am okay
+2. I am delayed
+3. My ETA changed
+4. I have stopped
+5. I need help
+6. I will send my location pin"
+
+ICE contact rule:
+Each member must have an In Case of Emergency contact.
+The ICE contact must not receive normal GREEN trip updates.
+The ICE contact is contacted only when escalation rules are met.
+
+ICE escalation triggers:
+- missed checkpoint + no member reply
+- repeated ETA drift
+- off-route concern + no reply
+- RED distress event
+- operator manually escalates
+
+ICE message:
+"Hi [ICE Name], this is Cyber Chaperone from eblockwatch.
+
+You are listed as [Member Name]'s emergency contact.
+
+We are monitoring their trip:
+[origin] → [destination].
+
+We have not received the expected check-in.
+
+Please try to contact [Member Name] and reply:
+
+1. I reached them — they are okay
+2. I reached them — they need help
+3. I could not reach them
+4. Please ask the Situation Room to call me"
+
+Operator mirror must show:
+- member name
+- trip route
+- original ETA
+- calculated ETA
+- ETA drift
+- expected checkpoint
+- last member check-in
+- last known location
+- ICE contact status
+- next action
+
+Privacy rule:
+Do not send the full member conversation, dashboard notes, or private trip history to the ICE contact.
+Send only the minimum information needed for them to assist.
+
+Required tests:
+1. Start trip with ETA.
+Expected: original ETA stored as bullseye.
+
+2. Google route calculated.
+Expected: polyline, calculated ETA, and checkpoints stored.
+
+3. ETA drift > 15 minutes.
+Expected: member check-in sent.
+
+4. Member replies "1".
+Expected: GREEN confirmed, checkpoint updated.
+
+5. Member misses check-in.
+Expected: AMBER operator mirror.
+
+6. Escalate to ICE.
+Expected: ICE message sent with limited information only.
+
+7. ICE replies "3".
+Expected: Situation Room receives ICE update and trip remains AMBER / escalates based on rules.
+
+8. Member sends "I need help".
+Expected: RED immediately, ICE/operator escalation available.
