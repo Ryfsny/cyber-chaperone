@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, messagesTable, tripsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -36,6 +36,16 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
     if (parsed) {
       const title = `${parsed.startLocation} → ${parsed.destination}`;
       const etaNote = parsed.eta ? ` ETA ${parsed.eta}.` : "";
+
+      const closedTrips = await db
+        .update(tripsTable)
+        .set({ status: "completed" })
+        .where(and(eq(tripsTable.travelerPhone, from), eq(tripsTable.status, "green")))
+        .returning({ id: tripsTable.id });
+
+      if (closedTrips.length > 0) {
+        req.log.info({ closedTripIds: closedTrips.map((t) => t.id) }, "Closed previous GREEN trips for traveler");
+      }
 
       const [newTrip] = await db
         .insert(tripsTable)
