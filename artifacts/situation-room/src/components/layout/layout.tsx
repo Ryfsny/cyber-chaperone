@@ -1,9 +1,12 @@
 import { Link, useLocation } from "wouter";
-import { MessageSquare, Plus, Shield } from "lucide-react";
+import { MessageSquare, Plus, Shield, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { AiAssistant } from "@/components/ai/AiAssistant";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const [showAi, setShowAi] = useState(false);
 
   const navItems = [
     { href: "/", label: "Situation Room", icon: Shield },
@@ -40,6 +43,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+          <button
+            onClick={() => setShowAi((v) => !v)}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2 text-sm uppercase tracking-wider rounded-sm transition-colors w-full text-left",
+              showAi
+                ? "bg-primary text-primary-foreground font-bold"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+            )}
+          >
+            <Bot className="w-4 h-4" />
+            AI Assistant
+          </button>
         </nav>
         <div className="p-4 border-t border-border">
           <Link
@@ -51,8 +66,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
       </aside>
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {children}
+      <main className="flex-1 flex min-w-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {children}
+        </div>
+        {showAi && (
+          <div className="w-80 shrink-0 flex flex-col overflow-hidden border-l border-border">
+            <AiAssistant onClose={() => setShowAi(false)} />
+          </div>
+        )}
       </main>
     </div>
   );

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, messagesTable, tripsTable, membersTable } from "@workspace/db";
 import { and, eq, ne, desc, count } from "drizzle-orm";
 import twilio from "twilio";
+import { assessRisk } from "./ai.js";
 
 const router: IRouter = Router();
 
@@ -743,17 +744,30 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
             );
 
           } else {
-            // ── Unknown classification ─────────────────────────────────────
-            const note = appendNote(
-              activeTrip.evidenceNotes,
-              `[${ts}] Update received: "${excerpt(body)}"`,
-            );
+            // ── Unknown classification — AI risk assessment ────────────────
+            const aiRisk = await assessRisk(body, activeTrip.title, activeTrip.evidenceNotes);
+            req.log.info({ tripId: activeTrip.id, aiRiskLevel: aiRisk.riskLevel, aiReason: aiRisk.reason }, "AI risk assessment for unknown message");
+
+            const noteEntry = `[${ts}] Update received: "${excerpt(body)}" [AI: ${aiRisk.riskLevel.toUpperCase()} — ${aiRisk.reason}]`;
+            const note = appendNote(activeTrip.evidenceNotes, noteEntry);
+
+            const updates: Record<string, string | null> = { evidenceNotes: note };
+            let mirrorKind: "amber" | "red" | "unknown" = "unknown";
+
+            if (aiRisk.riskLevel === "red" && activeTrip.status !== "red") {
+              updates.status = "red";
+              updates.nextAction = "AI flagged RED — immediate human review required.";
+              mirrorKind = "red";
+            } else if (aiRisk.riskLevel === "amber" && activeTrip.status === "green") {
+              updates.status = "amber";
+              updates.nextAction = "AI flagged AMBER — monitor closely.";
+              mirrorKind = "amber";
+            }
+
             await db
               .update(tripsTable)
-              .set({ evidenceNotes: note })
+              .set(updates)
               .where(eq(tripsTable.id, activeTrip.id));
-
-            req.log.info({ tripId: activeTrip.id }, "General update appended to evidence notes");
 
             const isLocationGuidance = LOCATION_GUIDANCE_PATTERN.test(body);
             const memberReply = isLocationGuidance
@@ -762,17 +776,19 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
 
             await sendReply(from, to, memberReply);
 
+            const effectiveStatus = updates.status ?? activeTrip.status;
             await sendOperatorMirror(
               to,
               [
-                `CYBER CHAPERONE — UPDATE`,
+                `CYBER CHAPERONE — UPDATE${aiRisk.riskLevel !== "green" ? ` [AI: ${aiRisk.riskLevel.toUpperCase()}]` : ""}`,
                 `Member: ${memberLabel}`,
                 `Known member: ${member?.isKnown ? "YES" : "NO"}`,
                 `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
                 `Message: "${excerpt(body, 120)}"`,
-                `Status: ${activeTrip.status.toUpperCase()}`,
+                `Status: ${String(effectiveStatus).toUpperCase()}`,
+                `AI Assessment: ${aiRisk.riskLevel.toUpperCase()} — ${aiRisk.reason}`,
               ].join("\n"),
-              "unknown",
+              mirrorKind,
             );
           }
         }

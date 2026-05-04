@@ -1,12 +1,13 @@
 import { useGetTrip, useGetTripMessages, useUpdateTrip, getGetTripQueryKey, getListTripsQueryKey } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
-import { ArrowLeft, Loader2, Save, Trash2, Clock, MapPin, Activity, XCircle } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Activity, XCircle } from "lucide-react";
 import { format } from "date-fns";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
+import { TripAiPanel } from "@/components/ai/TripAiPanel";
 
 export default function TripDetail() {
   const { id } = useParams();
@@ -207,6 +208,10 @@ export default function TripDetail() {
                 placeholder="Internal context..."
               />
             </div>
+          </div>
+
+          <div className="mt-8 pt-8 border-t border-border">
+            <TripAiPanel tripId={tripId} tripStatus={trip.status} />
           </div>
         </div>
 
