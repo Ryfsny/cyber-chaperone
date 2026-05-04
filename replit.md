@@ -49,9 +49,9 @@ Method: **POST** — paste this into Twilio Sandbox "WHEN A MESSAGE COMES IN"
 
 ## Database Schema
 
-- `trips` — traveler trip records (id, title, traveler_name, traveler_phone, status, evidence_notes, inference_notes, next_action, operator_notes, created_at, updated_at)
+- `trips` — traveler trip records (id, title, traveler_name, traveler_phone, status, evidence_notes, inference_notes, next_action, operator_notes, original_member_eta, current_route_confidence, last_member_checkin_time, eta_drift_minutes, ice_escalation_status, created_at, updated_at)
 - `messages` — raw WhatsApp messages (id, from_number, to_number, body, message_sid, trip_id, received_at)
-- `members` — known member registry (id, first_name, last_name, display_name, whatsapp_number, member_status, role, notes, created_at, updated_at)
+- `members` — known member registry (id, first_name, last_name, display_name, whatsapp_number, member_status, role, notes, ice_contact_name, ice_contact_phone, created_at, updated_at)
 - `conversation_states` — per-member menu state (id, whatsapp_number, current_flow, current_step, pending_trip_data, updated_at)
 
 ## Secrets Required
@@ -72,21 +72,24 @@ Ignore ONLY when `req.body.MessageStatus` is present and truthy. Never block on 
 **Conversation flows (stored in `conversation_states` table):**
 - `MAIN_MENU` — waiting for a main menu choice (1–10)
 - `CYBER_CHAPERONE` — waiting for a CC menu choice (1–7)
-- `TRIP_FLOW` — collecting trip data step-by-step (start → destination → reason → ETA → create trip)
+- `TRIP_FLOW` — collecting trip data step-by-step (start → destination → ETA → create trip)
 - `CLARIFICATION` — waiting for member response on ambiguous destination
+- `CHECKIN` — ETA drift check-in flow (choices 1–6: okay / delayed / ETA changed / stopped / help / send pin)
 
 **Trigger words:**
 - Main menu: `Hi`, `Hello`, `Menu`, `Start`, `0`
 - Cyber Chaperone: `5` from main menu, or keywords: `cyber chaperone`, `travel`, `trip`, `start trip`
 
 **Priority order (highest to lowest):**
-1. Distress (`help`, `sos`, `emergency`, `danger`, `call me`, …) → RED, always
+0. ICE contact detection — if `from` matches any member's `ice_contact_phone` → ICE reply handler (choices 1–4)
+1. Distress (`help`, `sos`, `emergency`, `danger`, `call me`, …) → RED + auto-escalate to ICE if not yet escalated
 2. Arrival (`arrived`, `i have arrived`, …) → close trip, always
 3. Menu reset trigger (`Hi`/`0`/…) → main menu
-4. Conversation state routing (TRIP_FLOW → CLARIFICATION → CYBER_CHAPERONE → MAIN_MENU)
+4. Conversation state routing (TRIP_FLOW → CLARIFICATION → CHECKIN → CYBER_CHAPERONE → MAIN_MENU)
 5. `START [from] to [dest] ETA [time]` structured parser → create GREEN trip
-6. Ambiguous destination guard (has active trip + movement language but not a full trip-start) → AMBER + clarification menu + operator mirror
-7. Pass-through to existing freeform trip-start parser (`Leaving X heading to Y ETA Z`) and follow-up classifier
+6. ETA drift monitoring — if drift ≥15 min and no recent check-in → CHECKIN flow; if drift ≥45 min → auto-ICE escalation + AMBER
+7. Ambiguous destination guard (has active trip + movement language but not a full trip-start) → AMBER + clarification menu + operator mirror
+8. Pass-through to existing freeform trip-start parser (`Leaving X heading to Y ETA Z`) and follow-up classifier
 
 **Unsafe fallback rule:** unclear movement/destination messages with an active trip → CLARIFICATION NEEDED / AMBER, never silent GREEN.
 
@@ -98,12 +101,44 @@ Members added via `POST /api/members` default to `memberStatus: "active"` and ar
 
 ## Pilot Members (production)
 
-| Name | WhatsApp | Role | DB id |
-|------|----------|------|-------|
-| Andre Snyman | whatsapp:+27825611065 | operator | 1 |
-| Kieren Snyman | whatsapp:+27833263751 | member | 2 |
+| Name | WhatsApp | Role | DB id | ICE Contact |
+|------|----------|------|-------|-------------|
+| Andre Snyman | whatsapp:+27825611065 | operator | 1 | — |
+| Kieren Snyman | whatsapp:+27833263751 | member | 4 | Andre Snyman (+27825611065) |
 
 PILOT_MEMBERS hardcoded fallback in webhook.ts still covers Andre if the DB lookup ever fails.
+
+## ETA Bullseye + ICE Escalation Architecture (2026-05-04)
+
+### ETA bullseye
+- When a trip is created (step-by-step or START format), `original_member_eta` is stored normalised (e.g. "23:30").
+- On every message from a known member with an active trip, `calculateEtaDrift` computes minutes past ETA using current local time (midnight-crossing safe).
+- `eta_drift_minutes` is updated on the trip record on every message.
+
+### Check-in flow
+- Drift ≥15 min + no check-in in last 25 min → `CHECKIN` flow entered, check-in prompt sent with 6 choices.
+- Choice 1 (okay) → GREEN, `lastMemberCheckinTime` updated.
+- Choice 2/3 (delayed/ETA changed) → AMBER, collect new ETA.
+- Choice 4 (stopped) → AMBER + operator mirror.
+- Choice 5 (need help) → RED (caught by distress handler).
+- Choice 6 (send pin) → wait for location pin.
+
+### ICE escalation
+- `ice_contact_name` + `ice_contact_phone` stored on `members` table (WhatsApp format: `whatsapp:+XXXXXXXXXXX`).
+- Auto-escalation: drift ≥45 min → `escalateToIce` → AMBER + ICE message sent + operator mirror.
+- Distress RED → if ICE not yet contacted (`iceEscalationStatus=null`) → auto-escalate to ICE.
+- ICE escalation status: `null` → `SENT` → `REPLIED`.
+
+### ICE reply detection
+- On every inbound message, `detectIceContact(from)` queries `members WHERE ice_contact_phone = from`.
+- If match: routes to `handleIceReply` (choices 1–4) before any other handler.
+- ICE reply "1" (okay) → GREEN + operator mirror.
+- ICE reply "2" (needs help) → RED + operator mirror.
+- ICE reply "3" (could not reach) → AMBER + operator mirror.
+- ICE reply "4" (call me) → operator mirror with ICE phone.
+
+### Google Maps stubs
+- `routePolyline`, `calculatedGoogleEta`, `checkpointList` are currently NULL — requires `GOOGLE_MAPS_API_KEY` env var + Directions API enabled. Add key as secret to activate route geofence and checkpoint logic.
 
 ## MVP Production Proof — 2026-05-04
 

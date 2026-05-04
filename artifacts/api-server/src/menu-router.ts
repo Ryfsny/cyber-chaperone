@@ -58,6 +58,9 @@ const STEP_WAITING_FOR_START_LOCATION = "WAITING_FOR_START_LOCATION";
 const STEP_WAITING_FOR_DESTINATION = "WAITING_FOR_DESTINATION";
 const STEP_WAITING_FOR_ETA = "WAITING_FOR_ETA";
 
+const FLOW_CHECKIN = "CHECKIN";
+const STEP_WAITING_FOR_NEW_ETA = "WAITING_FOR_NEW_ETA";
+
 // ── Keyword detectors ─────────────────────────────────────────────────────────
 
 const MAIN_MENU_TRIGGER = /^(hi|hello|menu|start|0)$/i;
@@ -97,6 +100,37 @@ function excerpt(body: string, maxLen = 80): string {
 
 function appendNote(existing: string | null | undefined, entry: string): string {
   return existing ? `${existing}\n${entry}` : entry;
+}
+
+function normaliseEta(raw: string): string {
+  return raw.replace(/^ETA\s+/i, "").trim();
+}
+
+function calculateEtaDrift(originalMemberEta: string, _tripCreatedAt: Date): number | null {
+  const normalised = normaliseEta(originalMemberEta);
+  const match = normalised.match(/^(\d{1,2}):(\d{2})(?:\s*([AaPp][Mm]))?$/);
+  if (!match) return null;
+  let h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  if (match[3]) {
+    const ampm = match[3].toLowerCase();
+    if (ampm === "pm" && h < 12) h += 12;
+    if (ampm === "am" && h === 12) h = 0;
+  }
+  const now = new Date();
+  const etaDate = new Date(now);
+  etaDate.setHours(h, m, 0, 0);
+  // If ETA appears more than 12 hrs in the future it's likely from yesterday (midnight crossover)
+  if ((etaDate.getTime() - now.getTime()) / 3600000 > 12) {
+    etaDate.setDate(etaDate.getDate() - 1);
+  }
+  return Math.round((now.getTime() - etaDate.getTime()) / 60000);
+}
+
+function shouldSendCheckin(trip: { lastMemberCheckinTime: Date | null | undefined }): boolean {
+  if (!trip.lastMemberCheckinTime) return true;
+  const mins = (Date.now() - new Date(trip.lastMemberCheckinTime).getTime()) / 60000;
+  return mins > 25;
 }
 
 // ── Twilio ────────────────────────────────────────────────────────────────────
@@ -239,6 +273,8 @@ async function createTrip(
       status: "green",
       evidenceNotes: initialNote,
       inferenceNotes: `Trip started via menu flow.${etaNote}`,
+      originalMemberEta: eta ? normaliseEta(eta) : null,
+      currentRouteConfidence: "green",
     })
     .returning();
 
@@ -269,6 +305,366 @@ async function createTrip(
   );
 
   await resetConvState(from);
+}
+
+// ── Check-in text ─────────────────────────────────────────────────────────────
+
+function checkinText(name: string, driftMin: number, tripTitle: string): string {
+  return [
+    `${name}, Cyber Chaperone check-in.`,
+    ``,
+    `Your ETA appears to have shifted — ${driftMin} minute${driftMin === 1 ? "" : "s"} past expected arrival.`,
+    ``,
+    `Trip: ${tripTitle}`,
+    ``,
+    `Please reply:`,
+    ``,
+    `1. I am okay`,
+    `2. I am delayed`,
+    `3. My ETA changed`,
+    `4. I have stopped`,
+    `5. I need help`,
+    `6. I will send my location pin`,
+    ``,
+    `Reply 0 for Main Menu.`,
+  ].join("\n");
+}
+
+async function sendCheckinPrompt(
+  ctx: MenuContext,
+  trip: typeof tripsTable.$inferSelect,
+  driftMin: number,
+): Promise<void> {
+  const name = ctx.member?.displayName ?? ctx.from;
+  await sendWhatsApp(ctx.from, ctx.to, checkinText(name, driftMin, trip.title));
+}
+
+// ── ICE escalation ────────────────────────────────────────────────────────────
+
+async function escalateToIce(
+  ctx: MenuContext,
+  memberRow: typeof membersTable.$inferSelect,
+  trip: typeof tripsTable.$inferSelect,
+): Promise<void> {
+  const { to, log } = ctx;
+  if (!memberRow.iceContactPhone) return;
+  const icePhone = memberRow.iceContactPhone;
+  const iceName = memberRow.iceContactName ?? "Emergency Contact";
+  const memberName = memberRow.displayName;
+  try {
+    await db
+      .update(tripsTable)
+      .set({ iceEscalationStatus: "SENT" })
+      .where(eq(tripsTable.id, trip.id));
+    await sendWhatsApp(
+      icePhone,
+      to,
+      [
+        `Hi ${iceName}, this is Cyber Chaperone from eblockwatch.`,
+        ``,
+        `You are listed as ${memberName}'s emergency contact.`,
+        ``,
+        `We are monitoring their trip:`,
+        `${trip.title}.`,
+        ``,
+        `We have not received the expected check-in.`,
+        ``,
+        `Please try to contact ${memberName} and reply:`,
+        ``,
+        `1. I reached them — they are okay`,
+        `2. I reached them — they need help`,
+        `3. I could not reach them`,
+        `4. Please ask the Situation Room to call me`,
+      ].join("\n"),
+    );
+    log.info({ memberName, tripId: trip.id }, "ICE contact escalated");
+    await sendOperatorMirror(to, [
+      `CYBER CHAPERONE — ICE ESCALATION SENT`,
+      `Member: ${memberName}`,
+      `Trip: ${trip.title} (ID: ${trip.id})`,
+      `ICE Contact: ${iceName}`,
+      `Status: ⚠️ AMBER`,
+      `Next action: Await ICE response. If no reply in 15 min, call operator.`,
+    ].join("\n"));
+  } catch (err) {
+    log.error({ err }, "Failed to escalate to ICE");
+  }
+}
+
+// ── ICE contact detection ─────────────────────────────────────────────────────
+
+async function detectIceContact(
+  from: string,
+): Promise<{ memberRow: typeof membersTable.$inferSelect; activeTrip: Awaited<ReturnType<typeof findActiveTrip>> } | null> {
+  try {
+    const [memberRow] = await db
+      .select()
+      .from(membersTable)
+      .where(eq(membersTable.iceContactPhone, from))
+      .limit(1);
+    if (!memberRow) return null;
+    const activeTrip = await findActiveTrip(memberRow.whatsappNumber);
+    return { memberRow, activeTrip };
+  } catch {
+    return null;
+  }
+}
+
+// ── ICE reply handler ─────────────────────────────────────────────────────────
+
+async function handleIceReply(
+  ctx: MenuContext,
+  memberRow: typeof membersTable.$inferSelect,
+  activeTrip: Awaited<ReturnType<typeof findActiveTrip>>,
+): Promise<void> {
+  const { from, to, body, messageSid, log } = ctx;
+  const choice = body.trim();
+  const memberName = memberRow.displayName;
+  const ts = nowUtc();
+
+  await saveMessage(from, to, body, messageSid, activeTrip?.id ?? null);
+
+  const mirror = (extra: string[]) =>
+    [
+      `CYBER CHAPERONE — ICE UPDATE`,
+      `Member: ${memberName}`,
+      activeTrip ? `Trip: ${activeTrip.title} (ID: ${activeTrip.id})` : `Trip: No active trip`,
+      ...extra,
+    ].join("\n");
+
+  if (choice === "1") {
+    if (activeTrip) {
+      await db
+        .update(tripsTable)
+        .set({
+          iceEscalationStatus: "REPLIED",
+          status: "green",
+          currentRouteConfidence: "green",
+          evidenceNotes: appendNote(activeTrip.evidenceNotes, `[${ts}] ICE REPLY: Contact confirmed member is okay.`),
+          nextAction: "ICE confirmed member is okay. Continue monitoring.",
+        })
+        .where(eq(tripsTable.id, activeTrip.id));
+    }
+    await sendWhatsApp(from, to, `Thank you. We have noted that ${memberName} is okay. We will continue monitoring their trip.`);
+    log.info({ memberName, tripId: activeTrip?.id }, "ICE reply: member okay");
+    await sendOperatorMirror(to, mirror([`ICE response: Reached member — okay`, `Status: GREEN`, `Next action: Monitor. ICE confirmed okay.`]));
+    return;
+  }
+
+  if (choice === "2") {
+    if (activeTrip) {
+      await db
+        .update(tripsTable)
+        .set({
+          iceEscalationStatus: "REPLIED",
+          status: "red",
+          evidenceNotes: appendNote(activeTrip.evidenceNotes, `[${ts}] ICE REPLY: Contact confirmed member needs help.`),
+          nextAction: "URGENT: ICE confirmed member needs help. Immediate human review.",
+        })
+        .where(eq(tripsTable.id, activeTrip.id));
+    }
+    await sendWhatsApp(from, to, `Thank you for confirming. We have marked this as urgent. The Situation Room has been notified.`);
+    log.info({ memberName, tripId: activeTrip?.id }, "ICE reply: member needs help — RED");
+    await sendOperatorMirror(to, mirror([`ICE response: Reached member — NEEDS HELP`, `Status: 🚨 RED`, `Next action: IMMEDIATE human review.`]));
+    return;
+  }
+
+  if (choice === "3") {
+    if (activeTrip) {
+      await db
+        .update(tripsTable)
+        .set({
+          iceEscalationStatus: "REPLIED",
+          status: "amber",
+          currentRouteConfidence: "amber",
+          evidenceNotes: appendNote(activeTrip.evidenceNotes, `[${ts}] ICE REPLY: Could not reach member.`),
+          nextAction: "AMBER: ICE could not reach member. Escalate to human review.",
+        })
+        .where(eq(tripsTable.id, activeTrip.id));
+    }
+    await sendWhatsApp(from, to, `Understood. Thank you for trying. We are escalating to human review. The Situation Room will follow up.`);
+    log.info({ memberName, tripId: activeTrip?.id }, "ICE reply: could not reach member — AMBER");
+    await sendOperatorMirror(to, mirror([`ICE response: Could NOT reach member`, `Status: ⚠️ AMBER`, `Next action: Immediate human review. Call member directly.`]));
+    return;
+  }
+
+  if (choice === "4") {
+    if (activeTrip) {
+      await db
+        .update(tripsTable)
+        .set({
+          iceEscalationStatus: "REPLIED",
+          evidenceNotes: appendNote(activeTrip.evidenceNotes, `[${ts}] ICE REPLY: Requesting callback from Situation Room.`),
+          nextAction: "ICE requesting callback from Situation Room.",
+        })
+        .where(eq(tripsTable.id, activeTrip.id));
+    }
+    await sendWhatsApp(from, to, `Noted. The Situation Room will contact you shortly.`);
+    log.info({ memberName }, "ICE reply: requesting callback");
+    await sendOperatorMirror(to, mirror([`ICE response: Please call me`, `ICE phone: ${from}`, `Next action: Call ICE contact immediately.`]));
+    return;
+  }
+
+  await sendWhatsApp(from, to, [
+    `Hi, this is Cyber Chaperone from eblockwatch.`,
+    ``,
+    `Please reply:`,
+    `1. I reached them — they are okay`,
+    `2. I reached them — they need help`,
+    `3. I could not reach them`,
+    `4. Please ask the Situation Room to call me`,
+  ].join("\n"));
+}
+
+// ── Check-in flow handler ─────────────────────────────────────────────────────
+
+async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<void> {
+  const { from, to, body, member, messageSid, log } = ctx;
+  const name = member?.displayName ?? from;
+  const pending = state.pendingTripData ?? {};
+  const choice = body.trim();
+  const ts = nowUtc();
+
+  let trip: typeof tripsTable.$inferSelect | null = null;
+  if (pending.clarificationActiveTripId) {
+    const [row] = await db.select().from(tripsTable).where(eq(tripsTable.id, pending.clarificationActiveTripId)).limit(1);
+    trip = row ?? null;
+  }
+  if (!trip) trip = await findActiveTrip(from);
+
+  await saveMessage(from, to, body, messageSid, trip?.id ?? null);
+
+  if (choice === "0") {
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, mainMenuText(name));
+    return;
+  }
+
+  if (state.currentStep === STEP_WAITING_FOR_NEW_ETA) {
+    const newEta = normaliseEta(choice);
+    if (trip) {
+      await db
+        .update(tripsTable)
+        .set({
+          originalMemberEta: newEta,
+          status: "green",
+          currentRouteConfidence: "green",
+          lastMemberCheckinTime: new Date(),
+          etaDriftMinutes: 0,
+          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] ETA updated to ${newEta} (was ${trip.originalMemberEta ?? "unknown"})`),
+          nextAction: "ETA updated. Monitoring continues.",
+        })
+        .where(eq(tripsTable.id, trip.id));
+    }
+    await resetConvState(from);
+    await sendWhatsApp(from, to, `✅ ETA updated to ${newEta}. We will continue monitoring your trip.\n\nReply 0 for Main Menu.`);
+    if (trip) {
+      await sendOperatorMirror(to, [
+        `CYBER CHAPERONE — ETA UPDATED`,
+        `Member: ${name}`,
+        `Trip: ${trip.title} (ID: ${trip.id})`,
+        `New ETA: ${newEta}`,
+        `Status: GREEN`,
+      ].join("\n"));
+    }
+    return;
+  }
+
+  if (choice === "1") {
+    if (trip) {
+      await db
+        .update(tripsTable)
+        .set({
+          status: "green",
+          currentRouteConfidence: "green",
+          lastMemberCheckinTime: new Date(),
+          etaDriftMinutes: 0,
+          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] CHECK-IN: Member confirmed okay.`),
+          nextAction: "Member checked in okay. Continue monitoring.",
+        })
+        .where(eq(tripsTable.id, trip.id));
+    }
+    await resetConvState(from);
+    await sendWhatsApp(from, to, `✅ Check-in confirmed. We are still monitoring your trip.\n\nReply 0 for Main Menu.`);
+    log.info({ from, tripId: trip?.id }, "Check-in: member okay");
+    if (trip) {
+      await sendOperatorMirror(to, [
+        `CYBER CHAPERONE — CHECK-IN CONFIRMED`,
+        `Member: ${name}`,
+        `Trip: ${trip.title} (ID: ${trip.id})`,
+        `Status: GREEN`,
+        `Member: I am okay.`,
+      ].join("\n"));
+    }
+    return;
+  }
+
+  if (choice === "2" || choice === "3") {
+    if (trip) {
+      await db
+        .update(tripsTable)
+        .set({ status: "amber", currentRouteConfidence: "amber" })
+        .where(eq(tripsTable.id, trip.id));
+    }
+    await setConvState(from, { currentFlow: FLOW_CHECKIN, currentStep: STEP_WAITING_FOR_NEW_ETA, pendingTripData: pending });
+    const reason = choice === "2" ? "you are delayed" : "your ETA has changed";
+    await sendWhatsApp(from, to, `Understood — ${reason}.\n\nPlease send your new ETA.\n\nExample:\nETA 23:30\n\nReply 0 for Main Menu.`);
+    return;
+  }
+
+  if (choice === "4") {
+    if (trip) {
+      await db
+        .update(tripsTable)
+        .set({
+          status: "amber",
+          currentRouteConfidence: "amber",
+          lastMemberCheckinTime: new Date(),
+          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] CHECK-IN: Member has stopped.`),
+          nextAction: "Member has stopped. Monitor closely.",
+        })
+        .where(eq(tripsTable.id, trip.id));
+    }
+    await resetConvState(from);
+    await sendWhatsApp(from, to, `Understood. We have noted that you have stopped and will monitor closely.\n\nIf you move again, send your location pin 📍 or a message.\nReply 0 for Main Menu.`);
+    log.info({ from, tripId: trip?.id }, "Check-in: member stopped — AMBER");
+    if (trip) {
+      await sendOperatorMirror(to, [
+        `CYBER CHAPERONE — AMBER (MEMBER STOPPED)`,
+        `Member: ${name}`,
+        `Trip: ${trip.title} (ID: ${trip.id})`,
+        `Status: ⚠️ AMBER`,
+        `Member: I have stopped.`,
+        `Next action: Monitor. Await next update.`,
+      ].join("\n"));
+    }
+    return;
+  }
+
+  if (choice === "5") {
+    if (trip) {
+      await db.update(tripsTable).set({ status: "red", nextAction: "Immediate human review." }).where(eq(tripsTable.id, trip.id));
+    }
+    await resetConvState(from);
+    await sendWhatsApp(from, to, `Help message received. Your trip has been flagged for immediate human review.`);
+    return;
+  }
+
+  if (choice === "6") {
+    if (trip) {
+      await db.update(tripsTable).set({ lastMemberCheckinTime: new Date() }).where(eq(tripsTable.id, trip.id));
+    }
+    await resetConvState(from);
+    await sendWhatsApp(from, to, `Please send your location pin 📍 and we will update your trip.\n\nReply 0 for Main Menu.`);
+    return;
+  }
+
+  if (trip) {
+    await sendCheckinPrompt(ctx, trip, trip.etaDriftMinutes ?? 15);
+  } else {
+    await sendWhatsApp(from, to, `Please reply with 1–6 or 0 for Main Menu.`);
+  }
 }
 
 // ── Menu text builders ────────────────────────────────────────────────────────
@@ -916,10 +1312,26 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   const name = member?.displayName ?? from;
   const trimmed = body.trim();
 
+  // 0. ICE contact detection — runs before all other handlers
+  const iceCtx = await detectIceContact(from);
+  if (iceCtx) {
+    await handleIceReply(ctx, iceCtx.memberRow, iceCtx.activeTrip);
+    log.info({ from }, "Menu router: ICE contact reply handler");
+    return { handled: true };
+  }
+
   // 1. PRIORITY: Distress — always handled first
   if (isDistress(trimmed)) {
     const activeTrip = await findActiveTrip(from);
     await handleDistress(ctx, activeTrip);
+    if (activeTrip && member?.isKnown) {
+      try {
+        const [mr] = await db.select().from(membersTable).where(eq(membersTable.whatsappNumber, from)).limit(1);
+        if (mr?.iceContactPhone && !activeTrip.iceEscalationStatus) {
+          await escalateToIce(ctx, mr, activeTrip);
+        }
+      } catch { /* best-effort */ }
+    }
     log.info({ from }, "Menu router: distress priority handler");
     return { handled: true };
   }
@@ -956,6 +1368,11 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     return { handled: true };
   }
 
+  if (state.currentFlow === FLOW_CHECKIN) {
+    await handleCheckinChoice(ctx, state);
+    return { handled: true };
+  }
+
   if (state.currentFlow === FLOW_CYBER_CHAPERONE) {
     const handled = await handleCCChoice(ctx, state);
     if (handled) return { handled: true };
@@ -985,8 +1402,38 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     return { handled: true };
   }
 
-  // 7. Ambiguous destination guard — only when member has an active trip
+  // Fetch active trip once for the remaining checks
   const activeTrip = await findActiveTrip(from);
+
+  // 7. ETA drift monitoring — reactive check on every unhandled message
+  if (member?.isKnown && activeTrip?.originalMemberEta && activeTrip.status !== "completed" && activeTrip.status !== "red") {
+    const drift = calculateEtaDrift(activeTrip.originalMemberEta, activeTrip.createdAt);
+    if (drift !== null && drift > 0) {
+      await db.update(tripsTable).set({ etaDriftMinutes: drift }).where(eq(tripsTable.id, activeTrip.id)).catch(() => {});
+      if (drift >= 45 && !activeTrip.iceEscalationStatus) {
+        try {
+          const [mr] = await db.select().from(membersTable).where(eq(membersTable.whatsappNumber, from)).limit(1);
+          if (mr?.iceContactPhone) {
+            await db.update(tripsTable).set({ status: "amber", currentRouteConfidence: "amber" }).where(eq(tripsTable.id, activeTrip.id)).catch(() => {});
+            await escalateToIce(ctx, mr, activeTrip);
+          }
+        } catch { /* best-effort */ }
+      }
+      if (drift >= 15 && state.currentFlow !== FLOW_CHECKIN && shouldSendCheckin(activeTrip)) {
+        await sendCheckinPrompt(ctx, activeTrip, drift);
+        await setConvState(from, {
+          currentFlow: FLOW_CHECKIN,
+          currentStep: null,
+          pendingTripData: { clarificationActiveTripId: activeTrip.id },
+        });
+        await saveMessage(from, to, body, messageSid, activeTrip.id);
+        log.info({ from, drift, tripId: activeTrip.id }, "ETA drift check-in sent");
+        return { handled: true };
+      }
+    }
+  }
+
+  // 8. Ambiguous destination guard — only when member has an active trip
   if (activeTrip) {
     const ambMatch = trimmed.match(AMBIGUOUS_DEST_PATTERN);
     if (ambMatch) {
@@ -996,7 +1443,7 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     }
   }
 
-  // 8. Pass through to existing webhook trip-start parser and follow-up classifier
+  // 9. Pass through to existing webhook trip-start parser and follow-up classifier
   log.info({ from, currentFlow: state.currentFlow }, "Menu router: passing through to existing handlers");
   return { handled: false };
 }

@@ -11,6 +11,8 @@ export const membersTable = pgTable("members", {
   memberStatus: text("member_status").notNull().default("unknown"),
   role: text("role"),
   notes: text("notes"),
+  iceContactName: text("ice_contact_name"),
+  iceContactPhone: text("ice_contact_phone"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

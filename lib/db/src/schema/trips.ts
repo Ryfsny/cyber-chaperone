@@ -12,6 +12,11 @@ export const tripsTable = pgTable("trips", {
   inferenceNotes: text("inference_notes"),
   nextAction: text("next_action"),
   operatorNotes: text("operator_notes"),
+  originalMemberEta: text("original_member_eta"),
+  currentRouteConfidence: text("current_route_confidence").default("green"),
+  lastMemberCheckinTime: timestamp("last_member_checkin_time", { withTimezone: true }),
+  etaDriftMinutes: integer("eta_drift_minutes"),
+  iceEscalationStatus: text("ice_escalation_status"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
