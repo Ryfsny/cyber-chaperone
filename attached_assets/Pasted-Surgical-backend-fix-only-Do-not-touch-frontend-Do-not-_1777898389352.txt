@@ -1,0 +1,124 @@
+Surgical backend fix only.
+
+Do not touch frontend.
+Do not touch Twilio settings.
+Do not change webhook URL.
+Do not change database schema.
+Do not manually insert or edit trips.
+Do not redesign anything.
+
+Fix the verified production parser failure.
+
+Verified production failure:
+The live WhatsApp message:
+"TEST RED — Leaving Fourways now heading to Sandton City. ETA 15:30."
+
+did not create a trip.
+The parser ran but returned null.
+There was no active trip, so the system replied:
+"Message received, but there is no active trip open..."
+
+Important:
+This exact message was expected to pass because "TEST LIVE — Leaving Fourways now heading to Rosebank Mall. ETA 14:40." worked.
+
+Required work:
+
+1. Add safe parser diagnostics in webhook.ts.
+
+For every inbound message, log:
+- normalized message body
+- whether trip-start parsing matched
+- if not matched, which required part failed:
+  - leaving/start phrase
+  - heading/going phrase
+  - destination
+  - ETA
+- do not log secrets
+- do not log Twilio auth data
+
+2. Replace the single fragile trip-start regex with a more robust parser function.
+
+Required parser behaviour:
+- It must search inside the message, not only from the start.
+- It must ignore prefixes like:
+  - TEST LIVE —
+  - TEST RED —
+  - Andre test:
+  - Morning Andre,
+- It must normalize:
+  - em dash / en dash
+  - extra spaces
+  - smart punctuation
+  - trailing full stops
+- It must detect:
+  - Leaving Fourways heading to Rosebank Mall ETA 14:40
+  - Leaving Fourways now heading to Rosebank Mall. ETA 14:40.
+  - Leaving from Fourways going to Rosebank Mall ETA 14:40
+  - TEST RED — Leaving Fourways now heading to Sandton City. ETA 15:30.
+  - Morning Andre, leaving Bryanston now heading to The Oyster Box. ETA 18:10.
+
+3. Do not allow the word RED in the prefix "TEST RED" to interfere with trip-start detection.
+Trip-start detection must run before distress classification.
+
+4. Add unit-style parser tests inside the dev verification script or test block.
+
+Must test these exact strings:
+
+A. "TEST LIVE — Leaving Fourways now heading to Rosebank Mall. ETA 14:40."
+Expected:
+startLocation = Fourways
+destination = Rosebank Mall
+eta = 14:40
+
+B. "TEST RED — Leaving Fourways now heading to Sandton City. ETA 15:30."
+Expected:
+startLocation = Fourways
+destination = Sandton City
+eta = 15:30
+
+C. "Andre test: Leaving Fourways heading to Rosebank Mall ETA 14:40"
+Expected:
+startLocation = Fourways
+destination = Rosebank Mall
+eta = 14:40
+
+D. "Leaving from Fourways going to Rosebank Mall. ETA 14:40."
+Expected:
+startLocation = Fourways
+destination = Rosebank Mall
+eta = 14:40
+
+E. "Morning Andre, leaving Bryanston now heading to The Oyster Box. ETA 18:10."
+Expected:
+startLocation = Bryanston
+destination = The Oyster Box
+eta = 18:10
+
+5. After parser tests pass, run dev webhook tests:
+
+Dev Test 1:
+"TEST RED — Leaving Fourways now heading to Sandton City. ETA 15:30."
+Expected:
+- new trip created
+- status GREEN
+- clean evidence notes
+- Twilio acknowledgement
+
+Dev Test 2:
+"I need help."
+Expected:
+- linked to latest active Sandton City trip
+- status RED
+- nextAction = immediate human review
+- clean distress evidence note
+- Twilio help acknowledgement
+- no emergency dispatch claim
+
+6. Report before publishing:
+- exact parser function changed
+- reason why production failed
+- parser test results A–E
+- dev webhook test results 1–2
+- confirmation no frontend, Twilio config, webhook URL, or schema changed
+
+Do not publish until the tests pass.

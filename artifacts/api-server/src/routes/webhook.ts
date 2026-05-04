@@ -33,6 +33,24 @@ function classifyMessage(text: string): MessageClass {
   return "unknown";
 }
 
+// ── Text normalisation ────────────────────────────────────────────────────────
+
+/**
+ * Normalise WhatsApp message text before parsing:
+ *  - em/en dashes → hyphen-minus
+ *  - smart quotes → straight quotes
+ *  - collapse runs of whitespace to single space
+ *  - strip trailing punctuation / whitespace
+ */
+function normaliseBody(raw: string): string {
+  return raw
+    .replace(/[\u2012\u2013\u2014\u2015]/g, "-") // en/em/figure dash → -
+    .replace(/[\u2018\u2019\u0060\u00b4]/g, "'")  // smart single quotes
+    .replace(/[\u201c\u201d]/g, '"')               // smart double quotes
+    .replace(/\s+/g, " ")                          // collapse whitespace
+    .trim();
+}
+
 // ── Trip-start parser ────────────────────────────────────────────────────────
 
 interface ParsedTripStart {
@@ -41,21 +59,101 @@ interface ParsedTripStart {
   eta: string | null;
 }
 
+/**
+ * Two-pass approach — keeps each regex simpler and avoids optional-group
+ * backtracking failures that silently break the single-regex version.
+ *
+ * Pass 1 (ETA present): "leaving [from] START [now] heading/going to DEST [.,] ETA HH:MM[.]"
+ * Pass 2 (no ETA):      "leaving [from] START [now] heading/going to DEST[.,]"
+ *
+ * Works anywhere inside the message — no ^ anchor — so prefixes such as
+ * "TEST LIVE — ", "TEST RED — ", "Morning Andre," are transparently ignored.
+ */
 function parseTripStart(body: string): ParsedTripStart | null {
-  // Matches "Leaving [from] X [now] heading/going to Y [. ETA HH:MM]"
-  // anywhere inside the message body — no ^ anchor, so prefixes like
-  // "TEST LIVE — " or "Andre test: " are safely ignored.
-  // Supports "from X", "going to", and ETA with or without a preceding dot/comma.
-  const match = body.match(
-    /leaving\s+(?:from\s+)?(.+?)\s+(?:now\s+)?(?:heading|going)\s+to\s+([^.,\n]+?)(?:\s*[.,]?\s*eta\s+(\d{1,2}:\d{2}(?:\s*[aApP][mM])?))?[.,]?\s*$/i,
+  const norm = normaliseBody(body);
+
+  // ── Pass 1: message contains an explicit ETA ─────────────────────────────
+  const withEta = norm.match(
+    /\bleaving\s+(?:from\s+)?(.+?)\s+(?:now\s+)?(?:heading|going)\s+to\s+([^.,]+?)[.,]?\s+eta\s+(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)[.,]?\s*$/i,
   );
-  if (!match) return null;
-  return {
-    startLocation: match[1].trim(),
-    destination: match[2].trim(),
-    eta: match[3]?.trim() ?? null,
-  };
+  if (withEta) {
+    return {
+      startLocation: withEta[1].trim(),
+      destination: withEta[2].trim(),
+      eta: withEta[3].trim(),
+    };
+  }
+
+  // ── Pass 2: no ETA — plain trip-start ────────────────────────────────────
+  const withoutEta = norm.match(
+    /\bleaving\s+(?:from\s+)?(.+?)\s+(?:now\s+)?(?:heading|going)\s+to\s+([^.,\n]+?)[.,]?\s*$/i,
+  );
+  if (withoutEta) {
+    return {
+      startLocation: withoutEta[1].trim(),
+      destination: withoutEta[2].trim(),
+      eta: null,
+    };
+  }
+
+  return null;
 }
+
+// ── Parser self-test (runs once at startup, logs results) ─────────────────────
+
+interface ParserTestCase {
+  input: string;
+  expectStart: string;
+  expectDest: string;
+  expectEta: string | null;
+}
+
+const PARSER_TEST_CASES: ParserTestCase[] = [
+  {
+    input: "TEST LIVE — Leaving Fourways now heading to Rosebank Mall. ETA 14:40.",
+    expectStart: "Fourways", expectDest: "Rosebank Mall", expectEta: "14:40",
+  },
+  {
+    input: "TEST RED — Leaving Fourways now heading to Sandton City. ETA 15:30.",
+    expectStart: "Fourways", expectDest: "Sandton City", expectEta: "15:30",
+  },
+  {
+    input: "Andre test: Leaving Fourways heading to Rosebank Mall ETA 14:40",
+    expectStart: "Fourways", expectDest: "Rosebank Mall", expectEta: "14:40",
+  },
+  {
+    input: "Leaving from Fourways going to Rosebank Mall. ETA 14:40.",
+    expectStart: "Fourways", expectDest: "Rosebank Mall", expectEta: "14:40",
+  },
+  {
+    input: "Morning Andre, leaving Bryanston now heading to The Oyster Box. ETA 18:10.",
+    expectStart: "Bryanston", expectDest: "The Oyster Box", expectEta: "18:10",
+  },
+];
+
+function runParserSelfTest(): void {
+  let passed = 0;
+  let failed = 0;
+  for (const tc of PARSER_TEST_CASES) {
+    const result = parseTripStart(tc.input);
+    const ok =
+      result !== null &&
+      result.startLocation === tc.expectStart &&
+      result.destination === tc.expectDest &&
+      result.eta === tc.expectEta;
+    if (ok) {
+      passed++;
+    } else {
+      failed++;
+      console.error(
+        `[parser-selftest] FAIL: "${tc.input.slice(0, 60)}" → got ${JSON.stringify(result)} expected start=${tc.expectStart} dest=${tc.expectDest} eta=${tc.expectEta}`,
+      );
+    }
+  }
+  console.info(`[parser-selftest] ${passed}/${PARSER_TEST_CASES.length} passed, ${failed} failed`);
+}
+
+runParserSelfTest();
 
 // ── Active trip lookup (safe query) ──────────────────────────────────────────
 
@@ -106,7 +204,34 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
   req.log.info({ from, messageSid: messageSid ? "[redacted]" : null }, "Incoming WhatsApp message");
 
   try {
+    // ── Diagnostic: log normalised body and parser outcome ──────────────────
+    const normalisedForLog = normaliseBody(body);
+    const hasLeaving = /\bleaving\b/i.test(normalisedForLog);
+    const hasHeadingTo = /\b(?:heading|going)\s+to\b/i.test(normalisedForLog);
+    const hasEta = /\beta\s+\d{1,2}:\d{2}/i.test(normalisedForLog);
+    req.log.info(
+      { normalisedBody: normalisedForLog.slice(0, 200), hasLeaving, hasHeadingTo, hasEta },
+      "parser-diagnostics",
+    );
+
     const parsed = parseTripStart(body);
+
+    if (!parsed) {
+      req.log.info(
+        {
+          normalisedBody: normalisedForLog.slice(0, 200),
+          hasLeaving,
+          hasHeadingTo,
+          hasEta,
+          verdict: !hasLeaving
+            ? "missing leaving keyword"
+            : !hasHeadingTo
+              ? "missing heading/going to keyword"
+              : "regex did not match — check destination / ETA format",
+        },
+        "parser-no-match",
+      );
+    }
 
     if (parsed) {
       // ── Trip-start message ──────────────────────────────────────────────────
