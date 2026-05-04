@@ -1,0 +1,87 @@
+Do not build anything.
+Do not change code.
+Do not create new features.
+Do not insert test data.
+Handover report only.
+
+We have now confirmed the real Cyber Chaperone MVP works end-to-end.
+
+Please produce a clear technical handover report covering:
+
+1. Project identity
+   - Replit project name
+   - Production app URL
+   - Main dashboard URL
+   - API base URL
+
+2. Confirmed working flow
+   - WhatsApp member sends message
+   - Twilio Sandbox receives message
+   - Twilio POSTs to production webhook
+   - Replit receives POST /api/webhook/twilio
+   - Message is saved
+   - Trip-start message is parsed
+   - New trip row is created
+   - Message is linked to the new trip
+   - Trip appears in Active Trips
+
+3. Twilio configuration
+   - Exact webhook URL currently required
+   - Required method: POST
+   - Status callback URL status
+   - Sandbox sender number
+   - Confirm registered participant number used in testing
+
+4. Working message formats
+   Include the exact patterns that currently create trips, for example:
+   - Leaving Sandton now heading to OR Tambo. ETA 11:30.
+   - TEST 09:25 — Leaving Bryanston now heading to Hyde Park Corner. ETA 10:00.
+
+5. Parsing rules
+   - How startLocation is extracted
+   - How destination is extracted
+   - How ETA is extracted
+   - What status is assigned by default
+   - What evidenceNotes and inferenceNotes are saved
+
+6. Database evidence from successful tests
+   - Trip ID 3: Bryanston → Hyde Park Corner
+   - Trip ID 4: Sandton → OR Tambo
+   - Message IDs linked to those trips
+   - Confirm these were real Twilio deliveries, not simulated POSTs
+
+7. Files changed
+   - List every file changed
+   - Explain what changed in each file
+   - Confirm whether trip-processor.ts exists or not
+   - Confirm where webhook parsing logic now lives
+
+8. What is NOT built yet
+   - Arrival handling
+   - Close trip logic
+   - Active vs completed trip filtering
+   - Amber / Red escalation automation
+   - Live location handling
+   - ETA drift monitoring
+   - Duplicate trip handling
+   - Member profile matching
+   - Production WhatsApp sender outside Sandbox
+
+9. Risks / known weaknesses
+   - Twilio Sandbox delivery reliability
+   - Current parser limitations
+   - Multiple active trips from same number
+   - Old trips staying active
+   - No operator confirmation before creating trip
+   - Any deployment or environment risks
+
+10. Recommended next controlled task
+   Give one next task only.
+   It must be small, server-side, and practical.
+   Do not recommend a redesign.
+
+Format the handover report clearly with headings.
+Evidence first.
+No sales language.
+No vague claims.
+No new work.
