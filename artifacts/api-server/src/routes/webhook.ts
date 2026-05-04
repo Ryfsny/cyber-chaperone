@@ -306,9 +306,9 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
   // inbound messages — processing them as such causes false distress alerts.
   const messageStatus: string = req.body?.MessageStatus ?? req.body?.SmsStatus ?? "";
   if (messageStatus) {
-    req.log.info({ messageStatus }, "Twilio status callback — ignoring");
-    res.set("Content-Type", "text/xml");
-    res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+    const callbackSid: string = req.body?.MessageSid ?? req.body?.SmsSid ?? "unknown";
+    req.log.info(`Ignored Twilio status callback: ${messageStatus} ${callbackSid}`);
+    res.sendStatus(200);
     return;
   }
 
