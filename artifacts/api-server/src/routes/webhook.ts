@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, messagesTable, tripsTable } from "@workspace/db";
-import { and, eq, ne, desc } from "drizzle-orm";
+import { db, messagesTable, tripsTable, membersTable } from "@workspace/db";
+import { and, eq, ne, desc, count } from "drizzle-orm";
 import twilio from "twilio";
 
 const router: IRouter = Router();
@@ -40,19 +40,12 @@ function classifyMessage(text: string): MessageClass {
 
 // ── Text normalisation ────────────────────────────────────────────────────────
 
-/**
- * Normalise WhatsApp message text before parsing:
- *  - em/en dashes → hyphen-minus
- *  - smart quotes → straight quotes
- *  - collapse runs of whitespace to single space
- *  - strip trailing punctuation / whitespace
- */
 function normaliseBody(raw: string): string {
   return raw
-    .replace(/[\u2012\u2013\u2014\u2015]/g, "-") // en/em/figure dash → -
-    .replace(/[\u2018\u2019\u0060\u00b4]/g, "'")  // smart single quotes
-    .replace(/[\u201c\u201d]/g, '"')               // smart double quotes
-    .replace(/\s+/g, " ")                          // collapse whitespace
+    .replace(/[\u2012\u2013\u2014\u2015]/g, "-")
+    .replace(/[\u2018\u2019\u0060\u00b4]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -64,20 +57,9 @@ interface ParsedTripStart {
   eta: string | null;
 }
 
-/**
- * Two-pass approach — keeps each regex simpler and avoids optional-group
- * backtracking failures that silently break the single-regex version.
- *
- * Pass 1 (ETA present): "leaving [from] START [now] heading/going to DEST [.,] ETA HH:MM[.]"
- * Pass 2 (no ETA):      "leaving [from] START [now] heading/going to DEST[.,]"
- *
- * Works anywhere inside the message — no ^ anchor — so prefixes such as
- * "TEST LIVE — ", "TEST RED — ", "Morning Andre," are transparently ignored.
- */
 function parseTripStart(body: string): ParsedTripStart | null {
   const norm = normaliseBody(body);
 
-  // ── Pass 1: message contains an explicit ETA ─────────────────────────────
   const withEta = norm.match(
     /\bleaving\s+(?:from\s+)?(.+?)\s+(?:now\s+)?(?:heading|going)\s+to\s+([^.,]+?)[.,]?\s+eta\s+(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)[.,]?\s*$/i,
   );
@@ -89,7 +71,6 @@ function parseTripStart(body: string): ParsedTripStart | null {
     };
   }
 
-  // ── Pass 2: no ETA — plain trip-start ────────────────────────────────────
   const withoutEta = norm.match(
     /\bleaving\s+(?:from\s+)?(.+?)\s+(?:now\s+)?(?:heading|going)\s+to\s+([^.,\n]+?)[.,]?\s*$/i,
   );
@@ -104,7 +85,7 @@ function parseTripStart(body: string): ParsedTripStart | null {
   return null;
 }
 
-// ── Parser self-test (runs once at startup, logs results) ─────────────────────
+// ── Parser self-test ─────────────────────────────────────────────────────────
 
 interface ParserTestCase {
   input: string;
@@ -160,7 +141,62 @@ function runParserSelfTest(): void {
 
 runParserSelfTest();
 
-// ── Active trip lookup (safe query) ──────────────────────────────────────────
+// ── Member lookup ─────────────────────────────────────────────────────────────
+
+interface MemberInfo {
+  displayName: string;
+  role: string | null;
+  memberStatus: string;
+  isKnown: boolean;
+}
+
+async function lookupMember(whatsappNumber: string): Promise<MemberInfo | null> {
+  const [member] = await db
+    .select()
+    .from(membersTable)
+    .where(eq(membersTable.whatsappNumber, whatsappNumber))
+    .limit(1);
+  if (!member) return null;
+  return {
+    displayName: member.displayName,
+    role: member.role,
+    memberStatus: member.memberStatus,
+    isKnown: member.memberStatus === "verified",
+  };
+}
+
+interface MemberHistory {
+  totalMessages: number;
+  totalTrips: number;
+  lastTripStatus: string | null;
+}
+
+async function getMemberHistory(whatsappNumber: string): Promise<MemberHistory> {
+  const [msgRow] = await db
+    .select({ total: count() })
+    .from(messagesTable)
+    .where(eq(messagesTable.fromNumber, whatsappNumber));
+
+  const [tripRow] = await db
+    .select({ total: count() })
+    .from(tripsTable)
+    .where(eq(tripsTable.travelerPhone, whatsappNumber));
+
+  const [lastTrip] = await db
+    .select({ status: tripsTable.status })
+    .from(tripsTable)
+    .where(eq(tripsTable.travelerPhone, whatsappNumber))
+    .orderBy(desc(tripsTable.id))
+    .limit(1);
+
+  return {
+    totalMessages: Number(msgRow?.total ?? 0),
+    totalTrips: Number(tripRow?.total ?? 0),
+    lastTripStatus: lastTrip?.status ?? null,
+  };
+}
+
+// ── Active trip lookup ────────────────────────────────────────────────────────
 
 async function findActiveTrip(phone: string) {
   const [trip] = await db
@@ -196,11 +232,6 @@ function mirrorEnabled(kind: MirrorKind): boolean {
   return false;
 }
 
-/**
- * Send an operator mirror notification to Andre.
- * Errors are logged but never bubble up — member flow is unaffected.
- * `twilioNumber` is the Twilio sandbox number (the inbound `To` field).
- */
 async function sendOperatorMirror(
   twilioNumber: string,
   mirrorBody: string,
@@ -231,6 +262,15 @@ function appendNote(existing: string | null | undefined, entry: string): string 
   return existing ? `${existing}\n${entry}` : entry;
 }
 
+// ── Member identity line for evidence notes ───────────────────────────────────
+
+function memberNoteLine(member: MemberInfo | null, phone: string): string {
+  if (member?.isKnown) {
+    return `Member: ${member.displayName} (${phone}) — verified`;
+  }
+  return `Member: Unknown (${phone})`;
+}
+
 // ── Webhook handler ───────────────────────────────────────────────────────────
 
 router.post("/webhook/twilio", async (req, res): Promise<void> => {
@@ -239,7 +279,6 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
   const to = req.body?.To ?? "";
   const messageSid = req.body?.MessageSid ?? null;
 
-  // Location fields sent by Twilio for WhatsApp native location pins
   const latitude: string = req.body?.Latitude ?? "";
   const longitude: string = req.body?.Longitude ?? "";
   const address: string = req.body?.Address ?? "";
@@ -248,7 +287,15 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
   req.log.info({ from, messageSid: messageSid ? "[redacted]" : null }, "Incoming WhatsApp message");
 
   try {
-    // ── Diagnostic: log normalised body and parser outcome ──────────────────
+    // ── Member lookup — runs on every inbound message ───────────────────────
+    const member = await lookupMember(from);
+    const memberLabel = member?.isKnown ? member.displayName : from;
+    req.log.info(
+      { from, isKnownMember: member?.isKnown ?? false, displayName: member?.displayName ?? null },
+      "member-lookup",
+    );
+
+    // ── Diagnostic ──────────────────────────────────────────────────────────
     const normalisedForLog = normaliseBody(body);
     const hasLeaving = /\bleaving\b/i.test(normalisedForLog);
     const hasHeadingTo = /\b(?:heading|going)\s+to\b/i.test(normalisedForLog);
@@ -283,6 +330,49 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
       );
     }
 
+    // ── Unknown member with no active trip and no trip-start ─────────────────
+    // Check this BEFORE trip-start / follow-up branching so the unknown-member
+    // mirror fires even when the message is unrecognised.
+    if (!member?.isKnown && !parsed) {
+      // We still process the message normally below — this block only fires the
+      // unknown-member mirror when there is no trip-start. For trip-start from
+      // an unknown member we handle the mirror inside the trip-start block.
+      const activeTrip = await findActiveTrip(from);
+      if (!activeTrip) {
+        // No trip at all — fire unknown-member mirror and prompt
+        await db.insert(messagesTable).values({
+          fromNumber: from,
+          toNumber: to,
+          body,
+          messageSid,
+          tripId: null,
+        });
+
+        await sendReply(
+          from,
+          to,
+          "I don't yet have your member profile linked to this WhatsApp number. Please reply with your name, surname, and registered eblockwatch cellphone number so we can connect your trip to your profile.",
+        );
+
+        await sendOperatorMirror(
+          to,
+          [
+            `CYBER CHAPERONE — UNKNOWN MEMBER`,
+            `WhatsApp: ${from}`,
+            `Known member: NO`,
+            `Message: "${excerpt(body || "(empty)", 120)}"`,
+            `Next action: Ask member for name, surname, and registered eblockwatch cellphone number.`,
+          ].join("\n"),
+          "unknown",
+        );
+
+        req.log.info({ from }, "Unknown member — no active trip — unknown-member mirror sent");
+        res.set("Content-Type", "text/xml");
+        res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+        return;
+      }
+    }
+
     if (parsed) {
       // ── Trip-start message ──────────────────────────────────────────────────
       const title = `${parsed.startLocation} → ${parsed.destination}`;
@@ -306,6 +396,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
 
       const initialNote = [
         `[${ts}] Trip-start message received from WhatsApp.`,
+        `[${ts}] ${memberNoteLine(member, from)}`,
         `[${ts}] Route: ${parsed.startLocation} → ${parsed.destination}${etaNote}`,
       ].join("\n");
 
@@ -313,7 +404,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
         .insert(tripsTable)
         .values({
           title,
-          travelerName: from,
+          travelerName: member?.isKnown ? member.displayName : from,
           travelerPhone: from,
           status: "green",
           evidenceNotes: initialNote,
@@ -335,23 +426,46 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
         `Trip started. We are monitoring: ${parsed.startLocation} → ${parsed.destination}.${etaNote}\n\nPlease send your current WhatsApp location pin now so we can confirm your start point and route.`,
       );
 
-      await sendOperatorMirror(
-        to,
-        [
-          `CYBER CHAPERONE — NEW TRIP`,
-          `Member: ${from}`,
-          `Route: ${parsed.startLocation} → ${parsed.destination}${etaNote}`,
-          `Status: GREEN`,
-          `Trip ID: ${newTrip.id}`,
-          `Next action: Monitoring — awaiting updates.`,
-          `---`,
-          excerpt(body, 120),
-        ].join("\n"),
-        "trip-start",
-      );
+      if (member?.isKnown) {
+        const history = await getMemberHistory(from);
+        await sendOperatorMirror(
+          to,
+          [
+            `CYBER CHAPERONE — NEW TRIP`,
+            `Member: ${member.displayName}`,
+            `WhatsApp: ${from}`,
+            `Known member: YES`,
+            `Role: ${member.role ?? "—"}`,
+            `Trip: ${parsed.startLocation} → ${parsed.destination}${etaNote}`,
+            `Trip ID: ${newTrip.id}`,
+            `Status: GREEN`,
+            `History: ${history.totalTrips} trip(s) | ${history.totalMessages} message(s) | Last status: ${history.lastTripStatus ?? "none"}`,
+            `Next action: Monitoring — awaiting updates.`,
+            `---`,
+            excerpt(body, 120),
+          ].join("\n"),
+          "trip-start",
+        );
+      } else {
+        await sendOperatorMirror(
+          to,
+          [
+            `CYBER CHAPERONE — NEW TRIP (UNKNOWN MEMBER)`,
+            `WhatsApp: ${from}`,
+            `Known member: NO`,
+            `Trip: ${parsed.startLocation} → ${parsed.destination}${etaNote}`,
+            `Trip ID: ${newTrip.id}`,
+            `Status: GREEN`,
+            `Next action: Trip created. Identify member — ask for name, surname, registered eblockwatch cellphone number.`,
+            `---`,
+            excerpt(body, 120),
+          ].join("\n"),
+          "trip-start",
+        );
+      }
 
       req.log.info(
-        { tripId: newTrip.id, title, startLocation: parsed.startLocation, destination: parsed.destination, eta: parsed.eta },
+        { tripId: newTrip.id, title, startLocation: parsed.startLocation, destination: parsed.destination, eta: parsed.eta, isKnownMember: member?.isKnown ?? false },
         "New trip created from WhatsApp message",
       );
     } else {
@@ -378,32 +492,18 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
 
         // ── Location pin (native WhatsApp location) ─────────────────────────
         const hasNativeLocation = latitude !== "" && longitude !== "";
-
-        // ── Google Maps link sent as text ───────────────────────────────────
         const isGoogleMapsLink = GOOGLE_MAPS_PATTERN.test(body);
 
         if (hasNativeLocation) {
           const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
-
-          // Human-readable address: WhatsApp/Twilio supplies Address and Label
-          // with the native location pin — use them directly.
-          // No external geocoding API is configured; if both fields are absent,
-          // fall back gracefully without failing the member flow.
           const humanAddress = [label, address].filter(Boolean).join(", ") || "Address unavailable — use map link";
-
           const noteEntry = `[${ts}] LOCATION received: ${humanAddress} (${latitude},${longitude})`;
           const note = appendNote(activeTrip.evidenceNotes, noteEntry);
-
-          // Route calculation is deferred — no Directions API key is configured.
-          // Record this cleanly so the operator knows to monitor using member ETA.
           const routeNote = "Location received. Route calculation unavailable. Quiet monitor using member ETA.";
 
           await db
             .update(tripsTable)
-            .set({
-              evidenceNotes: note,
-              nextAction: routeNote,
-            })
+            .set({ evidenceNotes: note, nextAction: routeNote })
             .where(eq(tripsTable.id, activeTrip.id));
 
           await sendReply(
@@ -419,21 +519,35 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
 
           await sendOperatorMirror(
             to,
-            [
-              `CYBER CHAPERONE — LOCATION UPDATE`,
-              `Member: ${from}`,
-              `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
-              `Current location: ${humanAddress}`,
-              `Coordinates: ${latitude}, ${longitude}`,
-              `Map: ${mapsLink}`,
-              `Status: ${activeTrip.status.toUpperCase()}`,
-              `Next action: Confirm route and monitor.`,
-            ].join("\n"),
+            member?.isKnown
+              ? [
+                  `CYBER CHAPERONE — LOCATION UPDATE`,
+                  `Member: ${member.displayName}`,
+                  `WhatsApp: ${from}`,
+                  `Known member: YES`,
+                  `Role: ${member.role ?? "—"}`,
+                  `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+                  `Current location: ${humanAddress}`,
+                  `Coordinates: ${latitude}, ${longitude}`,
+                  `Map: ${mapsLink}`,
+                  `Status: ${activeTrip.status.toUpperCase()}`,
+                  `Next action: Confirm route and monitor.`,
+                ].join("\n")
+              : [
+                  `CYBER CHAPERONE — LOCATION UPDATE (UNKNOWN MEMBER)`,
+                  `WhatsApp: ${from}`,
+                  `Known member: NO`,
+                  `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+                  `Current location: ${humanAddress}`,
+                  `Coordinates: ${latitude}, ${longitude}`,
+                  `Map: ${mapsLink}`,
+                  `Status: ${activeTrip.status.toUpperCase()}`,
+                  `Next action: Confirm route and monitor. Identify member.`,
+                ].join("\n"),
             "location",
           );
 
         } else if (isGoogleMapsLink) {
-          // ── Google Maps link sent as plain text ───────────────────────────
           const linkExcerpt = excerpt(body, 200);
           const note = appendNote(
             activeTrip.evidenceNotes,
@@ -452,7 +566,8 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
             to,
             [
               `CYBER CHAPERONE — LOCATION LINK`,
-              `Member: ${from}`,
+              `Member: ${memberLabel}`,
+              `Known member: ${member?.isKnown ? "YES" : "NO"}`,
               `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
               `Link: ${linkExcerpt}`,
               `Status: ${activeTrip.status.toUpperCase()}`,
@@ -461,14 +576,14 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
           );
 
         } else if (body.trim() === "") {
-          // ── Empty body, no location fields ────────────────────────────────
           req.log.info({ tripId: activeTrip.id }, "Empty message received — no body, no location fields");
 
           await sendOperatorMirror(
             to,
             [
               `CYBER CHAPERONE — UPDATE`,
-              `Member: ${from}`,
+              `Member: ${memberLabel}`,
+              `Known member: ${member?.isKnown ? "YES" : "NO"}`,
               `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
               `Message: (empty — possible unsupported media type)`,
               `Status: ${activeTrip.status.toUpperCase()}`,
@@ -488,11 +603,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
             );
             await db
               .update(tripsTable)
-              .set({
-                status: "red",
-                evidenceNotes: note,
-                nextAction: "Immediate human review required.",
-              })
+              .set({ status: "red", evidenceNotes: note, nextAction: "Immediate human review required." })
               .where(eq(tripsTable.id, activeTrip.id));
 
             await sendReply(
@@ -506,7 +617,8 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
               to,
               [
                 `CYBER CHAPERONE — RED`,
-                `Member: ${from}`,
+                `Member: ${memberLabel}`,
+                `Known member: ${member?.isKnown ? "YES" : "NO"}`,
                 `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
                 `Distress message: "${excerpt(body, 100)}"`,
                 `Status: RED`,
@@ -522,24 +634,18 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
             );
             await db
               .update(tripsTable)
-              .set({
-                status: "completed",
-                evidenceNotes: note,
-              })
+              .set({ status: "completed", evidenceNotes: note })
               .where(eq(tripsTable.id, activeTrip.id));
 
-            await sendReply(
-              from,
-              to,
-              "Received. Your arrival has been recorded and the trip is closed.",
-            );
+            await sendReply(from, to, "Received. Your arrival has been recorded and the trip is closed.");
             req.log.info({ tripId: activeTrip.id }, "Trip closed — arrival keyword");
 
             await sendOperatorMirror(
               to,
               [
                 `CYBER CHAPERONE — TRIP CLOSED`,
-                `Member: ${from}`,
+                `Member: ${memberLabel}`,
+                `Known member: ${member?.isKnown ? "YES" : "NO"}`,
                 `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
                 `Status: COMPLETED`,
                 `Arrival: "${excerpt(body, 100)}"`,
@@ -554,11 +660,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
             );
             await db
               .update(tripsTable)
-              .set({
-                status: "amber",
-                evidenceNotes: note,
-                nextAction: "Quiet monitor — await next update from traveler.",
-              })
+              .set({ status: "amber", evidenceNotes: note, nextAction: "Quiet monitor — await next update from traveler." })
               .where(eq(tripsTable.id, activeTrip.id));
 
             await sendReply(
@@ -572,7 +674,8 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
               to,
               [
                 `CYBER CHAPERONE — AMBER`,
-                `Member: ${from}`,
+                `Member: ${memberLabel}`,
+                `Known member: ${member?.isKnown ? "YES" : "NO"}`,
                 `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
                 `Reason: delay / traffic`,
                 `Status: AMBER`,
@@ -592,24 +695,18 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
             );
             await db
               .update(tripsTable)
-              .set({
-                evidenceNotes: note,
-                inferenceNotes: `ETA updated to ${newEta}.`,
-              })
+              .set({ evidenceNotes: note, inferenceNotes: `ETA updated to ${newEta}.` })
               .where(eq(tripsTable.id, activeTrip.id));
 
-            await sendReply(
-              from,
-              to,
-              "ETA update received. We are still monitoring the trip.",
-            );
+            await sendReply(from, to, "ETA update received. We are still monitoring the trip.");
             req.log.info({ tripId: activeTrip.id, newEta }, "Trip ETA updated — ETA keyword");
 
             await sendOperatorMirror(
               to,
               [
                 `CYBER CHAPERONE — ETA UPDATE`,
-                `Member: ${from}`,
+                `Member: ${memberLabel}`,
+                `Known member: ${member?.isKnown ? "YES" : "NO"}`,
                 `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
                 `New ETA: ${newEta}`,
                 `Status: ${activeTrip.status.toUpperCase()}`,
@@ -620,7 +717,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
             );
 
           } else {
-            // ── Unknown — save note, send member reply, mirror Andre ────────
+            // ── Unknown classification ─────────────────────────────────────
             const note = appendNote(
               activeTrip.evidenceNotes,
               `[${ts}] Update received: "${excerpt(body)}"`,
@@ -643,7 +740,8 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
               to,
               [
                 `CYBER CHAPERONE — UPDATE`,
-                `Member: ${from}`,
+                `Member: ${memberLabel}`,
+                `Known member: ${member?.isKnown ? "YES" : "NO"}`,
                 `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
                 `Message: "${excerpt(body, 120)}"`,
                 `Status: ${activeTrip.status.toUpperCase()}`,

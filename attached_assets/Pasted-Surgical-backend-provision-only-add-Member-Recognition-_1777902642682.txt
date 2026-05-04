@@ -1,0 +1,120 @@
+Surgical backend provision only: add Member Recognition Layer.
+
+Do not build a full CRM.
+Do not import old members.
+Do not add Rukus.
+Do not touch frontend styling.
+Do not redesign the dashboard.
+Do not change Twilio config.
+Do not change webhook URL.
+Do not add route ticks yet.
+Do not change trip logic except to enrich trips/messages with member identity where safe.
+
+Goal:
+When a WhatsApp message arrives, the system must recognise the sender if their WhatsApp number exists in the member database/provision table.
+
+Current known test member:
+- firstName: Andre
+- lastName: Snyman
+- displayName: Andre Snyman
+- whatsappNumber: whatsapp:+27825611065
+- memberStatus: verified
+- role: Founder / test operator
+- notes: Internal Cyber Chaperone production test member
+
+Required behaviour:
+
+1. Inspect the current database schema first.
+   - If a members table already exists, use it.
+   - If not, add the smallest possible members table.
+
+Suggested minimum fields:
+- id
+- firstName
+- lastName
+- displayName
+- whatsappNumber
+- memberStatus: verified / unknown / pending
+- role
+- notes
+- createdAt
+- updatedAt
+
+2. Seed only Andre Snyman as the first known member.
+   Do not import old eblockwatch members yet.
+
+3. On every inbound WhatsApp message:
+   - look up the sender by whatsappNumber
+   - if found, attach member identity to logs, operator mirror, and trip context
+   - if not found, treat as Unknown Member
+
+4. For known members, Andre Operator Mirror must show:
+
+CYBER CHAPERONE — NEW TRIP
+Member: Andre Snyman
+WhatsApp: whatsapp:+27825611065
+Known member: YES
+Role: Founder / test operator
+Trip: [route]
+Trip ID: [id]
+Status: [status]
+
+5. For unknown members, Andre Operator Mirror must show:
+
+CYBER CHAPERONE — UNKNOWN MEMBER
+WhatsApp: whatsapp:+27...
+Known member: NO
+Message: [short excerpt]
+Next action: Ask member for name, surname, and registered eblockwatch cellphone number.
+
+6. If an unknown member starts a trip, do not block the trip during pilot.
+   Create the trip, but mark the member as unknown in the mirror/notes.
+
+7. Unknown member reply:
+"I don’t yet have your member profile linked to this WhatsApp number. Please reply with your name, surname, and registered eblockwatch cellphone number so we can connect your trip to your profile."
+
+8. Add simple history counts where easy:
+   - total messages from this WhatsApp number
+   - total trips from this WhatsApp number
+   - last trip status
+If this is too much for one step, report it as deferred. Do not build a monster.
+
+9. Keep future CRM integration in mind:
+   - this members table is a placeholder for future CRM/Rukus/SmartChat sync
+   - do not hardwire the system in a way that prevents future CRM replacement
+
+Dev tests required:
+
+A. Known member test:
+Inbound from whatsapp:+27825611065
+Expected:
+- recognised as Andre Snyman
+- mirror shows Member: Andre Snyman
+- Known member: YES
+- trip/message still processes normally
+
+B. Unknown member test:
+Inbound from a different WhatsApp number
+Expected:
+- Known member: NO
+- trip still processes if destination/trip-start is valid
+- member receives unknown-profile reply
+- Andre mirror shows UNKNOWN MEMBER
+
+C. History count test:
+For Andre’s number, confirm whether the system can report:
+- total messages
+- total trips
+- last trip status
+If not implemented, explain why and defer cleanly.
+
+Report before publishing:
+1. Files changed.
+2. Database change, if any.
+3. Seeded member record for Andre.
+4. Exact lookup logic.
+5. Example known-member mirror.
+6. Example unknown-member mirror.
+7. Dev test results A–C.
+8. Confirmation no frontend styling, Twilio config, webhook URL, Rukus, old member import, route ticks, or dashboard redesign changed.
+Do not publish until dev tests pass.
