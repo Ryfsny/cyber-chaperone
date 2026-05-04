@@ -56,7 +56,6 @@ const FLOW_CLARIFICATION = "CLARIFICATION";
 
 const STEP_WAITING_FOR_START_LOCATION = "WAITING_FOR_START_LOCATION";
 const STEP_WAITING_FOR_DESTINATION = "WAITING_FOR_DESTINATION";
-const STEP_WAITING_FOR_REASON = "WAITING_FOR_REASON";
 const STEP_WAITING_FOR_ETA = "WAITING_FOR_ETA";
 
 // ── Keyword detectors ─────────────────────────────────────────────────────────
@@ -666,33 +665,26 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
     await sendWhatsApp(
       from,
       to,
-      `Got it — starting from ${startLocation}.\n\nWhere are you heading to?\nReply 0 for Main Menu.`,
+      `Got it — I have your starting location.\n\nWhere are you heading to?\nReply 0 for Main Menu.`,
     );
     log.info({ from, startLocation }, "Trip flow: start location collected");
     return;
   }
 
   if (step === STEP_WAITING_FOR_DESTINATION) {
-    const updatedPending: PendingTripData = { ...pending, destination: body.trim() };
-    await setConvState(from, {
-      currentFlow: FLOW_TRIP_FLOW,
-      currentStep: STEP_WAITING_FOR_REASON,
-      pendingTripData: updatedPending,
-    });
-    await sendWhatsApp(from, to, `Heading to ${body.trim()}.\n\nWhat is the reason for your trip?\nReply 0 for Main Menu.`);
-    log.info({ from, destination: body.trim() }, "Trip flow: destination collected");
-    return;
-  }
-
-  if (step === STEP_WAITING_FOR_REASON) {
-    const updatedPending: PendingTripData = { ...pending, reason: body.trim() };
+    const destination = body.trim();
+    const updatedPending: PendingTripData = { ...pending, destination };
     await setConvState(from, {
       currentFlow: FLOW_TRIP_FLOW,
       currentStep: STEP_WAITING_FOR_ETA,
       pendingTripData: updatedPending,
     });
-    await sendWhatsApp(from, to, `Reason noted.\n\nWhat time do you expect to arrive? (e.g. 18:30)\nReply 0 for Main Menu.`);
-    log.info({ from }, "Trip flow: reason collected");
+    await sendWhatsApp(
+      from,
+      to,
+      `Got it — your destination is ${destination}.\n\nPlease send your ETA.\n\nExample:\nETA 23:30\n\nReply 0 for Main Menu.`,
+    );
+    log.info({ from, destination }, "Trip flow: destination collected");
     return;
   }
 
