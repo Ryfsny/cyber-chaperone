@@ -1,6 +1,6 @@
 import { useGetTrip, useGetTripMessages, useUpdateTrip, getGetTripQueryKey, getListTripsQueryKey } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
-import { ArrowLeft, Loader2, Save, Trash2, Clock, MapPin, Activity } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Trash2, Clock, MapPin, Activity, XCircle } from "lucide-react";
 import { format } from "date-fns";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -70,6 +70,19 @@ export default function TripDetail() {
     });
   };
 
+  const handleCloseTrip = () => {
+    updateTrip.mutate({
+      id: tripId,
+      data: { status: "completed" }
+    }, {
+      onSuccess: (updatedTrip) => {
+        queryClient.setQueryData(getGetTripQueryKey(tripId), updatedTrip);
+        queryClient.invalidateQueries({ queryKey: getListTripsQueryKey() });
+        toast({ title: "Trip closed" });
+      }
+    });
+  };
+
   if (isLoadingTrip) {
     return <div className="flex-1 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>;
   }
@@ -83,7 +96,8 @@ export default function TripDetail() {
       <header className={cn(
         "h-20 px-8 flex items-center justify-between border-b shrink-0 transition-colors",
         trip.status === 'red' ? "bg-status-red/10 border-status-red" :
-        trip.status === 'amber' ? "bg-status-amber/10 border-status-amber" : "bg-status-green/10 border-status-green/30"
+        trip.status === 'amber' ? "bg-status-amber/10 border-status-amber" :
+        trip.status === 'completed' ? "bg-muted/30 border-border" : "bg-status-green/10 border-status-green/30"
       )}>
         <div className="flex items-center gap-6">
           <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
@@ -95,7 +109,8 @@ export default function TripDetail() {
               <span className={cn(
                 "px-2 py-0.5 text-xs rounded-sm",
                 trip.status === 'red' ? "bg-status-red text-destructive-foreground" :
-                trip.status === 'amber' ? "bg-status-amber text-primary-foreground" : "bg-status-green text-primary-foreground"
+                trip.status === 'amber' ? "bg-status-amber text-primary-foreground" :
+                trip.status === 'completed' ? "bg-muted text-muted-foreground" : "bg-status-green text-primary-foreground"
               )}>
                 {trip.status}
               </span>
@@ -107,18 +122,31 @@ export default function TripDetail() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button 
-            onClick={() => handleStatusChange('green')}
-            className={cn("px-4 py-2 text-xs uppercase tracking-widest font-bold border transition-colors", trip.status === 'green' ? "bg-status-green text-primary-foreground border-status-green" : "border-border text-muted-foreground hover:text-foreground")}
-          >Green</button>
-          <button 
-            onClick={() => handleStatusChange('amber')}
-            className={cn("px-4 py-2 text-xs uppercase tracking-widest font-bold border transition-colors", trip.status === 'amber' ? "bg-status-amber text-primary-foreground border-status-amber" : "border-border text-muted-foreground hover:text-foreground")}
-          >Amber</button>
-          <button 
-            onClick={() => handleStatusChange('red')}
-            className={cn("px-4 py-2 text-xs uppercase tracking-widest font-bold border transition-colors", trip.status === 'red' ? "bg-status-red text-destructive-foreground border-status-red" : "border-border text-muted-foreground hover:text-foreground")}
-          >Red</button>
+          {trip.status !== 'completed' && (
+            <>
+              <button
+                onClick={() => handleStatusChange('green')}
+                className={cn("px-4 py-2 text-xs uppercase tracking-widest font-bold border transition-colors", trip.status === 'green' ? "bg-status-green text-primary-foreground border-status-green" : "border-border text-muted-foreground hover:text-foreground")}
+              >Green</button>
+              <button
+                onClick={() => handleStatusChange('amber')}
+                className={cn("px-4 py-2 text-xs uppercase tracking-widest font-bold border transition-colors", trip.status === 'amber' ? "bg-status-amber text-primary-foreground border-status-amber" : "border-border text-muted-foreground hover:text-foreground")}
+              >Amber</button>
+              <button
+                onClick={() => handleStatusChange('red')}
+                className={cn("px-4 py-2 text-xs uppercase tracking-widest font-bold border transition-colors", trip.status === 'red' ? "bg-status-red text-destructive-foreground border-status-red" : "border-border text-muted-foreground hover:text-foreground")}
+              >Red</button>
+              <div className="w-px h-6 bg-border mx-1" />
+              <button
+                onClick={handleCloseTrip}
+                disabled={updateTrip.isPending}
+                className="flex items-center gap-2 px-4 py-2 text-xs uppercase tracking-widest font-bold border border-border text-muted-foreground hover:text-foreground hover:border-foreground transition-colors disabled:opacity-50"
+              >
+                {updateTrip.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                Close Trip
+              </button>
+            </>
+          )}
         </div>
       </header>
 
