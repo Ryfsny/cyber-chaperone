@@ -1,0 +1,103 @@
+Surgical feature only: add Andre Operator Mirror notifications.
+
+Do not change the dashboard design.
+Do not change existing trip logic.
+Do not change Twilio webhook URL.
+Do not change database schema unless absolutely required.
+Do not touch frontend styling.
+Do not import members.
+Do not add Rukus.
+Do not build route ticks yet.
+
+Current working system:
+- Member WhatsApp messages arrive via Twilio.
+- /api/webhook/twilio creates and updates trips.
+- Green / Amber / Red logic works.
+- Twilio replies to the member work.
+- Evidence notes are clean.
+
+Missing operator layer:
+Andre needs to receive a WhatsApp notification on his own number when tester/member messages are processed.
+
+Add an operator mirror using an environment variable:
+
+OPERATOR_WHATSAPP_NUMBER=whatsapp:+27825611065
+OPERATOR_MIRROR_MODE=all
+
+Required behaviour:
+
+1. After a new trip-start is processed, send Andre an operator WhatsApp notification:
+Title: CYBER CHAPERONE — NEW TRIP
+Include:
+- member WhatsApp number
+- start
+- destination
+- ETA
+- status
+- trip ID
+- next action
+- short evidence excerpt
+
+2. After an Amber update, send Andre:
+Title: CYBER CHAPERONE — AMBER
+Include:
+- member WhatsApp number
+- trip title
+- reason/classification
+- status
+- trip ID
+- next action
+- short evidence excerpt
+
+3. After a Red/distress update, send Andre:
+Title: CYBER CHAPERONE — RED
+Include:
+- member WhatsApp number
+- trip title
+- distress message excerpt
+- status RED
+- trip ID
+- nextAction = immediate human review
+- no claim that emergency services were dispatched
+
+4. After arrival/completion, send Andre:
+Title: CYBER CHAPERONE — TRIP CLOSED
+Include:
+- member WhatsApp number
+- trip title
+- status completed
+- trip ID
+- arrival message excerpt
+
+5. If OPERATOR_MIRROR_MODE=all:
+- send Andre notifications for trip-start, Amber, Red, arrival, ETA update, unknown update.
+
+6. If OPERATOR_MIRROR_MODE=critical:
+- send Andre only Amber, Red, and unknown/confusing messages.
+
+7. If OPERATOR_MIRROR_MODE=off:
+- send no operator notifications.
+
+8. Operator notification failure must not break the member flow.
+If the Andre mirror fails:
+- log the error
+- still save the member message
+- still update the trip
+- still reply to the member
+
+9. Do not send the operator mirror back to the member.
+This is only for Andre.
+
+10. After coding, run dev tests:
+A. New trip-start → member reply sent + Andre mirror sent.
+B. Traffic update → trip Amber + member reply + Andre mirror.
+C. Arrival → trip completed + member reply + Andre mirror.
+D. New trip + "I need help" → trip Red + member reply + Andre mirror.
+
+Report:
+1. Files changed.
+2. Exact environment variables required.
+3. Example Andre mirror messages.
+4. Test results.
+5. Confirmation no frontend, webhook URL, Twilio config, database schema, Rukus, or member import was changed.
+Do not publish until dev tests pass.

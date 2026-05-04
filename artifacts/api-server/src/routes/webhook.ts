@@ -178,6 +178,39 @@ async function sendReply(from: string, to: string, replyBody: string): Promise<v
   }
 }
 
+// ── Operator mirror ───────────────────────────────────────────────────────────
+
+type MirrorKind = "trip-start" | "amber" | "red" | "arrival" | "eta" | "unknown";
+
+function mirrorEnabled(kind: MirrorKind): boolean {
+  const operatorNumber = process.env.OPERATOR_WHATSAPP_NUMBER;
+  const mode = (process.env.OPERATOR_MIRROR_MODE ?? "off").toLowerCase();
+  if (!operatorNumber || mode === "off") return false;
+  if (mode === "all") return true;
+  if (mode === "critical") return kind === "amber" || kind === "red" || kind === "unknown";
+  return false;
+}
+
+/**
+ * Send an operator mirror notification to Andre.
+ * Errors are logged but never bubble up — member flow is unaffected.
+ * `twilioNumber` is the Twilio sandbox number (the inbound `To` field).
+ */
+async function sendOperatorMirror(
+  twilioNumber: string,
+  mirrorBody: string,
+  kind: MirrorKind,
+): Promise<void> {
+  const operatorNumber = process.env.OPERATOR_WHATSAPP_NUMBER;
+  if (!operatorNumber || !mirrorEnabled(kind)) return;
+  try {
+    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    await client.messages.create({ from: twilioNumber, to: operatorNumber, body: mirrorBody });
+  } catch (err) {
+    console.error("[operator-mirror] Failed to send mirror notification:", err);
+  }
+}
+
 // ── Structured evidence note helpers ─────────────────────────────────────────
 
 function nowUtc(): string {
@@ -285,6 +318,21 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
         `Trip started. We are monitoring: ${parsed.startLocation} → ${parsed.destination}.${etaNote} Reply with updates along the way.`,
       );
 
+      await sendOperatorMirror(
+        to,
+        [
+          `CYBER CHAPERONE — NEW TRIP`,
+          `Member: ${from}`,
+          `Route: ${parsed.startLocation} → ${parsed.destination}${etaNote}`,
+          `Status: GREEN`,
+          `Trip ID: ${newTrip.id}`,
+          `Next action: Monitoring — awaiting updates.`,
+          `---`,
+          excerpt(body, 120),
+        ].join("\n"),
+        "trip-start",
+      );
+
       req.log.info(
         { tripId: newTrip.id, title, startLocation: parsed.startLocation, destination: parsed.destination, eta: parsed.eta },
         "New trip created from WhatsApp message",
@@ -334,6 +382,19 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
           );
           req.log.info({ tripId: activeTrip.id }, "Trip escalated to RED — distress keyword");
 
+          await sendOperatorMirror(
+            to,
+            [
+              `CYBER CHAPERONE — RED`,
+              `Member: ${from}`,
+              `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+              `Distress message: "${excerpt(body, 100)}"`,
+              `Status: RED`,
+              `Next action: Immediate human review required.`,
+            ].join("\n"),
+            "red",
+          );
+
         } else if (kind === "arrival") {
           const note = appendNote(
             activeTrip.evidenceNotes,
@@ -353,6 +414,18 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
             "Received. Your arrival has been recorded and the trip is closed.",
           );
           req.log.info({ tripId: activeTrip.id }, "Trip closed — arrival keyword");
+
+          await sendOperatorMirror(
+            to,
+            [
+              `CYBER CHAPERONE — TRIP CLOSED`,
+              `Member: ${from}`,
+              `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+              `Status: COMPLETED`,
+              `Arrival: "${excerpt(body, 100)}"`,
+            ].join("\n"),
+            "arrival",
+          );
 
         } else if (kind === "delay") {
           const note = appendNote(
@@ -374,6 +447,21 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
             "Update received. We have marked the trip Amber for monitoring. Please send another update when you move again or arrive.",
           );
           req.log.info({ tripId: activeTrip.id }, "Trip set to AMBER — delay keyword");
+
+          await sendOperatorMirror(
+            to,
+            [
+              `CYBER CHAPERONE — AMBER`,
+              `Member: ${from}`,
+              `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+              `Reason: delay / traffic`,
+              `Status: AMBER`,
+              `Next action: Quiet monitor — await next update from traveler.`,
+              `---`,
+              excerpt(body, 120),
+            ].join("\n"),
+            "amber",
+          );
 
         } else if (kind === "eta") {
           const etaMatch = body.match(ETA_PATTERN);
@@ -397,6 +485,20 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
           );
           req.log.info({ tripId: activeTrip.id, newEta }, "Trip ETA updated — ETA keyword");
 
+          await sendOperatorMirror(
+            to,
+            [
+              `CYBER CHAPERONE — ETA UPDATE`,
+              `Member: ${from}`,
+              `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+              `New ETA: ${newEta}`,
+              `Status: ${activeTrip.status.toUpperCase()}`,
+              `---`,
+              excerpt(body, 120),
+            ].join("\n"),
+            "eta",
+          );
+
         } else {
           const note = appendNote(
             activeTrip.evidenceNotes,
@@ -408,6 +510,18 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
             .where(eq(tripsTable.id, activeTrip.id));
 
           req.log.info({ tripId: activeTrip.id }, "General update appended to evidence notes");
+
+          await sendOperatorMirror(
+            to,
+            [
+              `CYBER CHAPERONE — UPDATE`,
+              `Member: ${from}`,
+              `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+              `Message: "${excerpt(body, 120)}"`,
+              `Status: ${activeTrip.status.toUpperCase()}`,
+            ].join("\n"),
+            "unknown",
+          );
         }
       }
     }
