@@ -1,0 +1,197 @@
+Build the Ruka/SmartChat WhatsApp menu logic inside Replit.
+
+We are no longer depending on Ruka for the Cyber Chaperone flow.
+Use the existing Ruka instructions from Andre as the source of truth.
+
+Do not touch the Twilio MessageStatus / SmsStatus webhook guard.
+Do not change dashboard styling.
+Do not change Twilio credentials.
+Do not break the existing trip parser.
+Do not remove the existing trip dashboard.
+
+Required architecture:
+Twilio WhatsApp webhook
+→ message guard
+→ member lookup
+→ save inbound message
+→ menu router
+→ conversation state
+→ trip processor only when the message is a valid trip action
+→ member reply
+→ operator mirror
+→ dashboard
+
+Required database/state:
+Add the smallest possible conversation state system if one does not already exist.
+
+Each member must have:
+- phone
+- displayName
+- currentFlow
+- currentStep
+- pendingTripData
+- activeTripId
+- updatedAt
+
+Purpose:
+A numeric reply like "1" must be interpreted based on the current screen, not globally.
+
+Main menu trigger:
+If member sends Hi, Hello, Menu, Start, or 0, reply:
+
+"Hi Andre, I'm AI Arnie, Andre Snyman's digital wingman.
+You're on a Single Membership.
+We are here to make you safer.
+
+1. What is eblockwatch?
+2. Membership Options
+3. Activate my membership
+4. Update my profile
+5. Travel with Cyber Chaperone
+6. eblockshop — safer products to make you safer
+7. Request contact from a human
+
+URGENT? Reply 10 for immediate human review.
+
+Reply with the number of your choice. Reply 0 for Main Menu."
+
+Cyber Chaperone trigger:
+If member chooses 5 from Main Menu, or sends "Cyber Chaperone", "travel", "trip", or "start trip", reply:
+
+"Andre, Cyber Chaperone is your travel support link into eblockwatch.
+
+What do you want to do?
+
+1. Start a new trip
+2. Update my current trip
+3. Change my destination
+4. I have arrived
+5. I need help
+6. How Cyber Chaperone works
+7. Speak to Andre
+
+Reply 0 for Main Menu."
+
+Start trip flow:
+If member chooses 1 from the Cyber Chaperone menu:
+- set currentFlow = CYBER_CHAPERONE
+- set currentStep = WAITING_FOR_START_LOCATION
+- reply:
+"Andre, let’s start your trip.
+
+Please send your current location pin 📍.
+Reply 0 for Main Menu."
+
+Then collect one step at a time:
+1. start location / location pin
+2. destination
+3. reason for trip
+4. ETA
+
+Only after all required fields are collected:
+- create a GREEN trip
+- close previous active GREEN trip for that member
+- send confirmation to member
+- send operator mirror
+
+Also support structured text:
+"START Fourways to Rosebank Mall ETA 19:40"
+
+Also keep existing parser:
+"Leaving Fourways now heading to Rosebank Mall. ETA 19:40."
+
+Ambiguous destination guard:
+If the member has an active trip and sends movement/destination language such as:
+- I am going to
+- I'm going to
+- going to
+- on my way to
+- heading to
+
+but the message does not contain a complete new trip with start, destination, and ETA, then do not treat it as a normal GREEN update.
+
+Reply:
+
+"Andre, I need to confirm what you mean.
+
+You already have an active trip:
+
+Fourways → Rosebank Mall
+
+Your message says you are going to:
+
+Oyster Box in Durban
+
+What must I do?
+
+1. Start a new trip
+2. Change my current destination
+3. Add this as a note only
+4. Ignore this message
+
+Reply 0 for Main Menu."
+
+Operator mirror:
+
+"CYBER CHAPERONE — CLARIFICATION NEEDED
+
+Member: Andre Snyman
+Known member: YES
+Current trip: Fourways → Rosebank Mall (ID: 13)
+Message: [message text]
+Reason: possible new destination or trip change
+Status: AMBER
+Next action: wait for member clarification"
+
+Unsafe fallback rule:
+If AI assessment is unavailable, do not default uncertain movement/destination messages to GREEN.
+Unclear movement/destination = CLARIFICATION NEEDED / AMBER.
+
+Priority rules:
+- "I need help", "danger", "emergency", "call me" = RED / immediate human review
+- "I have arrived", "arrived safely" = close trip
+- traffic/delay messages = AMBER or existing delay logic
+- normal "I am okay" = GREEN update
+- unclear destination/movement = clarification needed
+
+Required tests:
+1. Send "Hi"
+Expected: Main Menu.
+
+2. Send "5"
+Expected: Cyber Chaperone menu.
+
+3. Send "1"
+Expected: asks for current location pin.
+
+4. Send:
+"START Fourways to Rosebank Mall ETA 19:40"
+Expected: GREEN trip created.
+
+5. With active trip running, send:
+"I am going to Oyster Box in Durban"
+Expected:
+- no silent GREEN update
+- no automatic new trip
+- clarification menu sent
+- operator mirror shows CLARIFICATION NEEDED
+- AMBER clarification event or status
+
+6. Reply "1" to clarification.
+Expected:
+- system starts new trip flow and asks for missing fields.
+
+7. Send:
+"I have arrived"
+Expected:
+- active trip closed as completed.
+
+8. Send:
+"I need help"
+Expected:
+- RED alert and operator mirror.
+
+Report only:
+- logs
+- database evidence
+- exact WhatsApp replies

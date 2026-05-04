@@ -3,6 +3,7 @@ import { db, messagesTable, tripsTable, membersTable } from "@workspace/db";
 import { and, eq, ne, desc, count } from "drizzle-orm";
 import twilio from "twilio";
 import { assessRisk } from "./ai.js";
+import { handleMenuRouter } from "../menu-router.js";
 
 const router: IRouter = Router();
 
@@ -178,7 +179,7 @@ async function lookupMember(whatsappNumber: string): Promise<MemberInfo | null> 
         displayName: member.displayName,
         role: member.role,
         memberStatus: member.memberStatus,
-        isKnown: member.memberStatus === "verified",
+        isKnown: member.memberStatus === "verified" || member.memberStatus === "active",
       };
     }
   } catch {
@@ -409,6 +410,30 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
         res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
         return;
       }
+    }
+
+    // ── Menu router — stateful conversation flows ─────────────────────────────
+    // Runs before the trip-start parser. If it handles the message it returns
+    // early so the existing trip-start / follow-up branch is skipped entirely.
+    // The menu router saves the message to the DB when it handles it.
+    const menuResult = await handleMenuRouter({
+      body,
+      from,
+      to,
+      member,
+      latitude,
+      longitude,
+      address,
+      label,
+      messageSid,
+      log: req.log,
+    });
+
+    if (menuResult.handled) {
+      req.log.info({ from }, "Menu router handled message — skipping trip parser");
+      res.set("Content-Type", "text/xml");
+      res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+      return;
     }
 
     if (parsed) {
