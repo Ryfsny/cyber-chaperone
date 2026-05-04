@@ -1,0 +1,117 @@
+Surgical fix only. Do not build new features.
+
+Do not touch frontend styling.
+Do not change Twilio settings.
+Do not change webhook URL.
+Do not change database schema unless absolutely required.
+Do not manually insert fake trips.
+Do not delete existing trips.
+Do not change the dashboard design.
+
+Fix two verified production issues in /api/webhook/twilio.
+
+ISSUE 1 — Trip-start parser is too fragile
+
+Verified failure:
+The live WhatsApp message:
+"TEST LIVE — Leaving Fourways now heading to Rosebank Mall. ETA 14:40."
+
+was incorrectly treated as an ETA follow-up.
+It should have created a new trip.
+
+Required fix:
+The trip-start parser must detect a trip-start pattern anywhere inside the message body, not only at the beginning.
+
+It must match messages like:
+1. "Leaving Fourways now heading to Rosebank Mall. ETA 14:40."
+2. "TEST LIVE — Leaving Fourways now heading to Rosebank Mall. ETA 14:40."
+3. "Andre test: Leaving Fourways heading to Rosebank Mall ETA 14:40"
+4. "Leaving from Fourways going to Rosebank Mall. ETA 14:40."
+
+Minimum extraction:
+- startLocation = Fourways
+- destination = Rosebank Mall
+- eta = 14:40
+
+Trip-start detection must happen before ETA follow-up classification.
+
+Expected action when trip-start is detected:
+- close any previous active GREEN/AMBER/RED trip for that phone if applicable
+- create a new active trip
+- status = GREEN
+- link the inbound message to the new trip
+- save clean evidence note: "Trip-start message received from WhatsApp"
+- send appropriate acknowledgement if outbound replies are already enabled
+
+ISSUE 2 — Evidence notes contamination
+
+Verified anomaly:
+Trip 7 evidenceNotes contains unexpected content that appears to mirror developer/assistant chat text, not a WhatsApp message.
+
+Required investigation before fixing:
+1. Search the codebase for every place evidenceNotes is written or appended.
+2. Confirm whether evidenceNotes can receive text from:
+   - req.body.Body
+   - test scripts
+   - dev simulation payloads
+   - assistant/developer chat output
+   - any manual seed/demo code
+3. Identify exactly which code path wrote the unexpected content into trip 7.
+4. Fix the write path so evidenceNotes only stores:
+   - raw WhatsApp message evidence where appropriate
+   - short system classification notes
+   - operator notes if manually entered by the operator
+
+Do not store long developer reports or assistant messages in evidenceNotes.
+
+Clean evidence note format:
+- [timestamp] WhatsApp inbound: "<short message excerpt>"
+- [timestamp] Classification: eta / delay / arrival / distress / trip-start
+- [timestamp] Action: status changed GREEN → AMBER / completed / RED
+
+After fixing, run controlled dev tests first:
+
+Test A:
+"TEST LIVE — Leaving Fourways now heading to Rosebank Mall. ETA 14:40."
+Expected:
+- new trip created
+- start = Fourways
+- destination = Rosebank Mall
+- ETA = 14:40
+- status GREEN
+- not treated as ETA follow-up
+
+Test B:
+"ETA changed to 15:00. Traffic is slower than expected."
+Expected:
+- linked to latest active trip
+- classified as delay because traffic keyword wins
+- status AMBER
+
+Test C:
+"I have arrived safely at Rosebank Mall."
+Expected:
+- linked to latest active trip
+- trip completed/closed
+
+Test D:
+"TEST RED — Leaving Fourways now heading to Sandton City. ETA 15:30."
+Expected:
+- new active GREEN trip created despite prefix
+
+Test E:
+"I need help."
+Expected:
+- linked to latest active trip
+- status RED
+- evidence note clean and short
+
+Final report required:
+1. Files changed.
+2. Exact trip-start regex/parser logic added.
+3. Every code path that writes evidenceNotes.
+4. Explanation of how the contamination happened.
+5. Confirmation evidenceNotes now only stores clean evidence/classification/action notes.
+6. Dev test results A–E.
+7. Confirmation no frontend, Twilio config, webhook URL, or database schema was changed.
+8. Do not publish until dev tests pass.

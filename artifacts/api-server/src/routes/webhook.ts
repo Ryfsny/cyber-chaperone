@@ -42,8 +42,12 @@ interface ParsedTripStart {
 }
 
 function parseTripStart(body: string): ParsedTripStart | null {
+  // Matches "Leaving [from] X [now] heading/going to Y [. ETA HH:MM]"
+  // anywhere inside the message body — no ^ anchor, so prefixes like
+  // "TEST LIVE — " or "Andre test: " are safely ignored.
+  // Supports "from X", "going to", and ETA with or without a preceding dot/comma.
   const match = body.match(
-    /leaving\s+(.+?)\s+(?:now\s+)?heading\s+to\s+([^.]+?)(?:\.\s*ETA\s+([\d:aApPmM\s]+?))?\.?\s*$/i,
+    /leaving\s+(?:from\s+)?(.+?)\s+(?:now\s+)?(?:heading|going)\s+to\s+([^.,\n]+?)(?:\s*[.,]?\s*eta\s+(\d{1,2}:\d{2}(?:\s*[aApP][mM])?))?[.,]?\s*$/i,
   );
   if (!match) return null;
   return {
@@ -76,6 +80,21 @@ async function sendReply(from: string, to: string, replyBody: string): Promise<v
   }
 }
 
+// ── Structured evidence note helpers ─────────────────────────────────────────
+
+function nowUtc(): string {
+  return new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
+}
+
+function excerpt(body: string, maxLen = 80): string {
+  const clean = body.replace(/\s+/g, " ").trim();
+  return clean.length > maxLen ? clean.slice(0, maxLen) + "…" : clean;
+}
+
+function appendNote(existing: string | null | undefined, entry: string): string {
+  return existing ? `${existing}\n${entry}` : entry;
+}
+
 // ── Webhook handler ───────────────────────────────────────────────────────────
 
 router.post("/webhook/twilio", async (req, res): Promise<void> => {
@@ -93,16 +112,27 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
       // ── Trip-start message ──────────────────────────────────────────────────
       const title = `${parsed.startLocation} → ${parsed.destination}`;
       const etaNote = parsed.eta ? ` ETA ${parsed.eta}.` : "";
+      const ts = nowUtc();
 
       const closedTrips = await db
         .update(tripsTable)
         .set({ status: "completed" })
-        .where(and(eq(tripsTable.travelerPhone, from), eq(tripsTable.status, "green")))
+        .where(
+          and(
+            eq(tripsTable.travelerPhone, from),
+            ne(tripsTable.status, "completed"),
+          ),
+        )
         .returning({ id: tripsTable.id });
 
       if (closedTrips.length > 0) {
-        req.log.info({ closedTripIds: closedTrips.map((t) => t.id) }, "Closed previous GREEN trips for traveler");
+        req.log.info({ closedTripIds: closedTrips.map((t) => t.id) }, "Closed previous active trips for traveler");
       }
+
+      const initialNote = [
+        `[${ts}] Trip-start message received from WhatsApp.`,
+        `[${ts}] Route: ${parsed.startLocation} → ${parsed.destination}${etaNote}`,
+      ].join("\n");
 
       const [newTrip] = await db
         .insert(tripsTable)
@@ -111,7 +141,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
           travelerName: from,
           travelerPhone: from,
           status: "green",
-          evidenceNotes: body,
+          evidenceNotes: initialNote,
           inferenceNotes: `Freeform WhatsApp trip-start message detected.${etaNote}`,
         })
         .returning();
@@ -123,6 +153,12 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
         messageSid,
         tripId: newTrip.id,
       });
+
+      await sendReply(
+        from,
+        to,
+        `Trip started. We are monitoring: ${parsed.startLocation} → ${parsed.destination}.${etaNote} Reply with updates along the way.`,
+      );
 
       req.log.info(
         { tripId: newTrip.id, title, startLocation: parsed.startLocation, destination: parsed.destination, eta: parsed.eta },
@@ -149,14 +185,19 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
         );
       } else {
         const kind = classifyMessage(body);
+        const ts = nowUtc();
         req.log.info({ tripId: activeTrip.id, kind }, "Follow-up message classified");
 
         if (kind === "distress") {
+          const note = appendNote(
+            activeTrip.evidenceNotes,
+            `[${ts}] DISTRESS received: "${excerpt(body)}"`,
+          );
           await db
             .update(tripsTable)
             .set({
               status: "red",
-              evidenceNotes: `${activeTrip.evidenceNotes ? activeTrip.evidenceNotes + "\n\n" : ""}DISTRESS: ${body}`,
+              evidenceNotes: note,
               nextAction: "Immediate human review required.",
             })
             .where(eq(tripsTable.id, activeTrip.id));
@@ -169,11 +210,15 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
           req.log.info({ tripId: activeTrip.id }, "Trip escalated to RED — distress keyword");
 
         } else if (kind === "arrival") {
+          const note = appendNote(
+            activeTrip.evidenceNotes,
+            `[${ts}] ARRIVAL confirmed: "${excerpt(body)}"`,
+          );
           await db
             .update(tripsTable)
             .set({
               status: "completed",
-              evidenceNotes: `${activeTrip.evidenceNotes ? activeTrip.evidenceNotes + "\n\n" : ""}ARRIVAL: ${body}`,
+              evidenceNotes: note,
             })
             .where(eq(tripsTable.id, activeTrip.id));
 
@@ -185,11 +230,15 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
           req.log.info({ tripId: activeTrip.id }, "Trip closed — arrival keyword");
 
         } else if (kind === "delay") {
+          const note = appendNote(
+            activeTrip.evidenceNotes,
+            `[${ts}] DELAY reported: "${excerpt(body)}"`,
+          );
           await db
             .update(tripsTable)
             .set({
               status: "amber",
-              evidenceNotes: `${activeTrip.evidenceNotes ? activeTrip.evidenceNotes + "\n\n" : ""}DELAY: ${body}`,
+              evidenceNotes: note,
               nextAction: "Quiet monitor — await next update from traveler.",
             })
             .where(eq(tripsTable.id, activeTrip.id));
@@ -204,10 +253,14 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
         } else if (kind === "eta") {
           const etaMatch = body.match(ETA_PATTERN);
           const newEta = etaMatch?.[1] ?? "unknown";
+          const note = appendNote(
+            activeTrip.evidenceNotes,
+            `[${ts}] ETA update: "${excerpt(body)}"`,
+          );
           await db
             .update(tripsTable)
             .set({
-              evidenceNotes: `${activeTrip.evidenceNotes ? activeTrip.evidenceNotes + "\n\n" : ""}ETA UPDATE: ${body}`,
+              evidenceNotes: note,
               inferenceNotes: `ETA updated to ${newEta}.`,
             })
             .where(eq(tripsTable.id, activeTrip.id));
@@ -220,12 +273,13 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
           req.log.info({ tripId: activeTrip.id, newEta }, "Trip ETA updated — ETA keyword");
 
         } else {
-          // Unknown follow-up — save message, touch updatedAt, no status change
+          const note = appendNote(
+            activeTrip.evidenceNotes,
+            `[${ts}] Update received: "${excerpt(body)}"`,
+          );
           await db
             .update(tripsTable)
-            .set({
-              evidenceNotes: `${activeTrip.evidenceNotes ? activeTrip.evidenceNotes + "\n\n" : ""}UPDATE: ${body}`,
-            })
+            .set({ evidenceNotes: note })
             .where(eq(tripsTable.id, activeTrip.id));
 
           req.log.info({ tripId: activeTrip.id }, "General update appended to evidence notes");
