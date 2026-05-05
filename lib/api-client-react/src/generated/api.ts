@@ -17,13 +17,18 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  CreateResponderBody,
   CreateTripBody,
+  DispatchBody,
+  DispatchResponse,
   ErrorResponse,
   HealthStatus,
   Message,
+  Responder,
   Trip,
   TwilioWebhookBody,
   UpdateMessageBody,
+  UpdateResponderBody,
   UpdateTripBody,
 } from "./api.schemas";
 
@@ -775,6 +780,424 @@ export function useListMessages<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List all responders
+ */
+export const getListRespondersUrl = () => {
+  return `/api/responders`;
+};
+
+export const listResponders = async (
+  options?: RequestInit,
+): Promise<Responder[]> => {
+  return customFetch<Responder[]>(getListRespondersUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListRespondersQueryKey = () => {
+  return [`/api/responders`] as const;
+};
+
+export const getListRespondersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listResponders>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listResponders>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListRespondersQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listResponders>>> = ({
+    signal,
+  }) => listResponders({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listResponders>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListRespondersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listResponders>>
+>;
+export type ListRespondersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all responders
+ */
+
+export function useListResponders<
+  TData = Awaited<ReturnType<typeof listResponders>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listResponders>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRespondersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add a new responder
+ */
+export const getCreateResponderUrl = () => {
+  return `/api/responders`;
+};
+
+export const createResponder = async (
+  createResponderBody: CreateResponderBody,
+  options?: RequestInit,
+): Promise<Responder> => {
+  return customFetch<Responder>(getCreateResponderUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createResponderBody),
+  });
+};
+
+export const getCreateResponderMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createResponder>>,
+    TError,
+    { data: BodyType<CreateResponderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createResponder>>,
+  TError,
+  { data: BodyType<CreateResponderBody> },
+  TContext
+> => {
+  const mutationKey = ["createResponder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createResponder>>,
+    { data: BodyType<CreateResponderBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createResponder(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateResponderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createResponder>>
+>;
+export type CreateResponderMutationBody = BodyType<CreateResponderBody>;
+export type CreateResponderMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a new responder
+ */
+export const useCreateResponder = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createResponder>>,
+    TError,
+    { data: BodyType<CreateResponderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createResponder>>,
+  TError,
+  { data: BodyType<CreateResponderBody> },
+  TContext
+> => {
+  return useMutation(getCreateResponderMutationOptions(options));
+};
+
+/**
+ * @summary Update a responder
+ */
+export const getUpdateResponderUrl = (id: number) => {
+  return `/api/responders/${id}`;
+};
+
+export const updateResponder = async (
+  id: number,
+  updateResponderBody: UpdateResponderBody,
+  options?: RequestInit,
+): Promise<Responder> => {
+  return customFetch<Responder>(getUpdateResponderUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateResponderBody),
+  });
+};
+
+export const getUpdateResponderMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateResponder>>,
+    TError,
+    { id: number; data: BodyType<UpdateResponderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateResponder>>,
+  TError,
+  { id: number; data: BodyType<UpdateResponderBody> },
+  TContext
+> => {
+  const mutationKey = ["updateResponder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateResponder>>,
+    { id: number; data: BodyType<UpdateResponderBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateResponder(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateResponderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateResponder>>
+>;
+export type UpdateResponderMutationBody = BodyType<UpdateResponderBody>;
+export type UpdateResponderMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update a responder
+ */
+export const useUpdateResponder = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateResponder>>,
+    TError,
+    { id: number; data: BodyType<UpdateResponderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateResponder>>,
+  TError,
+  { id: number; data: BodyType<UpdateResponderBody> },
+  TContext
+> => {
+  return useMutation(getUpdateResponderMutationOptions(options));
+};
+
+/**
+ * @summary Remove a responder
+ */
+export const getDeleteResponderUrl = (id: number) => {
+  return `/api/responders/${id}`;
+};
+
+export const deleteResponder = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteResponderUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteResponderMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteResponder>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteResponder>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteResponder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteResponder>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteResponder(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteResponderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteResponder>>
+>;
+
+export type DeleteResponderMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Remove a responder
+ */
+export const useDeleteResponder = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteResponder>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteResponder>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteResponderMutationOptions(options));
+};
+
+/**
+ * @summary Send WhatsApp dispatch to a responder for an active trip
+ */
+export const getDispatchResponderUrl = () => {
+  return `/api/dispatch`;
+};
+
+export const dispatchResponder = async (
+  dispatchBody: DispatchBody,
+  options?: RequestInit,
+): Promise<DispatchResponse> => {
+  return customFetch<DispatchResponse>(getDispatchResponderUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(dispatchBody),
+  });
+};
+
+export const getDispatchResponderMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof dispatchResponder>>,
+    TError,
+    { data: BodyType<DispatchBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof dispatchResponder>>,
+  TError,
+  { data: BodyType<DispatchBody> },
+  TContext
+> => {
+  const mutationKey = ["dispatchResponder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof dispatchResponder>>,
+    { data: BodyType<DispatchBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return dispatchResponder(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DispatchResponderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof dispatchResponder>>
+>;
+export type DispatchResponderMutationBody = BodyType<DispatchBody>;
+export type DispatchResponderMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Send WhatsApp dispatch to a responder for an active trip
+ */
+export const useDispatchResponder = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof dispatchResponder>>,
+    TError,
+    { data: BodyType<DispatchBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof dispatchResponder>>,
+  TError,
+  { data: BodyType<DispatchBody> },
+  TContext
+> => {
+  return useMutation(getDispatchResponderMutationOptions(options));
+};
 
 /**
  * @summary Update message (e.g. assign to trip)

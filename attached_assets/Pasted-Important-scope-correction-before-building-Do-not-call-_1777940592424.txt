@@ -1,0 +1,86 @@
+Important scope correction before building:
+
+Do not call projected trip icons "live position" unless the member has sent a current location pin or the Situation Room has confirmed live WhatsApp location.
+
+Use these terms:
+
+1. Actual last known position
+- based on latest WhatsApp location pin
+- solid marker
+
+2. Projected route position
+- estimated from departure time, route duration, ETA, and route polyline
+- ghost marker / lighter marker
+- label clearly as "projected"
+
+Do not fake live tracking.
+
+Build in this order:
+
+PHASE 1 — Radar map only
+- Full-screen Situation Room radar page
+- Show active trips
+- Show Green / Amber / Red / Blue status
+- Show route line
+- Show actual last known marker if available
+- Show projected marker if route data exists
+- Auto-refresh every 30 seconds
+- Completed trips should be blue/faded
+- No responder dispatch yet
+
+PHASE 2 — Responder layer
+- Add responder table
+- Store trusted eblockwatch responder base/home location
+- Show responders only on operator radar, not member-facing
+- Allow filter by responder type
+- Keep responder pins private and operator-only
+
+PHASE 3 — Manual dispatch drafts
+- On RED trip, show nearest responders
+- Generate WhatsApp assist request drafts
+- Do not auto-send
+- Operator must confirm before any WhatsApp is sent
+
+Responder privacy rule:
+Do not expose responder home pins to members.
+Do not show responder data on public/member-facing screens.
+Do not auto-message responders.
+Do not blast residents' groups automatically.
+
+Responder records should include:
+- name
+- WhatsApp number
+- base/home latitude
+- base/home longitude
+- suburb/area
+- responder type
+- support radius
+- availability
+- notes
+
+Assist request wording:
+"Cyber Chaperone request:
+A member may need assistance near [area/location].
+
+Are you in a position to assist or help mobilise your local network?
+
+Reply:
+1. I can assist
+2. I can help mobilise
+3. I cannot assist now"
+
+Keep all current functionality intact:
+- webhook guard
+- WhatsApp menu flow
+- trip creation
+- ETA bullseye
+- ICE escalation
+- OSRM routing
+- dashboard
+
+Report separately:
+1. Radar map evidence
+2. Responder layer evidence
+3. Dispatch draft evidence
+4. Schema changes
+5. Screenshots

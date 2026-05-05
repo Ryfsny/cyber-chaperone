@@ -8,6 +8,8 @@ import Dashboard from "@/pages/dashboard";
 import TripDetail from "@/pages/trip-detail";
 import Messages from "@/pages/messages";
 import NewTrip from "@/pages/new-trip";
+import Radar from "@/pages/radar";
+import Responders from "@/pages/responders";
 import { Layout } from "@/components/layout/layout";
 
 const queryClient = new QueryClient();
@@ -20,6 +22,8 @@ function Router() {
         <Route path="/trips/new" component={NewTrip} />
         <Route path="/trips/:id" component={TripDetail} />
         <Route path="/messages" component={Messages} />
+        <Route path="/radar" component={Radar} />
+        <Route path="/responders" component={Responders} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

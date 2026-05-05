@@ -16,6 +16,10 @@ tags:
     description: Incoming WhatsApp messages
   - name: webhook
     description: Twilio webhook
+  - name: responders
+    description: eblockwatch responder network members
+  - name: dispatch
+    description: Operator dispatch to responders
 
 paths:
   /healthz:
@@ -200,6 +204,113 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Message"
+
+  /responders:
+    get:
+      operationId: listResponders
+      tags: [responders]
+      summary: List all responders
+      responses:
+        "200":
+          description: List of responders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Responder"
+    post:
+      operationId: createResponder
+      tags: [responders]
+      summary: Add a new responder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateResponderBody"
+      responses:
+        "201":
+          description: Created responder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Responder"
+
+  /responders/{id}:
+    patch:
+      operationId: updateResponder
+      tags: [responders]
+      summary: Update a responder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateResponderBody"
+      responses:
+        "200":
+          description: Updated responder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Responder"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteResponder
+      tags: [responders]
+      summary: Remove a responder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /dispatch:
+    post:
+      operationId: dispatchResponder
+      tags: [dispatch]
+      summary: Send WhatsApp dispatch to a responder for an active trip
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DispatchBody"
+      responses:
+        "200":
+          description: Dispatch sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DispatchResponse"
+        "404":
+          description: Trip or responder not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /messages/{id}:
     patch:
@@ -399,3 +510,108 @@ components:
       properties:
         tripId:
           type: ["integer", "null"]
+
+    Responder:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        whatsappNumber:
+          type: string
+        areaName:
+          type: string
+        homeLat:
+          type: string
+        homeLon:
+          type: string
+        notes:
+          type: ["string", "null"]
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - whatsappNumber
+        - areaName
+        - homeLat
+        - homeLon
+        - notes
+        - active
+        - createdAt
+        - updatedAt
+
+    CreateResponderBody:
+      type: object
+      properties:
+        name:
+          type: string
+        whatsappNumber:
+          type: string
+        areaName:
+          type: string
+        homeLat:
+          type: string
+        homeLon:
+          type: string
+        notes:
+          type: ["string", "null"]
+        active:
+          type: boolean
+      required:
+        - name
+        - whatsappNumber
+        - areaName
+        - homeLat
+        - homeLon
+
+    UpdateResponderBody:
+      type: object
+      properties:
+        name:
+          type: string
+        whatsappNumber:
+          type: string
+        areaName:
+          type: string
+        homeLat:
+          type: string
+        homeLon:
+          type: string
+        notes:
+          type: ["string", "null"]
+        active:
+          type: boolean
+
+    DispatchBody:
+      type: object
+      properties:
+        tripId:
+          type: integer
+        responderId:
+          type: integer
+        customNote:
+          type: ["string", "null"]
+      required:
+        - tripId
+        - responderId
+
+    DispatchResponse:
+      type: object
+      properties:
+        sent:
+          type: boolean
+        messageSid:
+          type: ["string", "null"]
+        preview:
+          type: string
+      required:
+        - sent
+        - preview

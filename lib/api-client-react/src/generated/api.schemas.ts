@@ -133,6 +133,56 @@ export interface UpdateMessageBody {
   tripId?: number | null;
 }
 
+export interface Responder {
+  id: number;
+  name: string;
+  whatsappNumber: string;
+  areaName: string;
+  homeLat: string;
+  homeLon: string;
+  /** @nullable */
+  notes: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateResponderBody {
+  name: string;
+  whatsappNumber: string;
+  areaName: string;
+  homeLat: string;
+  homeLon: string;
+  /** @nullable */
+  notes?: string | null;
+  active?: boolean;
+}
+
+export interface UpdateResponderBody {
+  name?: string;
+  whatsappNumber?: string;
+  areaName?: string;
+  homeLat?: string;
+  homeLon?: string;
+  /** @nullable */
+  notes?: string | null;
+  active?: boolean;
+}
+
+export interface DispatchBody {
+  tripId: number;
+  responderId: number;
+  /** @nullable */
+  customNote?: string | null;
+}
+
+export interface DispatchResponse {
+  sent: boolean;
+  /** @nullable */
+  messageSid?: string | null;
+  preview: string;
+}
+
 export type TwilioWebhookBody = {
   Body?: string;
   From?: string;

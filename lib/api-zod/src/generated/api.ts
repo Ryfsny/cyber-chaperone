@@ -182,6 +182,88 @@ export const ListMessagesResponseItem = zod.object({
 export const ListMessagesResponse = zod.array(ListMessagesResponseItem);
 
 /**
+ * @summary List all responders
+ */
+export const ListRespondersResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  whatsappNumber: zod.string(),
+  areaName: zod.string(),
+  homeLat: zod.string(),
+  homeLon: zod.string(),
+  notes: zod.string().nullable(),
+  active: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListRespondersResponse = zod.array(ListRespondersResponseItem);
+
+/**
+ * @summary Add a new responder
+ */
+export const CreateResponderBody = zod.object({
+  name: zod.string(),
+  whatsappNumber: zod.string(),
+  areaName: zod.string(),
+  homeLat: zod.string(),
+  homeLon: zod.string(),
+  notes: zod.string().nullish(),
+  active: zod.boolean().optional(),
+});
+
+/**
+ * @summary Update a responder
+ */
+export const UpdateResponderParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateResponderBody = zod.object({
+  name: zod.string().optional(),
+  whatsappNumber: zod.string().optional(),
+  areaName: zod.string().optional(),
+  homeLat: zod.string().optional(),
+  homeLon: zod.string().optional(),
+  notes: zod.string().nullish(),
+  active: zod.boolean().optional(),
+});
+
+export const UpdateResponderResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  whatsappNumber: zod.string(),
+  areaName: zod.string(),
+  homeLat: zod.string(),
+  homeLon: zod.string(),
+  notes: zod.string().nullable(),
+  active: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Remove a responder
+ */
+export const DeleteResponderParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Send WhatsApp dispatch to a responder for an active trip
+ */
+export const DispatchResponderBody = zod.object({
+  tripId: zod.number(),
+  responderId: zod.number(),
+  customNote: zod.string().nullish(),
+});
+
+export const DispatchResponderResponse = zod.object({
+  sent: zod.boolean(),
+  messageSid: zod.string().nullish(),
+  preview: zod.string(),
+});
+
+/**
  * @summary Update message (e.g. assign to trip)
  */
 export const UpdateMessageParams = zod.object({

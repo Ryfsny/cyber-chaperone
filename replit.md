@@ -49,6 +49,7 @@ Method: **POST** — paste this into Twilio Sandbox "WHEN A MESSAGE COMES IN"
 
 ## Database Schema
 
+- `responders` — eblockwatch responder network (id, name, whatsappNumber, areaName, homeLat, homeLon, notes, active, created_at, updated_at)
 - `trips` — traveler trip records (id, title, traveler_name, traveler_phone, status, evidence_notes, inference_notes, next_action, operator_notes, original_member_eta, current_route_confidence, last_member_checkin_time, eta_drift_minutes, ice_escalation_status, start_lat, start_lon, dest_lat, dest_lon, route_polyline, route_eta_minutes, route_eta_time, checkpoint_list, created_at, updated_at)
 - `messages` — raw WhatsApp messages (id, from_number, to_number, body, message_sid, trip_id, received_at)
 - `members` — known member registry (id, first_name, last_name, display_name, whatsapp_number, member_status, role, notes, ice_contact_name, ice_contact_phone, created_at, updated_at)
