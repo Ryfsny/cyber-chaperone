@@ -10,6 +10,7 @@ import Messages from "@/pages/messages";
 import NewTrip from "@/pages/new-trip";
 import Radar from "@/pages/radar";
 import Responders from "@/pages/responders";
+import Members from "@/pages/members";
 import { Layout } from "@/components/layout/layout";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ function Router() {
         <Route path="/messages" component={Messages} />
         <Route path="/radar" component={Radar} />
         <Route path="/responders" component={Responders} />
+        <Route path="/members" component={Members} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

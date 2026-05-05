@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { MessageSquare, Plus, Shield, Bot, Radio, Users } from "lucide-react";
+import { MessageSquare, Plus, Shield, Bot, Radio, Users, BookUser } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { AiAssistant } from "@/components/ai/AiAssistant";
@@ -13,6 +13,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/radar", label: "Live Radar", icon: Radio },
     { href: "/messages", label: "Inbox", icon: MessageSquare },
     { href: "/responders", label: "Responders", icon: Users },
+    { href: "/members", label: "Members", icon: BookUser },
   ];
 
   return (
