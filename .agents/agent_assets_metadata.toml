@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "GZcowUx324_zRD73VmXNW"
+uri = "file://docs/ruka-vs-current-alignment-report.md"
+type = "text"
+title = "Ruka vs Current — Alignment Report"
