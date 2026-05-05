@@ -65,7 +65,9 @@ const STEP_WAITING_FOR_NEW_ETA = "WAITING_FOR_NEW_ETA";
 
 // ── Keyword detectors ─────────────────────────────────────────────────────────
 
-const MAIN_MENU_TRIGGER = /^(hi|hello|menu|start|0)$/i;
+const MAIN_MENU_TRIGGER = /^(hi|hello|menu|main menu|start|0)$/i;
+const GLOBAL_MENU_OVERRIDE = /^(hi|hello|menu|main menu|start|0|join)$/i;
+const JOIN_PREFIX = /^join\s+/i;
 const CC_KEYWORDS = /\b(cyber chaperone|travel|trip|start trip)\b/i;
 const AMBIGUOUS_DEST_PATTERN =
   /\b(i'?m? (?:am )?going to|on my way to|heading to|going to)\s+(.+)/i;
@@ -1320,11 +1322,36 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   const name = member?.displayName ?? from;
   const trimmed = body.trim();
 
+  // ── DIAGNOSTIC LOGGING ────────────────────────────────────────────────────
+  log.info(
+    {
+      from,
+      body: trimmed.slice(0, 120),
+      menuOverrideMatch: GLOBAL_MENU_OVERRIDE.test(trimmed) || JOIN_PREFIX.test(trimmed),
+    },
+    "menu-router: inbound",
+  );
+
+  // ── GLOBAL MENU OVERRIDE ──────────────────────────────────────────────────
+  // Runs BEFORE ICE detection, conversation state, trip logic, and all other
+  // handlers. Any message that is a menu trigger word or begins with "join "
+  // always returns the main menu — no other routing applies.
+  const isMenuOverride = GLOBAL_MENU_OVERRIDE.test(trimmed) || JOIN_PREFIX.test(trimmed);
+  if (isMenuOverride) {
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, mainMenuText(name));
+    await saveMessage(from, to, body, messageSid, null);
+    log.info({ from, body: trimmed, handler: "GLOBAL_MENU_OVERRIDE" }, "menu-router: MENU_OVERRIDE triggered");
+    return { handled: true };
+  }
+
   // 0. ICE contact detection — runs before all other handlers
+  //    Skipped when GLOBAL_MENU_OVERRIDE fires above.
   const iceCtx = await detectIceContact(from);
   if (iceCtx) {
     await handleIceReply(ctx, iceCtx.memberRow, iceCtx.activeTrip);
-    log.info({ from }, "Menu router: ICE contact reply handler");
+    log.info({ from, handler: "ICE_CONTACT" }, "Menu router: ICE contact reply handler");
     return { handled: true };
   }
 
@@ -1340,7 +1367,7 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
         }
       } catch { /* best-effort */ }
     }
-    log.info({ from }, "Menu router: distress priority handler");
+    log.info({ from, handler: "DISTRESS" }, "menu-router: distress priority handler");
     return { handled: true };
   }
 
@@ -1348,17 +1375,17 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   if (isArrival(trimmed)) {
     const activeTrip = await findActiveTrip(from);
     await handleArrival(ctx, activeTrip);
-    log.info({ from }, "Menu router: arrival priority handler");
+    log.info({ from, handler: "ARRIVAL" }, "menu-router: arrival priority handler");
     return { handled: true };
   }
 
-  // 3. Main menu reset trigger
+  // 3. Main menu reset trigger (belt-and-suspenders after GLOBAL_MENU_OVERRIDE)
   if (MAIN_MENU_TRIGGER.test(trimmed)) {
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     await sendWhatsApp(from, to, mainMenuText(name));
     await saveMessage(from, to, body, messageSid, null);
-    log.info({ from }, "Menu router: main menu shown");
+    log.info({ from, handler: "MAIN_MENU_TRIGGER" }, "menu-router: main menu trigger");
     return { handled: true };
   }
 
