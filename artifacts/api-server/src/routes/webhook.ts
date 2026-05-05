@@ -602,7 +602,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
       await sendReply(
         from,
         to,
-        `Trip started. We are monitoring: ${parsed.startLocation} → ${parsed.destination}.${etaNote}\n\nPlease send your current WhatsApp location pin now so we can confirm your start point and route.`,
+        `Trip started. We are monitoring: ${parsed.startLocation} → ${parsed.destination}.${etaNote}\n\nPlease send your current WhatsApp location pin now so we can confirm your start point and route.\n\nReply 0 for Main Menu.`,
       );
 
       if (member?.isKnown) {
@@ -664,7 +664,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
         await sendReply(
           from,
           to,
-          "Message received, but there is no active trip open. Please start a new trip with: Leaving [start] heading to [destination]. ETA [time].",
+          "Message received, but there is no active trip open. Please start a new trip with: Leaving [start] heading to [destination]. ETA [time].\n\nReply 0 for Main Menu.",
         );
       } else {
         const ts = nowUtc();
@@ -688,7 +688,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
           await sendReply(
             from,
             to,
-            "Location received. We have added it to your active trip and will use it to confirm your route.",
+            "Location received. We have added it to your active trip and will use it to confirm your route.\n\nReply 0 for Main Menu.",
           );
 
           req.log.info(
@@ -737,7 +737,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
             .set({ evidenceNotes: note })
             .where(eq(tripsTable.id, activeTrip.id));
 
-          await sendReply(from, to, "Location link received. We have added it to your active trip.");
+          await sendReply(from, to, "Location link received. We have added it to your active trip.\n\nReply 0 for Main Menu.");
 
           req.log.info({ tripId: activeTrip.id }, "Google Maps location link received and recorded");
 
@@ -816,7 +816,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
               .set({ status: "completed", evidenceNotes: note })
               .where(eq(tripsTable.id, activeTrip.id));
 
-            await sendReply(from, to, "Received. Your arrival has been recorded and the trip is closed.");
+            await sendReply(from, to, "Arrival recorded. Your trip is now closed. Travel safe! 🟢\n\nReply Hi or 0 to start a new trip.");
             req.log.info({ tripId: activeTrip.id }, "Trip closed — arrival keyword");
 
             await sendOperatorMirror(
@@ -845,7 +845,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
             await sendReply(
               from,
               to,
-              "Update received. We have marked the trip Amber for monitoring. Please send another update when you move again or arrive.",
+              "Update received. We have marked the trip Amber for monitoring. Please send another update when you move again or arrive.\n\nReply 0 for Main Menu.",
             );
             req.log.info({ tripId: activeTrip.id }, "Trip set to AMBER — delay keyword");
 
@@ -877,7 +877,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
               .set({ evidenceNotes: note, inferenceNotes: `ETA updated to ${newEta}.` })
               .where(eq(tripsTable.id, activeTrip.id));
 
-            await sendReply(from, to, "ETA update received. We are still monitoring the trip.");
+            await sendReply(from, to, "ETA update received. We are still monitoring the trip.\n\nReply 0 for Main Menu.");
             req.log.info({ tripId: activeTrip.id, newEta }, "Trip ETA updated — ETA keyword");
 
             await sendOperatorMirror(
@@ -923,8 +923,8 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
 
             const isLocationGuidance = LOCATION_GUIDANCE_PATTERN.test(body);
             const memberReply = isLocationGuidance
-              ? "Yes. Please send your current WhatsApp location pin or Google Maps location link. We will add it to your active trip."
-              : "Update received. Your trip is still being monitored. Please send ETA changes, delays, arrival, or help if needed.";
+              ? "Yes. Please send your current WhatsApp location pin or Google Maps location link. We will add it to your active trip.\n\nReply 0 for Main Menu."
+              : "Update received. Your trip is still being monitored. Please send ETA changes, delays, arrival, or help if needed.\n\nReply 0 for Main Menu.";
 
             await sendReply(from, to, memberReply);
 

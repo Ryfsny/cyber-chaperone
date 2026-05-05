@@ -1,0 +1,86 @@
+Add a consistent menu-return instruction to all member-facing WhatsApp replies.
+
+Do not change the webhook MessageStatus / SmsStatus guard.
+Do not change trip logic.
+Do not change ETA / ICE logic.
+Do not change radar or responder logic.
+Do not change dashboard styling.
+
+Requirement:
+Every normal member-facing WhatsApp response must end with:
+
+"Reply 0 for Main Menu."
+
+Purpose:
+No WhatsApp conversation may end in a dead end.
+
+Apply this to:
+- Main menu responses
+- Cyber Chaperone menu responses
+- Start-trip flow replies
+- Location pin confirmation replies
+- Destination replies
+- ETA request replies
+- Trip started confirmation
+- Update received replies
+- Delay replies
+- Arrival replies
+- Ambiguous destination clarification replies
+- Check-in prompts
+- Help / RED acknowledgement replies
+- Profile / membership / eblockshop menu replies if present
+
+Do not apply blindly to:
+- Twilio status callback logs
+- database logs
+- internal server logs
+- operator mirror alerts, unless the operator message already uses operator commands
+- responder/conduit dispatch messages where the reply options are specific
+- ICE contact messages where the reply options are specific
+
+For responder/conduit/ICE messages:
+Do not add Main Menu unless they are registered members inside the member menu flow.
+Those messages must keep their own reply options.
+
+Best implementation:
+Create a shared helper, for example:
+
+appendMainMenuFooter(text)
+
+It should:
+1. Append "\n\nReply 0 for Main Menu." if missing.
+2. Not duplicate the line if already present.
+3. Preserve special reply menus.
+4. Allow exceptions for operator mirror, conduit dispatch, ICE escalation, and logs.
+
+Regression tests:
+1. Send Hi
+Expected main menu includes Reply 0 for Main Menu.
+
+2. Send 5
+Expected Cyber Chaperone menu includes Reply 0 for Main Menu.
+
+3. Send 1 from Cyber Chaperone
+Expected location request includes Reply 0 for Main Menu.
+
+4. Send location pin
+Expected destination request includes Reply 0 for Main Menu.
+
+5. Send destination
+Expected ETA request includes Reply 0 for Main Menu.
+
+6. Send ETA
+Expected trip started confirmation includes Reply 0 for Main Menu.
+
+7. Send unclear message:
+"I am going to Oyster Box in Durban"
+Expected clarification menu includes Reply 0 for Main Menu.
+
+8. Send I need help
+Expected RED/help acknowledgement includes Reply 0 for Main Menu unless it has a more urgent instruction.
+
+9. Confirm operator mirror messages were not polluted with member menu wording.
+
+10. Confirm MessageStatus guard unchanged.
+
+Report exact WhatsApp replies only.

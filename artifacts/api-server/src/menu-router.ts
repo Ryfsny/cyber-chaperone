@@ -794,7 +794,7 @@ async function handleArrival(ctx: MenuContext, activeTrip: Awaited<ReturnType<ty
 
   if (!activeTrip) {
     await saveMessage(from, to, body, messageSid, null);
-    await sendWhatsApp(from, to, "Arrival noted, but there is no active trip open. Send Hi or 0 to start.");
+    await sendWhatsApp(from, to, "Arrival noted, but there is no active trip open.\n\nReply 0 for Main Menu.");
     return;
   }
 
@@ -807,7 +807,7 @@ async function handleArrival(ctx: MenuContext, activeTrip: Awaited<ReturnType<ty
   await saveMessage(from, to, body, messageSid, activeTrip.id);
   await resetConvState(from);
 
-  await sendWhatsApp(from, to, "Arrival recorded. Your trip is now closed. Travel safe! 🟢");
+  await sendWhatsApp(from, to, "Arrival recorded. Your trip is now closed. Travel safe! 🟢\n\nReply Hi or 0 to start a new trip.");
 
   log.info({ tripId: activeTrip.id }, "Trip closed — arrival (menu router)");
 
@@ -962,7 +962,7 @@ async function handleClarificationChoice(ctx: MenuContext, state: ConvState): Pr
       }
     }
     await resetConvState(from);
-    await sendWhatsApp(from, to, "Noted. Your active trip continues unchanged. 🟢");
+    await sendWhatsApp(from, to, "Noted. Your active trip continues unchanged. 🟢\n\nReply 0 for Main Menu.");
     log.info({ from }, "Clarification: added as note");
     return;
   }
@@ -976,7 +976,7 @@ async function handleClarificationChoice(ctx: MenuContext, state: ConvState): Pr
         .where(eq(tripsTable.id, pending.clarificationActiveTripId));
     }
     await resetConvState(from);
-    await sendWhatsApp(from, to, "Message ignored. Your active trip continues unchanged. 🟢");
+    await sendWhatsApp(from, to, "Message ignored. Your active trip continues unchanged. 🟢\n\nReply 0 for Main Menu.");
     log.info({ from }, "Clarification: ignored");
     return;
   }
