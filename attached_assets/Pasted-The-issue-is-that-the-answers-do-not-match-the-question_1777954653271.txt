@@ -1,0 +1,386 @@
+The issue is that the answers do not match the questions.
+
+Do not enrich.
+Do not redesign.
+Do not change code.
+Do not deploy.
+
+Create a clean Question-to-Answer Matching Report for the WhatsApp system.
+
+Use two sources:
+1. The old Ruka / SmartChat handover spec as the baseline.
+2. The current evolved Replit Situation Room system as the updated reality.
+
+The task:
+For every WhatsApp menu question, trigger, or user input, show the correct response that must go back to the member.
+
+Use this structure:
+
+1. Question / Trigger
+2. Current wrong answer if known
+3. Correct answer
+4. Source / reason
+5. Whether this is:
+   - member-facing
+   - Situation Room / operator-facing
+   - ICE-facing
+   - Local Conduit-facing
+6. Whether it must include:
+   “Reply 0 for Main Menu.”
+
+Important:
+The answers must match the question asked.
+Do not answer Cyber Chaperone questions with membership answers.
+Do not answer membership questions with trip answers.
+Do not answer local conduit messages with member menu answers.
+Do not add “Reply 0 for Main Menu” to ICE or Local Conduit messages if they already have their own numbered reply options.
+
+Start with these mappings:
+
+MAIN MENU
+
+Trigger:
+Hi / Hello / Menu / Start / 0
+
+Correct answer:
+Hi [Member Name], I’m AI Arnie, Andre Snyman’s digital wingman.
+
+You’re on a [Membership Type].
+
+We are here to make you safer.
+
+1. What is eblockwatch?
+2. Membership Options
+3. Activate my membership
+4. Update my profile
+5. Travel with Cyber Chaperone
+6. eblockshop — safer products to make you safer
+7. Request contact from a human
+
+URGENT? Reply 10 for immediate human review.
+
+Reply with the number of your choice. Reply 0 for Main Menu.
+
+
+WHAT IS EBLOCKWATCH
+
+Trigger:
+Member replies 1 from Main Menu.
+
+Correct answer:
+[Member Name], eblockwatch is a trusted human support network built around real people, real relationships, and looking after people properly.
+
+For more than 25 years, Andre Snyman has built trusted relationships with members across South Africa. That is what gives eblockwatch its strength.
+
+When something goes wrong, eblockwatch uses those relationships and networks to connect the right people, in the right place, at the right time, with the right solutions to your predicament.
+
+This is not just a page or a group. It is a real network.
+
+When you register, the relationship starts, and each member makes the spine of eblockwatch stronger.
+
+1. Membership Options
+2. Update my profile
+3. Travel with Cyber Chaperone
+4. eblockshop — safer products to make you safer
+
+Reply 0 for Main Menu.
+
+
+MEMBERSHIP OPTIONS
+
+Trigger:
+Member replies 2 from Main Menu.
+
+Correct answer:
+[Member Name], here are your eblockwatch membership options.
+
+1. Entry Level — your starting point in eblockwatch
+2. Single Membership — R150/month
+3. Family Membership — R250/month
+
+The stronger your membership, the stronger your support layer.
+
+Reply 3 to activate your membership.
+Reply 0 for Main Menu.
+
+
+ACTIVATE MEMBERSHIP
+
+Trigger:
+Member replies 3 from Main Menu.
+
+Correct answer:
+[Member Name], let’s get your membership activated.
+
+1. Entry Level — free
+2. Single Membership — R150/month
+3. Family Membership — R250/month
+
+Reply with the number of your choice.
+Reply 0 for Main Menu.
+
+
+UPDATE PROFILE
+
+Trigger:
+Member replies 4 from Main Menu.
+
+Correct answer:
+[Member Name], your profile helps the Situation Room support you properly.
+
+What would you like to update?
+
+1. My personal details
+2. My home location
+3. My vehicle details
+4. My ICE contact
+5. My family members
+6. My local network / conduit details
+
+Reply 0 for Main Menu.
+
+
+CYBER CHAPERONE MENU
+
+Trigger:
+Member replies 5 from Main Menu.
+
+Correct answer:
+[Member Name], Cyber Chaperone is your travel support link into eblockwatch.
+
+What do you want to do?
+
+1. Start a new trip
+2. Update my current trip
+3. Change my destination
+4. I have arrived
+5. I need help
+6. How Cyber Chaperone works
+7. Speak to Andre
+
+Reply 0 for Main Menu.
+
+
+START TRIP
+
+Trigger:
+Member replies 1 from Cyber Chaperone menu.
+
+Correct answer:
+[Member Name], let’s start your trip.
+
+Please send your current location pin 📍.
+
+Reply 0 for Main Menu.
+
+
+LOCATION PIN RECEIVED
+
+Trigger:
+Member sends location pin during start-trip flow.
+
+Correct answer:
+Got it — I have your starting location.
+
+Where are you heading to?
+
+Reply 0 for Main Menu.
+
+
+DESTINATION RECEIVED
+
+Trigger:
+Member sends destination.
+
+Correct answer:
+Got it — your destination is [Destination].
+
+Please send your ETA.
+
+Example:
+ETA 23:30
+
+Reply 0 for Main Menu.
+
+
+ETA RECEIVED / TRIP STARTED
+
+Trigger:
+Member sends ETA.
+
+Correct answer:
+[Member Name], your Cyber Chaperone trip is active.
+
+Route: [Start] → [Destination]
+ETA: [ETA]
+Status: GREEN
+
+For stronger backup, you can also share:
+1. Your WhatsApp live location to the Situation Room
+2. Your Waze / Google Maps route link
+3. Updates if your ETA changes
+
+We are monitoring your journey.
+
+Reply 4 when you arrive.
+Reply 5 if you need help.
+Reply 0 for Main Menu.
+
+
+AMBIGUOUS DESTINATION
+
+Trigger:
+Active trip exists and member says something like:
+“I am going to Oyster Box in Durban”
+
+Correct answer:
+[Member Name], I need to confirm what you mean.
+
+You already have an active trip:
+
+[Current Trip Route]
+
+Your message says you are going to:
+
+[Detected Destination]
+
+What must I do?
+
+1. Start a new trip
+2. Change my current destination
+3. Add this as a note only
+4. Ignore this message
+
+Reply 0 for Main Menu.
+
+
+ARRIVED
+
+Trigger:
+Member says:
+I have arrived / arrived safely
+
+Correct answer:
+[Member Name], confirmed.
+
+Your trip has been closed as arrived safely.
+
+Status: COMPLETED
+
+Reply 0 for Main Menu.
+
+
+HELP / RED
+
+Trigger:
+Member says:
+I need help / danger / emergency / call me
+
+Correct answer:
+[Member Name], I have marked this for immediate human review.
+
+The Situation Room has been notified.
+
+Please reply with one number:
+
+1. I am in danger
+2. I have broken down
+3. I am lost
+4. Medical issue
+5. Call me
+
+Reply 0 for Main Menu.
+
+
+ICE CONTACT MESSAGE
+
+Trigger:
+ICE escalation.
+
+Correct answer:
+Hi [ICE Name], this is Cyber Chaperone from eblockwatch.
+
+You are listed as [Member Name]’s ICE contact.
+
+We are monitoring their trip:
+[Origin] → [Destination].
+
+We have not received the expected check-in.
+
+Please try to contact [Member Name] and reply:
+
+1. I reached them — they are okay
+2. I reached them — they need help
+3. I could not reach them
+4. Please ask the Situation Room to call me
+
+Do not add “Reply 0 for Main Menu” here unless the ICE contact is also in a normal member menu flow.
+
+
+LOCAL CONDUIT DISPATCH
+
+Trigger:
+Operator manually dispatches to a local conduit.
+
+Correct answer:
+Cyber Chaperone request from the eblockwatch Situation Room.
+
+A member may need assistance near [area/location].
+
+Status: [AMBER / RED]
+
+Are you able to assist or help mobilise trusted local support?
+
+Reply:
+1. I can assist directly
+2. I can alert my local safety network
+3. I can contact a trusted responder
+4. I cannot assist now
+5. Please ask the Situation Room to call me
+
+Do not include:
+- full trip history
+- evidence notes
+- private notes
+- member phone number
+- dashboard links
+- direct member contact link
+
+Do not add “Reply 0 for Main Menu” here.
+
+
+SITUATION ROOM MIRROR
+
+Trigger:
+Important event happens.
+
+Correct answer style:
+CYBER CHAPERONE — [EVENT TYPE]
+
+Member: [Member Name]
+Known member: YES / NO
+Trip: [Trip Route]
+Status: [GREEN / AMBER / RED / COMPLETED]
+Reason: [Short reason]
+Next action: [Operator action]
+
+Do not add “Reply 0 for Main Menu” to operator mirror messages.
+
+
+Now produce the report.
+
+Do not ask me which questions.
+Use the above as the first set.
+Then scan the current code/docs for any other WhatsApp replies and add them to the mapping.
+
+Output:
+- Missing question-answer pairs
+- Wrong answers currently used
+- Correct answers to replace them
+- Which ones need Reply 0 for Main Menu
+- Which ones must not get Reply 0
+- Privacy risks
+- Code locations where fixes are needed
+
+No code changes yet.
+Report only.
