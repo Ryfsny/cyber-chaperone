@@ -349,183 +349,6 @@ async function sendCheckinPrompt(
   await sendWhatsApp(ctx.from, ctx.to, checkinText(name, driftMin, trip.title, checkpointLabel));
 }
 
-// ── ICE escalation ────────────────────────────────────────────────────────────
-
-async function escalateToIce(
-  ctx: MenuContext,
-  memberRow: typeof membersTable.$inferSelect,
-  trip: typeof tripsTable.$inferSelect,
-): Promise<void> {
-  const { to, log } = ctx;
-  if (!memberRow.iceContactPhone) return;
-  const icePhone = memberRow.iceContactPhone;
-  const iceName = memberRow.iceContactName ?? "Emergency Contact";
-  const memberName = memberRow.displayName;
-  try {
-    await db
-      .update(tripsTable)
-      .set({ iceEscalationStatus: "SENT" })
-      .where(eq(tripsTable.id, trip.id));
-    await sendWhatsApp(
-      icePhone,
-      to,
-      [
-        `Hi ${iceName}, this is Cyber Chaperone from eblockwatch.`,
-        ``,
-        `You are listed as ${memberName}'s emergency contact.`,
-        ``,
-        `We are monitoring their trip:`,
-        `${trip.title}.`,
-        ``,
-        `We have not received the expected check-in.`,
-        ``,
-        `Please try to contact ${memberName} and reply:`,
-        ``,
-        `1. I reached them — they are okay`,
-        `2. I reached them — they need help`,
-        `3. I could not reach them`,
-        `4. Please ask the Situation Room to call me`,
-      ].join("\n"),
-    );
-    log.info({ memberName, tripId: trip.id }, "ICE contact escalated");
-    await sendOperatorMirror(to, [
-      `CYBER CHAPERONE — ICE ESCALATION SENT`,
-      `Member: ${memberName}`,
-      `Trip: ${trip.title} (ID: ${trip.id})`,
-      `ICE Contact: ${iceName}`,
-      `Status: ⚠️ AMBER`,
-      `Next action: Await ICE response. If no reply in 15 min, call operator.`,
-    ].join("\n"));
-  } catch (err) {
-    log.error({ err }, "Failed to escalate to ICE");
-  }
-}
-
-// ── ICE contact detection ─────────────────────────────────────────────────────
-
-async function detectIceContact(
-  from: string,
-): Promise<{ memberRow: typeof membersTable.$inferSelect; activeTrip: Awaited<ReturnType<typeof findActiveTrip>> } | null> {
-  try {
-    const [memberRow] = await db
-      .select()
-      .from(membersTable)
-      .where(eq(membersTable.iceContactPhone, from))
-      .limit(1);
-    if (!memberRow) return null;
-    const activeTrip = await findActiveTrip(memberRow.whatsappNumber);
-    return { memberRow, activeTrip };
-  } catch {
-    return null;
-  }
-}
-
-// ── ICE reply handler ─────────────────────────────────────────────────────────
-
-async function handleIceReply(
-  ctx: MenuContext,
-  memberRow: typeof membersTable.$inferSelect,
-  activeTrip: Awaited<ReturnType<typeof findActiveTrip>>,
-): Promise<void> {
-  const { from, to, body, messageSid, log } = ctx;
-  const choice = body.trim();
-  const memberName = memberRow.displayName;
-  const ts = nowUtc();
-
-  await saveMessage(from, to, body, messageSid, activeTrip?.id ?? null);
-
-  const mirror = (extra: string[]) =>
-    [
-      `CYBER CHAPERONE — ICE UPDATE`,
-      `Member: ${memberName}`,
-      activeTrip ? `Trip: ${activeTrip.title} (ID: ${activeTrip.id})` : `Trip: No active trip`,
-      ...extra,
-    ].join("\n");
-
-  if (choice === "1") {
-    if (activeTrip) {
-      await db
-        .update(tripsTable)
-        .set({
-          iceEscalationStatus: "REPLIED",
-          status: "green",
-          currentRouteConfidence: "green",
-          evidenceNotes: appendNote(activeTrip.evidenceNotes, `[${ts}] ICE REPLY: Contact confirmed member is okay.`),
-          nextAction: "ICE confirmed member is okay. Continue monitoring.",
-        })
-        .where(eq(tripsTable.id, activeTrip.id));
-    }
-    await sendWhatsApp(from, to, `Thank you. We have noted that ${memberName} is okay. We will continue monitoring their trip.`);
-    log.info({ memberName, tripId: activeTrip?.id }, "ICE reply: member okay");
-    await sendOperatorMirror(to, mirror([`ICE response: Reached member — okay`, `Status: GREEN`, `Next action: Monitor. ICE confirmed okay.`]));
-    return;
-  }
-
-  if (choice === "2") {
-    if (activeTrip) {
-      await db
-        .update(tripsTable)
-        .set({
-          iceEscalationStatus: "REPLIED",
-          status: "red",
-          evidenceNotes: appendNote(activeTrip.evidenceNotes, `[${ts}] ICE REPLY: Contact confirmed member needs help.`),
-          nextAction: "URGENT: ICE confirmed member needs help. Immediate human review.",
-        })
-        .where(eq(tripsTable.id, activeTrip.id));
-    }
-    await sendWhatsApp(from, to, `Thank you for confirming. We have marked this as urgent. The Situation Room has been notified.`);
-    log.info({ memberName, tripId: activeTrip?.id }, "ICE reply: member needs help — RED");
-    await sendOperatorMirror(to, mirror([`ICE response: Reached member — NEEDS HELP`, `Status: 🚨 RED`, `Next action: IMMEDIATE human review.`]));
-    return;
-  }
-
-  if (choice === "3") {
-    if (activeTrip) {
-      await db
-        .update(tripsTable)
-        .set({
-          iceEscalationStatus: "REPLIED",
-          status: "amber",
-          currentRouteConfidence: "amber",
-          evidenceNotes: appendNote(activeTrip.evidenceNotes, `[${ts}] ICE REPLY: Could not reach member.`),
-          nextAction: "AMBER: ICE could not reach member. Escalate to human review.",
-        })
-        .where(eq(tripsTable.id, activeTrip.id));
-    }
-    await sendWhatsApp(from, to, `Understood. Thank you for trying. We are escalating to human review. The Situation Room will follow up.`);
-    log.info({ memberName, tripId: activeTrip?.id }, "ICE reply: could not reach member — AMBER");
-    await sendOperatorMirror(to, mirror([`ICE response: Could NOT reach member`, `Status: ⚠️ AMBER`, `Next action: Immediate human review. Call member directly.`]));
-    return;
-  }
-
-  if (choice === "4") {
-    if (activeTrip) {
-      await db
-        .update(tripsTable)
-        .set({
-          iceEscalationStatus: "REPLIED",
-          evidenceNotes: appendNote(activeTrip.evidenceNotes, `[${ts}] ICE REPLY: Requesting callback from Situation Room.`),
-          nextAction: "ICE requesting callback from Situation Room.",
-        })
-        .where(eq(tripsTable.id, activeTrip.id));
-    }
-    await sendWhatsApp(from, to, `Noted. The Situation Room will contact you shortly.`);
-    log.info({ memberName }, "ICE reply: requesting callback");
-    await sendOperatorMirror(to, mirror([`ICE response: Please call me`, `ICE phone: ${from}`, `Next action: Call ICE contact immediately.`]));
-    return;
-  }
-
-  await sendWhatsApp(from, to, [
-    `Hi, this is Cyber Chaperone from eblockwatch.`,
-    ``,
-    `Please reply:`,
-    `1. I reached them — they are okay`,
-    `2. I reached them — they need help`,
-    `3. I could not reach them`,
-    `4. Please ask the Situation Room to call me`,
-  ].join("\n"));
-}
-
 // ── Check-in flow handler ─────────────────────────────────────────────────────
 
 async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<void> {
@@ -731,7 +554,7 @@ function ccInfoText(name: string): string {
     `${name}, here's how Cyber Chaperone works:`,
     ``,
     `1. You start a trip by sending your location and destination.`,
-    `2. We monitor your journey and keep your ICE contact informed.`,
+    `2. We monitor your journey and the Situation Room watches over you.`,
     `3. Send updates along the way — delays, ETA changes, or your location pin.`,
     `4. When you arrive, send ARRIVED and we close the trip.`,
     `5. If you need help, send HELP or reply 5 from the Cyber Chaperone menu.`,
@@ -1346,35 +1169,10 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     return { handled: true };
   }
 
-  // 0. ICE contact detection — ONLY for non-members
-  //    A person who is BOTH a known member AND stored as an ICE contact for
-  //    another member must always be routed through the normal member flows.
-  //    Routing them through the ICE handler causes every message they send to
-  //    be treated as an ICE escalation reply instead of a member interaction.
-  //    ICE replies are only valid for contacts who are NOT members themselves.
-  if (!member?.isKnown) {
-    const iceCtx = await detectIceContact(from);
-    if (iceCtx) {
-      await handleIceReply(ctx, iceCtx.memberRow, iceCtx.activeTrip);
-      log.info({ from, handler: "ICE_CONTACT" }, "Menu router: ICE contact reply handler");
-      return { handled: true };
-    }
-  } else {
-    log.info({ from, handler: "ICE_CHECK_SKIPPED" }, "menu-router: known member — ICE contact check skipped");
-  }
-
   // 1. PRIORITY: Distress — always handled first
   if (isDistress(trimmed)) {
     const activeTrip = await findActiveTrip(from);
     await handleDistress(ctx, activeTrip);
-    if (activeTrip && member?.isKnown) {
-      try {
-        const [mr] = await db.select().from(membersTable).where(eq(membersTable.whatsappNumber, from)).limit(1);
-        if (mr?.iceContactPhone && !activeTrip.iceEscalationStatus) {
-          await escalateToIce(ctx, mr, activeTrip);
-        }
-      } catch { /* best-effort */ }
-    }
     log.info({ from, handler: "DISTRESS" }, "menu-router: distress priority handler");
     return { handled: true };
   }
@@ -1491,15 +1289,6 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     const drift = calculateEtaDrift(activeTrip.originalMemberEta, activeTrip.createdAt);
     if (drift !== null && drift > 0) {
       await db.update(tripsTable).set({ etaDriftMinutes: drift }).where(eq(tripsTable.id, activeTrip.id)).catch(() => {});
-      if (drift >= 45 && !activeTrip.iceEscalationStatus) {
-        try {
-          const [mr] = await db.select().from(membersTable).where(eq(membersTable.whatsappNumber, from)).limit(1);
-          if (mr?.iceContactPhone) {
-            await db.update(tripsTable).set({ status: "amber", currentRouteConfidence: "amber" }).where(eq(tripsTable.id, activeTrip.id)).catch(() => {});
-            await escalateToIce(ctx, mr, activeTrip);
-          }
-        } catch { /* best-effort */ }
-      }
       if (drift >= 15 && state.currentFlow !== FLOW_CHECKIN && shouldSendCheckin(activeTrip)) {
         await sendCheckinPrompt(ctx, activeTrip, drift);
         await setConvState(from, {
