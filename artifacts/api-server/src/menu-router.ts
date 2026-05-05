@@ -64,6 +64,9 @@ const STEP_WAITING_FOR_ETA = "WAITING_FOR_ETA";
 const FLOW_CHECKIN = "CHECKIN";
 const STEP_WAITING_FOR_NEW_ETA = "WAITING_FOR_NEW_ETA";
 const FLOW_MEMBERSHIP = "MEMBERSHIP";
+const STEP_WAITING_FOR_PAYMENT_CONFIRMATION = "WAITING_FOR_PAYMENT_CONFIRMATION";
+const FLOW_PROFILE_UPDATE = "PROFILE_UPDATE";
+const STEP_WAITING_FOR_ICE = "WAITING_FOR_ICE";
 
 // ── Keyword detectors ─────────────────────────────────────────────────────────
 
@@ -303,12 +306,20 @@ async function createTrip(
     to,
     [
       `CYBER CHAPERONE — NEW TRIP`,
+      ``,
       `Member: ${member?.displayName ?? from}`,
       `Known member: ${member?.isKnown ? "YES" : "NO"}`,
       `Trip: ${title}${etaNote}`,
       `Trip ID: ${newTrip.id}`,
       `Status: GREEN`,
-      `Next action: Monitoring — awaiting updates.`,
+      ``,
+      `Location layers:`,
+      `1. Situation Room trip monitor: ACTIVE`,
+      `2. WhatsApp live location backup: PENDING`,
+      `3. Waze / Google Maps route link: PENDING`,
+      ``,
+      `ETA bullseye: ${eta ?? "not set"}`,
+      `Next action: Monitor route and checkpoint behaviour.`,
     ].join("\n"),
   );
 
@@ -482,7 +493,31 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
       await db.update(tripsTable).set({ status: "red", nextAction: "Immediate human review." }).where(eq(tripsTable.id, trip.id));
     }
     await resetConvState(from);
-    await sendWhatsApp(from, to, withMenu("Help message received. Your trip has been flagged for immediate human review."));
+    await sendWhatsApp(from, to, [
+      `${name}, I have marked this for immediate human review.`,
+      ``,
+      `The Situation Room has been notified.`,
+      ``,
+      `Please reply with one number:`,
+      ``,
+      `1. I am in danger`,
+      `2. I have broken down`,
+      `3. I am lost`,
+      `4. Medical issue`,
+      `5. Call me`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    if (trip) {
+      await sendOperatorMirror(to, [
+        `🚨 CYBER CHAPERONE — RED`,
+        `Member: ${name}`,
+        `Trip: ${trip.title} (ID: ${trip.id})`,
+        `Reason: Member requested help from check-in`,
+        `Status: RED`,
+        `Next action: Immediate human review required.`,
+      ].join("\n"));
+    }
     return;
   }
 
@@ -536,15 +571,13 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
 
 function membershipActivationText(name: string): string {
   return [
-    `${name}, this is where you finalise your eblockwatch membership.`,
+    `${name}, let's get your membership activated.`,
     ``,
-    `Please choose:`,
+    `1. Entry Level — free`,
+    `2. Single Membership — R150/month`,
+    `3. Family Membership — R250/month`,
     ``,
-    `1. Single Membership — R150/month`,
-    `2. Family Membership — R250/month`,
-    `3. I have already finalised my membership`,
-    `4. I need help from a human`,
-    ``,
+    `Reply with the number of your choice.`,
     `Reply 0 for Main Menu.`,
   ].join("\n");
 }
@@ -563,32 +596,85 @@ async function handleMembershipChoice(ctx: MenuContext): Promise<void> {
     return;
   }
 
+  // ── Payment confirmation sub-step ─────────────────────────────────────────
+  const state = await getConvState(from);
+  if (state.currentStep === STEP_WAITING_FOR_PAYMENT_CONFIRMATION) {
+    const tier = state.pendingTripData?.reason ?? "membership";
+    if (choice === "1") {
+      // Member says they have finalised payment
+      await resetConvState(from);
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, [
+        `Thank you, ${name}. We have noted that you have finalised your ${tier}.`,
+        ``,
+        `We will verify and update your membership profile.`,
+        ``,
+        `Reply 0 for Main Menu.`,
+      ].join("\n"));
+      await sendOperatorMirror(to, [
+        `CYBER CHAPERONE — MEMBERSHIP PAYMENT CLAIMED`,
+        `Member: ${name}`,
+        `Known member: ${member?.isKnown ? "YES" : "NO"}`,
+        `Tier: ${tier}`,
+        `Next action: Verify Paystack payment and update membershipTier in database.`,
+      ].join("\n"));
+      return;
+    }
+    if (choice === "2") {
+      await resetConvState(from);
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, `A human from eblockwatch will contact you shortly.\n\nIf this is urgent, reply 10.\n\nReply 0 for Main Menu.`);
+      await sendOperatorMirror(to, [
+        `CYBER CHAPERONE — MEMBERSHIP HELP REQUEST`,
+        `Member: ${name}`,
+        `Known member: ${member?.isKnown ? "YES" : "NO"}`,
+        `Tier attempted: ${tier}`,
+        `Next action: Member needs help with membership activation.`,
+      ].join("\n"));
+      return;
+    }
+    // Unknown — repeat
+    await sendWhatsApp(from, to, `Please reply:\n\n1. I have finalised my membership\n2. I need help\n\nReply 0 for Main Menu.`);
+    return;
+  }
+
+  // ── Activation menu choices ───────────────────────────────────────────────
   if (choice === "1") {
+    // Entry Level — free
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     await sendWhatsApp(from, to, [
-      `Single Membership — R150/month`,
+      `${name}, you are registered at Entry Level — your starting point in eblockwatch.`,
       ``,
-      `Tap the link below to complete your payment securely via Paystack:`,
-      `https://paystack.shop/pay/cyber-chaperone`,
-      ``,
-      `Once payment is confirmed your membership will be activated.`,
+      `Your profile is active. When you are ready to upgrade, reply 3 from the Main Menu.`,
       ``,
       `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    await sendOperatorMirror(to, [
+      `CYBER CHAPERONE — ENTRY LEVEL SELECTED`,
+      `Member: ${name}`,
+      `Known member: ${member?.isKnown ? "YES" : "NO"}`,
+      `Next action: Confirm entry level registration in member profile.`,
     ].join("\n"));
     return;
   }
 
   if (choice === "2") {
-    await resetConvState(from);
-    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    // Single Membership
+    await setConvState(from, {
+      currentFlow: FLOW_MEMBERSHIP,
+      currentStep: STEP_WAITING_FOR_PAYMENT_CONFIRMATION,
+      pendingTripData: { reason: "Single Membership" },
+    });
     await sendWhatsApp(from, to, [
-      `Family Membership — R250/month`,
+      `${name}, to finalise your Single Membership, please use this secure link:`,
       ``,
-      `Tap the link below to complete your payment securely via Paystack:`,
-      `https://paystack.shop/pay/family-cyber-chaperone`,
+      `https://paystack.shop/pay/cyber-chaperone`,
       ``,
-      `Once payment is confirmed your membership will be activated.`,
+      `Once complete, reply:`,
+      ``,
+      `1. I have finalised my membership`,
+      `2. I need help`,
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n"));
@@ -596,21 +682,23 @@ async function handleMembershipChoice(ctx: MenuContext): Promise<void> {
   }
 
   if (choice === "3") {
-    await resetConvState(from);
-    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, `Thank you, ${name}. We will check your membership confirmation and update your profile.\n\nReply 0 for Main Menu.`);
-    return;
-  }
-
-  if (choice === "4") {
-    await resetConvState(from);
-    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, `A human from eblockwatch will contact you shortly.\n\nIf this is urgent, reply 10.\n\nReply 0 for Main Menu.`);
-    await sendOperatorMirror(to, [
-      `CYBER CHAPERONE — MEMBERSHIP HELP REQUEST`,
-      `Member: ${name}`,
-      `Known member: ${member?.isKnown ? "YES" : "NO"}`,
-      `Next action: Member needs help with membership activation.`,
+    // Family Membership
+    await setConvState(from, {
+      currentFlow: FLOW_MEMBERSHIP,
+      currentStep: STEP_WAITING_FOR_PAYMENT_CONFIRMATION,
+      pendingTripData: { reason: "Family Membership" },
+    });
+    await sendWhatsApp(from, to, [
+      `${name}, to finalise your Family Membership, please use this secure link:`,
+      ``,
+      `https://paystack.shop/pay/family-cyber-chaperone`,
+      ``,
+      `Once complete, reply:`,
+      ``,
+      `1. I have finalised my membership`,
+      `2. I need help`,
+      ``,
+      `Reply 0 for Main Menu.`,
     ].join("\n"));
     return;
   }
@@ -690,7 +778,21 @@ async function handleDistress(ctx: MenuContext, activeTrip: Awaited<ReturnType<t
     log.info({ from }, "Distress received — no active trip — RED mirror sent");
   }
 
-  await sendWhatsApp(from, to, withMenu("Help message received. Stay as safe as possible. Your situation has been flagged RED for immediate human review."));
+  await sendWhatsApp(from, to, [
+    `${memberLabel}, I have marked this for immediate human review.`,
+    ``,
+    `The Situation Room has been notified.`,
+    ``,
+    `Please reply with one number:`,
+    ``,
+    `1. I am in danger`,
+    `2. I have broken down`,
+    `3. I am lost`,
+    `4. Medical issue`,
+    `5. Call me`,
+    ``,
+    `Reply 0 for Main Menu.`,
+  ].join("\n"));
 
   await resetConvState(from);
 
@@ -730,7 +832,15 @@ async function handleArrival(ctx: MenuContext, activeTrip: Awaited<ReturnType<ty
   await saveMessage(from, to, body, messageSid, activeTrip.id);
   await resetConvState(from);
 
-  await sendWhatsApp(from, to, withMenu("Arrival recorded. Your trip is now closed. Travel safe! 🟢"));
+  await sendWhatsApp(from, to, [
+    `${memberLabel}, confirmed.`,
+    ``,
+    `Your trip has been closed as arrived safely.`,
+    ``,
+    `Status: COMPLETED`,
+    ``,
+    `Reply 0 for Main Menu.`,
+  ].join("\n"));
 
   log.info({ tripId: activeTrip.id }, "Trip closed — arrival (menu router)");
 
@@ -1146,6 +1256,122 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
   return false;
 }
 
+// ── Profile update handler ────────────────────────────────────────────────────
+
+async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Promise<void> {
+  const { from, to, body, member, messageSid } = ctx;
+  const name = member?.displayName ?? from;
+  const choice = body.trim();
+
+  await saveMessage(from, to, body, messageSid, null);
+
+  if (choice === "0") {
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, mainMenuText(name, member));
+    return;
+  }
+
+  // ICE contact step — waiting for "ICE: Name, Number" message
+  if (state.currentStep === STEP_WAITING_FOR_ICE) {
+    const icePattern = /^ICE:\s*(.+?),\s*(\+?[\d\s]+)$/i;
+    const match = body.trim().match(icePattern);
+    if (match) {
+      const iceName = match[1].trim();
+      const icePhone = match[2].replace(/\s/g, "");
+      try {
+        await db
+          .update(membersTable)
+          .set({ iceContactName: iceName, iceContactPhone: icePhone })
+          .where(eq(membersTable.whatsappNumber, from));
+      } catch {
+        // best-effort
+      }
+      await resetConvState(from);
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, [
+        `${name}, your ICE contact has been updated.`,
+        ``,
+        `Name: ${iceName}`,
+        `Number: ${icePhone}`,
+        ``,
+        `Your ICE contact is only contacted when escalation rules are met.`,
+        ``,
+        `Reply 0 for Main Menu.`,
+      ].join("\n"));
+      await sendOperatorMirror(to, [
+        `PROFILE UPDATE — ICE CONTACT`,
+        `Member: ${name}`,
+        `Known member: ${member?.isKnown ? "YES" : "NO"}`,
+        `ICE name: ${iceName}`,
+        `ICE phone: ${icePhone}`,
+      ].join("\n"));
+      return;
+    }
+    // Format not matched
+    await sendWhatsApp(from, to, [
+      `${name}, please send your ICE contact in this format:`,
+      ``,
+      `ICE: Full Name, 0821234567`,
+      ``,
+      `Your ICE contact is only contacted when escalation rules are met.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (choice === "4") {
+    // ICE contact
+    await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: STEP_WAITING_FOR_ICE });
+    await sendWhatsApp(from, to, [
+      `${name}, please send your ICE contact like this:`,
+      ``,
+      `ICE: Full Name, 0821234567`,
+      ``,
+      `Your ICE contact is only contacted when escalation rules are met.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    return;
+  }
+
+  // Options 1, 2, 3, 5, 6 — not yet built, direct to human
+  const optionLabels: Record<string, string> = {
+    "1": "personal details",
+    "2": "home location",
+    "3": "vehicle details",
+    "5": "family members",
+    "6": "local network / conduit details",
+  };
+  if (optionLabels[choice]) {
+    await sendWhatsApp(from, to, [
+      `${name}, updating your ${optionLabels[choice]} directly is coming soon.`,
+      ``,
+      `For now, reply 7 from the Main Menu to request a human who can assist you.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    return;
+  }
+
+  // Unknown — repeat profile menu
+  await sendWhatsApp(from, to, [
+    `${name}, your profile helps the Situation Room support you properly.`,
+    ``,
+    `What would you like to update?`,
+    ``,
+    `1. My personal details`,
+    `2. My home location`,
+    `3. My vehicle details`,
+    `4. My ICE contact`,
+    `5. My family members`,
+    `6. My local network / conduit details`,
+    ``,
+    `Reply 0 for Main Menu.`,
+  ].join("\n"));
+}
+
 // ── Main menu choice handler ──────────────────────────────────────────────────
 
 async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise<boolean> {
@@ -1164,9 +1390,20 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   if (choice === "1") {
     await saveMessage(from, to, body, messageSid, null);
     await sendWhatsApp(from, to, [
-      `eblockwatch is a private safety and security network.`,
-      `We connect you to a community of verified members and rapid response partners.`,
-      `Our mission: make you safer at home, at work, and on the road.`,
+      `${name}, eblockwatch is a trusted human support network built around real people, real relationships, and looking after people properly.`,
+      ``,
+      `For more than 25 years, Andre Snyman has built trusted relationships with members across South Africa. That is what gives eblockwatch its strength.`,
+      ``,
+      `When something goes wrong, eblockwatch uses those relationships and networks to connect the right people, in the right place, at the right time, with the right solutions to your predicament.`,
+      ``,
+      `This is not just a page or a group. It is a real network.`,
+      ``,
+      `When you register, the relationship starts, and each member makes the spine of eblockwatch stronger.`,
+      ``,
+      `1. Membership Options`,
+      `2. Update my profile`,
+      `3. Travel with Cyber Chaperone`,
+      `4. eblockshop — safer products to make you safer`,
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n"));
@@ -1176,13 +1413,15 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   if (choice === "2") {
     await saveMessage(from, to, body, messageSid, null);
     await sendWhatsApp(from, to, [
-      `Membership Options:`,
-      `• Single Membership`,
-      `• Family Membership`,
-      `• Business Membership`,
+      `${name}, here are your eblockwatch membership options.`,
       ``,
-      `For full details, visit eblockwatch.com or request a human (reply 7).`,
+      `1. Entry Level — your starting point in eblockwatch`,
+      `2. Single Membership — R150/month`,
+      `3. Family Membership — R250/month`,
       ``,
+      `The stronger your membership, the stronger your support layer.`,
+      ``,
+      `Reply 3 to activate your membership.`,
       `Reply 0 for Main Menu.`,
     ].join("\n"));
     return true;
@@ -1197,13 +1436,33 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
 
   if (choice === "4") {
     await saveMessage(from, to, body, messageSid, null);
-    await sendWhatsApp(from, to, `To update your profile, please reply 7 to request a human who will assist you.\n\nReply 0 for Main Menu.`);
+    await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: null });
+    await sendWhatsApp(from, to, [
+      `${name}, your profile helps the Situation Room support you properly.`,
+      ``,
+      `What would you like to update?`,
+      ``,
+      `1. My personal details`,
+      `2. My home location`,
+      `3. My vehicle details`,
+      `4. My ICE contact`,
+      `5. My family members`,
+      `6. My local network / conduit details`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
     return true;
   }
 
   if (choice === "6") {
     await saveMessage(from, to, body, messageSid, null);
-    await sendWhatsApp(from, to, `eblockshop carries safety products vetted by eblockwatch.\nVisit eblockwatch.com/shop for the full range.\n\nReply 0 for Main Menu.`);
+    await sendWhatsApp(from, to, [
+      `${name}, eblockshop is where you find safer products to make you safer.`,
+      ``,
+      `Coming soon — we will notify you when it is ready.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
     return true;
   }
 
@@ -1299,6 +1558,11 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
 
   if (state.currentFlow === FLOW_MEMBERSHIP) {
     await handleMembershipChoice(ctx);
+    return { handled: true };
+  }
+
+  if (state.currentFlow === FLOW_PROFILE_UPDATE) {
+    await handleProfileUpdateChoice(ctx, state);
     return { handled: true };
   }
 
