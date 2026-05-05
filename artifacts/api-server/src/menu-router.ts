@@ -67,6 +67,7 @@ const FLOW_MEMBERSHIP = "MEMBERSHIP";
 const STEP_WAITING_FOR_PAYMENT_CONFIRMATION = "WAITING_FOR_PAYMENT_CONFIRMATION";
 const FLOW_PROFILE_UPDATE = "PROFILE_UPDATE";
 const STEP_WAITING_FOR_ICE = "WAITING_FOR_ICE";
+const FLOW_EBLOCKWATCH_INFO = "EBLOCKWATCH_INFO";
 
 // ── Keyword detectors ─────────────────────────────────────────────────────────
 
@@ -1256,6 +1257,96 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
   return false;
 }
 
+// ── eblockwatch info sub-menu handler ────────────────────────────────────────
+// Handles replies from the "What is eblockwatch?" sub-menu (options 1–4)
+
+async function handleEblockwatchInfoChoice(ctx: MenuContext): Promise<void> {
+  const { from, to, body, member, messageSid } = ctx;
+  const name = member?.displayName ?? from;
+  const choice = body.trim();
+
+  await saveMessage(from, to, body, messageSid, null);
+
+  if (choice === "0") {
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, mainMenuText(name, member));
+    return;
+  }
+
+  if (choice === "1") {
+    // Membership Options — same as main menu option 2
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, [
+      `${name}, here are your eblockwatch membership options.`,
+      ``,
+      `• Entry Level — your starting point in eblockwatch`,
+      `• Single Membership — R150/month`,
+      `• Family Membership — R250/month`,
+      ``,
+      `The stronger your membership, the stronger your support layer.`,
+      ``,
+      `Reply 3 to activate your membership.`,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (choice === "2") {
+    // Update my profile
+    await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: null });
+    await sendWhatsApp(from, to, [
+      `${name}, your profile helps the Situation Room support you properly.`,
+      ``,
+      `What would you like to update?`,
+      ``,
+      `1. My personal details`,
+      `2. My home location`,
+      `3. My vehicle details`,
+      `4. My ICE contact`,
+      `5. My family members`,
+      `6. My local network / conduit details`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (choice === "3") {
+    // Travel with Cyber Chaperone
+    await setConvState(from, { currentFlow: FLOW_CYBER_CHAPERONE, currentStep: null, pendingTripData: null });
+    await sendWhatsApp(from, to, ccMenuText(name));
+    return;
+  }
+
+  if (choice === "4") {
+    // eblockshop
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, [
+      `${name}, eblockshop is where you find safer products to make you safer.`,
+      ``,
+      `Coming soon — we will notify you when it is ready.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    return;
+  }
+
+  // Unknown — repeat the sub-menu
+  await sendWhatsApp(from, to, [
+    `Please reply with a number:`,
+    ``,
+    `1. Membership Options`,
+    `2. Update my profile`,
+    `3. Travel with Cyber Chaperone`,
+    `4. eblockshop — safer products to make you safer`,
+    ``,
+    `Reply 0 for Main Menu.`,
+  ].join("\n"));
+}
+
 // ── Profile update handler ────────────────────────────────────────────────────
 
 async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Promise<void> {
@@ -1389,6 +1480,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
 
   if (choice === "1") {
     await saveMessage(from, to, body, messageSid, null);
+    await setConvState(from, { currentFlow: FLOW_EBLOCKWATCH_INFO, currentStep: null });
     await sendWhatsApp(from, to, [
       `${name}, eblockwatch is a trusted human support network built around real people, real relationships, and looking after people properly.`,
       ``,
@@ -1415,9 +1507,9 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
     await sendWhatsApp(from, to, [
       `${name}, here are your eblockwatch membership options.`,
       ``,
-      `1. Entry Level — your starting point in eblockwatch`,
-      `2. Single Membership — R150/month`,
-      `3. Family Membership — R250/month`,
+      `• Entry Level — your starting point in eblockwatch`,
+      `• Single Membership — R150/month`,
+      `• Family Membership — R250/month`,
       ``,
       `The stronger your membership, the stronger your support layer.`,
       ``,
@@ -1558,6 +1650,11 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
 
   if (state.currentFlow === FLOW_MEMBERSHIP) {
     await handleMembershipChoice(ctx);
+    return { handled: true };
+  }
+
+  if (state.currentFlow === FLOW_EBLOCKWATCH_INFO) {
+    await handleEblockwatchInfoChoice(ctx);
     return { handled: true };
   }
 
