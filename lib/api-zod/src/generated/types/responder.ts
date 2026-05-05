@@ -11,10 +11,25 @@ export interface Responder {
   name: string;
   whatsappNumber: string;
   areaName: string;
+  /** @nullable */
+  suburb?: string | null;
+  /** @nullable */
+  street?: string | null;
+  /** @nullable */
+  province?: string | null;
   homeLat: string;
   homeLon: string;
+  conduitType: string;
   /** @nullable */
-  notes: string | null;
+  supportRadiusKm?: number | null;
+  availabilityStatus: string;
+  trustLevel: string;
+  /** @nullable */
+  linkedNetworkType?: string | null;
+  /** @nullable */
+  linkedNetworkName?: string | null;
+  /** @nullable */
+  notes?: string | null;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;

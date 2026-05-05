@@ -168,6 +168,117 @@ export const GetTripMessagesResponseItem = zod.object({
 export const GetTripMessagesResponse = zod.array(GetTripMessagesResponseItem);
 
 /**
+ * @summary List Situation Room Case participants for a trip
+ */
+export const ListCaseParticipantsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListCaseParticipantsResponseItem = zod.object({
+  id: zod.number(),
+  tripId: zod.number(),
+  participantName: zod.string(),
+  whatsappNumber: zod.string(),
+  role: zod.string(),
+  accessStatus: zod.enum(["invited", "active", "declined", "removed"]),
+  infoLevel: zod.number(),
+  permissions: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  invitedBy: zod.string().nullish(),
+  invitedAt: zod.coerce.date(),
+  removedBy: zod.string().nullish(),
+  removedAt: zod.coerce.date().nullish(),
+  responderId: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListCaseParticipantsResponse = zod.array(
+  ListCaseParticipantsResponseItem,
+);
+
+/**
+ * @summary Invite a participant into the Situation Room Case
+ */
+export const InviteCaseParticipantParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const InviteCaseParticipantBody = zod.object({
+  participantName: zod.string(),
+  whatsappNumber: zod.string(),
+  role: zod.string(),
+  infoLevel: zod.number().optional(),
+  permissions: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  invitedBy: zod.string(),
+  responderId: zod.number().nullish(),
+});
+
+/**
+ * @summary Update participant status (active/removed/declined)
+ */
+export const UpdateCaseParticipantParams = zod.object({
+  id: zod.coerce.number(),
+  participantId: zod.coerce.number(),
+});
+
+export const UpdateCaseParticipantBody = zod.object({
+  accessStatus: zod
+    .enum(["invited", "active", "declined", "removed"])
+    .optional(),
+  infoLevel: zod.number().optional(),
+  permissions: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  removedBy: zod.string().nullish(),
+});
+
+export const UpdateCaseParticipantResponse = zod.object({
+  id: zod.number(),
+  tripId: zod.number(),
+  participantName: zod.string(),
+  whatsappNumber: zod.string(),
+  role: zod.string(),
+  accessStatus: zod.enum(["invited", "active", "declined", "removed"]),
+  infoLevel: zod.number(),
+  permissions: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  invitedBy: zod.string().nullish(),
+  invitedAt: zod.coerce.date(),
+  removedBy: zod.string().nullish(),
+  removedAt: zod.coerce.date().nullish(),
+  responderId: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary List audit log entries for a Situation Room Case
+ */
+export const ListCaseLogsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListCaseLogsResponseItem = zod.object({
+  id: zod.number(),
+  tripId: zod.number(),
+  participantId: zod.number().nullish(),
+  actionType: zod.string(),
+  operator: zod.string().nullish(),
+  participantName: zod.string().nullish(),
+  participantWhatsapp: zod.string().nullish(),
+  messageSent: zod.string().nullish(),
+  replyReceived: zod.string().nullish(),
+  replyCode: zod.string().nullish(),
+  infoLevelAtTime: zod.number().nullish(),
+  tripStatusAtTime: zod.string().nullish(),
+  outcome: zod.string().nullish(),
+  operatorNote: zod.string().nullish(),
+  twilioMessageSid: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const ListCaseLogsResponse = zod.array(ListCaseLogsResponseItem);
+
+/**
  * @summary List all incoming messages
  */
 export const ListMessagesResponseItem = zod.object({
@@ -189,9 +300,18 @@ export const ListRespondersResponseItem = zod.object({
   name: zod.string(),
   whatsappNumber: zod.string(),
   areaName: zod.string(),
+  suburb: zod.string().nullish(),
+  street: zod.string().nullish(),
+  province: zod.string().nullish(),
   homeLat: zod.string(),
   homeLon: zod.string(),
-  notes: zod.string().nullable(),
+  conduitType: zod.string(),
+  supportRadiusKm: zod.number().nullish(),
+  availabilityStatus: zod.string(),
+  trustLevel: zod.string(),
+  linkedNetworkType: zod.string().nullish(),
+  linkedNetworkName: zod.string().nullish(),
+  notes: zod.string().nullish(),
   active: zod.boolean(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -205,8 +325,17 @@ export const CreateResponderBody = zod.object({
   name: zod.string(),
   whatsappNumber: zod.string(),
   areaName: zod.string(),
+  suburb: zod.string().nullish(),
+  street: zod.string().nullish(),
+  province: zod.string().nullish(),
   homeLat: zod.string(),
   homeLon: zod.string(),
+  conduitType: zod.string().optional(),
+  supportRadiusKm: zod.number().nullish(),
+  availabilityStatus: zod.string().optional(),
+  trustLevel: zod.string().optional(),
+  linkedNetworkType: zod.string().nullish(),
+  linkedNetworkName: zod.string().nullish(),
   notes: zod.string().nullish(),
   active: zod.boolean().optional(),
 });
@@ -222,8 +351,17 @@ export const UpdateResponderBody = zod.object({
   name: zod.string().optional(),
   whatsappNumber: zod.string().optional(),
   areaName: zod.string().optional(),
+  suburb: zod.string().nullish(),
+  street: zod.string().nullish(),
+  province: zod.string().nullish(),
   homeLat: zod.string().optional(),
   homeLon: zod.string().optional(),
+  conduitType: zod.string().optional(),
+  supportRadiusKm: zod.number().nullish(),
+  availabilityStatus: zod.string().optional(),
+  trustLevel: zod.string().optional(),
+  linkedNetworkType: zod.string().nullish(),
+  linkedNetworkName: zod.string().nullish(),
   notes: zod.string().nullish(),
   active: zod.boolean().optional(),
 });
@@ -233,9 +371,18 @@ export const UpdateResponderResponse = zod.object({
   name: zod.string(),
   whatsappNumber: zod.string(),
   areaName: zod.string(),
+  suburb: zod.string().nullish(),
+  street: zod.string().nullish(),
+  province: zod.string().nullish(),
   homeLat: zod.string(),
   homeLon: zod.string(),
-  notes: zod.string().nullable(),
+  conduitType: zod.string(),
+  supportRadiusKm: zod.number().nullish(),
+  availabilityStatus: zod.string(),
+  trustLevel: zod.string(),
+  linkedNetworkType: zod.string().nullish(),
+  linkedNetworkName: zod.string().nullish(),
+  notes: zod.string().nullish(),
   active: zod.boolean(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -249,18 +396,26 @@ export const DeleteResponderParams = zod.object({
 });
 
 /**
- * @summary Send WhatsApp dispatch to a responder for an active trip
+ * @summary Send Situation Room dispatch to a conduit for an active trip
  */
 export const DispatchResponderBody = zod.object({
   tripId: zod.number(),
   responderId: zod.number(),
   customNote: zod.string().nullish(),
+  infoLevel: zod
+    .number()
+    .optional()
+    .describe(
+      "1=area only(default), 2=route\/dest, 3=member name, 4=member phone",
+    ),
 });
 
 export const DispatchResponderResponse = zod.object({
   sent: zod.boolean(),
   messageSid: zod.string().nullish(),
   preview: zod.string(),
+  participantId: zod.number().nullish(),
+  caseLogId: zod.number().nullish(),
 });
 
 /**

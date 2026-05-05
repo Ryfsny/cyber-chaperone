@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, messagesTable, tripsTable, membersTable } from "@workspace/db";
+import { db, messagesTable, tripsTable, membersTable, caseParticipantsTable, caseLogsTable } from "@workspace/db";
 import { and, eq, ne, desc, count } from "drizzle-orm";
 import twilio from "twilio";
 import { assessRisk } from "./ai.js";
@@ -406,6 +406,122 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
         );
 
         req.log.info({ from }, "Unknown member — no active trip — unknown-member mirror sent");
+        res.set("Content-Type", "text/xml");
+        res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+        return;
+      }
+    }
+
+    // ── Conduit reply handler ─────────────────────────────────────────────────
+    // Detects numbered replies (1-5) from known case participants (conduits).
+    // Runs BEFORE the menu router so conduit messages are never misrouted.
+    // Does NOT forward conduit identity to the travelling member.
+    const conduitReplyCode = body.trim();
+    if (/^[1-5]$/.test(conduitReplyCode)) {
+      // Look for an active/invited conduit participant with this WhatsApp number
+      const [conduitParticipant] = await db
+        .select()
+        .from(caseParticipantsTable)
+        .where(
+          and(
+            eq(caseParticipantsTable.whatsappNumber, from),
+            eq(caseParticipantsTable.role, "conduit"),
+          )
+        )
+        .orderBy(desc(caseParticipantsTable.invitedAt))
+        .limit(1);
+
+      if (conduitParticipant) {
+        const REPLY_MEANINGS: Record<string, string> = {
+          "1": "I can assist directly",
+          "2": "I can alert my local safety network",
+          "3": "I can contact a trusted responder",
+          "4": "I cannot assist now",
+          "5": "Please ask the Situation Room to call me",
+        };
+        const REPLY_OUTCOMES: Record<string, string> = {
+          "1": "assisting",
+          "2": "mobilising",
+          "3": "mobilising",
+          "4": "declined",
+          "5": "callback_requested",
+        };
+        const replyKey = conduitReplyCode as keyof typeof REPLY_MEANINGS;
+        const replyMeaning = REPLY_MEANINGS[replyKey] ?? "Unknown reply";
+        const replyOutcome = REPLY_OUTCOMES[replyKey] ?? "replied";
+        void replyOutcome;
+
+        // Update participant status
+        await db
+          .update(caseParticipantsTable)
+          .set({ accessStatus: ["4"].includes(conduitReplyCode) ? "declined" : "active" })
+          .where(eq(caseParticipantsTable.id, conduitParticipant.id));
+
+        // Fetch trip for context
+        const [conduitTrip] = await db
+          .select()
+          .from(tripsTable)
+          .where(eq(tripsTable.id, conduitParticipant.tripId));
+
+        // Write case log
+        await db.insert(caseLogsTable).values({
+          tripId: conduitParticipant.tripId,
+          participantId: conduitParticipant.id,
+          actionType: "conduit_reply",
+          participantName: conduitParticipant.participantName,
+          participantWhatsapp: from,
+          replyReceived: conduitReplyCode,
+          replyCode: conduitReplyCode,
+          tripStatusAtTime: conduitTrip?.status ?? null,
+          outcome: replyMeaning,
+        });
+
+        // Acknowledge to conduit — Situation Room branded
+        await sendReply(
+          from,
+          to,
+          `Cyber Chaperone Situation Room — reply recorded.\n\n"${replyMeaning}"\n\nThank you. The Situation Room operator will follow up if needed.`,
+        );
+
+        // Operator mirror — LOCAL CONDUIT UPDATE
+        const NEXT_ACTIONS: Record<string, string> = {
+          "1": "Conduit is assisting directly. Monitor and close case if resolved.",
+          "2": "Conduit is alerting local safety network. Monitor for updates.",
+          "3": "Conduit is contacting a trusted responder. Monitor.",
+          "4": "Conduit cannot assist. Dispatch to next available conduit or escalate.",
+          "5": "Conduit requests Situation Room callback. Call conduit now.",
+        };
+        const nextAction = NEXT_ACTIONS[conduitReplyCode] ?? "Review conduit reply.";
+
+        await sendOperatorMirror(
+          to,
+          [
+            `CYBER CHAPERONE — LOCAL CONDUIT UPDATE`,
+            ``,
+            `Trip: ${conduitTrip?.title ?? `#${conduitParticipant.tripId}`}`,
+            `Case: Trip #${conduitParticipant.tripId}`,
+            `Conduit: ${conduitParticipant.participantName}`,
+            `Reply: ${replyMeaning}`,
+            `Status: ${(conduitTrip?.status ?? "unknown").toUpperCase()}`,
+            `Next action: ${nextAction}`,
+          ].join("\n"),
+          "unknown",
+        );
+
+        req.log.info(
+          { conduitParticipantId: conduitParticipant.id, tripId: conduitParticipant.tripId, replyCode: conduitReplyCode, replyMeaning },
+          "Conduit reply handled",
+        );
+
+        // Save message to DB
+        await db.insert(messagesTable).values({
+          fromNumber: from,
+          toNumber: to,
+          body,
+          messageSid,
+          tripId: conduitParticipant.tripId,
+        });
+
         res.set("Content-Type", "text/xml");
         res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
         return;

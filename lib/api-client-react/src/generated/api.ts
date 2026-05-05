@@ -17,16 +17,20 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  CaseLog,
+  CaseParticipant,
   CreateResponderBody,
   CreateTripBody,
   DispatchBody,
   DispatchResponse,
   ErrorResponse,
   HealthStatus,
+  InviteCaseParticipantBody,
   Message,
   Responder,
   Trip,
   TwilioWebhookBody,
+  UpdateCaseParticipantBody,
   UpdateMessageBody,
   UpdateResponderBody,
   UpdateTripBody,
@@ -707,6 +711,384 @@ export function useGetTripMessages<
 }
 
 /**
+ * @summary List Situation Room Case participants for a trip
+ */
+export const getListCaseParticipantsUrl = (id: number) => {
+  return `/api/trips/${id}/participants`;
+};
+
+export const listCaseParticipants = async (
+  id: number,
+  options?: RequestInit,
+): Promise<CaseParticipant[]> => {
+  return customFetch<CaseParticipant[]>(getListCaseParticipantsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListCaseParticipantsQueryKey = (id: number) => {
+  return [`/api/trips/${id}/participants`] as const;
+};
+
+export const getListCaseParticipantsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listCaseParticipants>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCaseParticipants>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListCaseParticipantsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listCaseParticipants>>
+  > = ({ signal }) => listCaseParticipants(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listCaseParticipants>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListCaseParticipantsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listCaseParticipants>>
+>;
+export type ListCaseParticipantsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List Situation Room Case participants for a trip
+ */
+
+export function useListCaseParticipants<
+  TData = Awaited<ReturnType<typeof listCaseParticipants>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCaseParticipants>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListCaseParticipantsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Invite a participant into the Situation Room Case
+ */
+export const getInviteCaseParticipantUrl = (id: number) => {
+  return `/api/trips/${id}/participants`;
+};
+
+export const inviteCaseParticipant = async (
+  id: number,
+  inviteCaseParticipantBody: InviteCaseParticipantBody,
+  options?: RequestInit,
+): Promise<CaseParticipant> => {
+  return customFetch<CaseParticipant>(getInviteCaseParticipantUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(inviteCaseParticipantBody),
+  });
+};
+
+export const getInviteCaseParticipantMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof inviteCaseParticipant>>,
+    TError,
+    { id: number; data: BodyType<InviteCaseParticipantBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof inviteCaseParticipant>>,
+  TError,
+  { id: number; data: BodyType<InviteCaseParticipantBody> },
+  TContext
+> => {
+  const mutationKey = ["inviteCaseParticipant"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof inviteCaseParticipant>>,
+    { id: number; data: BodyType<InviteCaseParticipantBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return inviteCaseParticipant(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type InviteCaseParticipantMutationResult = NonNullable<
+  Awaited<ReturnType<typeof inviteCaseParticipant>>
+>;
+export type InviteCaseParticipantMutationBody =
+  BodyType<InviteCaseParticipantBody>;
+export type InviteCaseParticipantMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Invite a participant into the Situation Room Case
+ */
+export const useInviteCaseParticipant = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof inviteCaseParticipant>>,
+    TError,
+    { id: number; data: BodyType<InviteCaseParticipantBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof inviteCaseParticipant>>,
+  TError,
+  { id: number; data: BodyType<InviteCaseParticipantBody> },
+  TContext
+> => {
+  return useMutation(getInviteCaseParticipantMutationOptions(options));
+};
+
+/**
+ * @summary Update participant status (active/removed/declined)
+ */
+export const getUpdateCaseParticipantUrl = (
+  id: number,
+  participantId: number,
+) => {
+  return `/api/trips/${id}/participants/${participantId}`;
+};
+
+export const updateCaseParticipant = async (
+  id: number,
+  participantId: number,
+  updateCaseParticipantBody: UpdateCaseParticipantBody,
+  options?: RequestInit,
+): Promise<CaseParticipant> => {
+  return customFetch<CaseParticipant>(
+    getUpdateCaseParticipantUrl(id, participantId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateCaseParticipantBody),
+    },
+  );
+};
+
+export const getUpdateCaseParticipantMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCaseParticipant>>,
+    TError,
+    {
+      id: number;
+      participantId: number;
+      data: BodyType<UpdateCaseParticipantBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateCaseParticipant>>,
+  TError,
+  {
+    id: number;
+    participantId: number;
+    data: BodyType<UpdateCaseParticipantBody>;
+  },
+  TContext
+> => {
+  const mutationKey = ["updateCaseParticipant"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateCaseParticipant>>,
+    {
+      id: number;
+      participantId: number;
+      data: BodyType<UpdateCaseParticipantBody>;
+    }
+  > = (props) => {
+    const { id, participantId, data } = props ?? {};
+
+    return updateCaseParticipant(id, participantId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateCaseParticipantMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateCaseParticipant>>
+>;
+export type UpdateCaseParticipantMutationBody =
+  BodyType<UpdateCaseParticipantBody>;
+export type UpdateCaseParticipantMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update participant status (active/removed/declined)
+ */
+export const useUpdateCaseParticipant = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCaseParticipant>>,
+    TError,
+    {
+      id: number;
+      participantId: number;
+      data: BodyType<UpdateCaseParticipantBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateCaseParticipant>>,
+  TError,
+  {
+    id: number;
+    participantId: number;
+    data: BodyType<UpdateCaseParticipantBody>;
+  },
+  TContext
+> => {
+  return useMutation(getUpdateCaseParticipantMutationOptions(options));
+};
+
+/**
+ * @summary List audit log entries for a Situation Room Case
+ */
+export const getListCaseLogsUrl = (id: number) => {
+  return `/api/trips/${id}/case-logs`;
+};
+
+export const listCaseLogs = async (
+  id: number,
+  options?: RequestInit,
+): Promise<CaseLog[]> => {
+  return customFetch<CaseLog[]>(getListCaseLogsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListCaseLogsQueryKey = (id: number) => {
+  return [`/api/trips/${id}/case-logs`] as const;
+};
+
+export const getListCaseLogsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listCaseLogs>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCaseLogs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListCaseLogsQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listCaseLogs>>> = ({
+    signal,
+  }) => listCaseLogs(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listCaseLogs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListCaseLogsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listCaseLogs>>
+>;
+export type ListCaseLogsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List audit log entries for a Situation Room Case
+ */
+
+export function useListCaseLogs<
+  TData = Awaited<ReturnType<typeof listCaseLogs>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCaseLogs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListCaseLogsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary List all incoming messages
  */
 export const getListMessagesUrl = () => {
@@ -1114,7 +1496,7 @@ export const useDeleteResponder = <
 };
 
 /**
- * @summary Send WhatsApp dispatch to a responder for an active trip
+ * @summary Send Situation Room dispatch to a conduit for an active trip
  */
 export const getDispatchResponderUrl = () => {
   return `/api/dispatch`;
@@ -1177,7 +1559,7 @@ export type DispatchResponderMutationBody = BodyType<DispatchBody>;
 export type DispatchResponderMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Send WhatsApp dispatch to a responder for an active trip
+ * @summary Send Situation Room dispatch to a conduit for an active trip
  */
 export const useDispatchResponder = <
   TError = ErrorType<ErrorResponse>,

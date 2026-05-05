@@ -11,4 +11,8 @@ export interface DispatchResponse {
   /** @nullable */
   messageSid?: string | null;
   preview: string;
+  /** @nullable */
+  participantId?: number | null;
+  /** @nullable */
+  caseLogId?: number | null;
 }

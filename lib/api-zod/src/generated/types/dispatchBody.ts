@@ -11,4 +11,6 @@ export interface DispatchBody {
   responderId: number;
   /** @nullable */
   customNote?: string | null;
+  /** 1=area only(default), 2=route/dest, 3=member name, 4=member phone */
+  infoLevel?: number;
 }

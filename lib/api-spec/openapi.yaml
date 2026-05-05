@@ -20,6 +20,8 @@ tags:
     description: eblockwatch responder network members
   - name: dispatch
     description: Operator dispatch to responders
+  - name: case
+    description: Situation Room Case participant control
 
 paths:
   /healthz:
@@ -190,6 +192,107 @@ paths:
                 items:
                   $ref: "#/components/schemas/Message"
 
+  /trips/{id}/participants:
+    get:
+      operationId: listCaseParticipants
+      tags: [case]
+      summary: List Situation Room Case participants for a trip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of participants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CaseParticipant"
+    post:
+      operationId: inviteCaseParticipant
+      tags: [case]
+      summary: Invite a participant into the Situation Room Case
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteCaseParticipantBody"
+      responses:
+        "201":
+          description: Participant invited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaseParticipant"
+
+  /trips/{id}/participants/{participantId}:
+    patch:
+      operationId: updateCaseParticipant
+      tags: [case]
+      summary: Update participant status (active/removed/declined)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: participantId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCaseParticipantBody"
+      responses:
+        "200":
+          description: Updated participant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaseParticipant"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /trips/{id}/case-logs:
+    get:
+      operationId: listCaseLogs
+      tags: [case]
+      summary: List audit log entries for a Situation Room Case
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of case log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CaseLog"
+
   /messages:
     get:
       operationId: listMessages
@@ -291,7 +394,7 @@ paths:
     post:
       operationId: dispatchResponder
       tags: [dispatch]
-      summary: Send WhatsApp dispatch to a responder for an active trip
+      summary: Send Situation Room dispatch to a conduit for an active trip
       requestBody:
         required: true
         content:
@@ -522,10 +625,28 @@ components:
           type: string
         areaName:
           type: string
+        suburb:
+          type: ["string", "null"]
+        street:
+          type: ["string", "null"]
+        province:
+          type: ["string", "null"]
         homeLat:
           type: string
         homeLon:
           type: string
+        conduitType:
+          type: string
+        supportRadiusKm:
+          type: ["integer", "null"]
+        availabilityStatus:
+          type: string
+        trustLevel:
+          type: string
+        linkedNetworkType:
+          type: ["string", "null"]
+        linkedNetworkName:
+          type: ["string", "null"]
         notes:
           type: ["string", "null"]
         active:
@@ -543,7 +664,9 @@ components:
         - areaName
         - homeLat
         - homeLon
-        - notes
+        - conduitType
+        - availabilityStatus
+        - trustLevel
         - active
         - createdAt
         - updatedAt
@@ -557,10 +680,28 @@ components:
           type: string
         areaName:
           type: string
+        suburb:
+          type: ["string", "null"]
+        street:
+          type: ["string", "null"]
+        province:
+          type: ["string", "null"]
         homeLat:
           type: string
         homeLon:
           type: string
+        conduitType:
+          type: string
+        supportRadiusKm:
+          type: ["integer", "null"]
+        availabilityStatus:
+          type: string
+        trustLevel:
+          type: string
+        linkedNetworkType:
+          type: ["string", "null"]
+        linkedNetworkName:
+          type: ["string", "null"]
         notes:
           type: ["string", "null"]
         active:
@@ -581,14 +722,166 @@ components:
           type: string
         areaName:
           type: string
+        suburb:
+          type: ["string", "null"]
+        street:
+          type: ["string", "null"]
+        province:
+          type: ["string", "null"]
         homeLat:
           type: string
         homeLon:
           type: string
+        conduitType:
+          type: string
+        supportRadiusKm:
+          type: ["integer", "null"]
+        availabilityStatus:
+          type: string
+        trustLevel:
+          type: string
+        linkedNetworkType:
+          type: ["string", "null"]
+        linkedNetworkName:
+          type: ["string", "null"]
         notes:
           type: ["string", "null"]
         active:
           type: boolean
+
+    CaseParticipant:
+      type: object
+      properties:
+        id:
+          type: integer
+        tripId:
+          type: integer
+        participantName:
+          type: string
+        whatsappNumber:
+          type: string
+        role:
+          type: string
+        accessStatus:
+          type: string
+          enum: [invited, active, declined, removed]
+        infoLevel:
+          type: integer
+        permissions:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        invitedBy:
+          type: ["string", "null"]
+        invitedAt:
+          type: string
+          format: date-time
+        removedBy:
+          type: ["string", "null"]
+        removedAt:
+          type: ["string", "null"]
+          format: date-time
+        responderId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tripId
+        - participantName
+        - whatsappNumber
+        - role
+        - accessStatus
+        - infoLevel
+        - invitedAt
+        - createdAt
+        - updatedAt
+
+    InviteCaseParticipantBody:
+      type: object
+      properties:
+        participantName:
+          type: string
+        whatsappNumber:
+          type: string
+        role:
+          type: string
+        infoLevel:
+          type: integer
+        permissions:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        invitedBy:
+          type: string
+        responderId:
+          type: ["integer", "null"]
+      required:
+        - participantName
+        - whatsappNumber
+        - role
+        - invitedBy
+
+    UpdateCaseParticipantBody:
+      type: object
+      properties:
+        accessStatus:
+          type: string
+          enum: [invited, active, declined, removed]
+        infoLevel:
+          type: integer
+        permissions:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        removedBy:
+          type: ["string", "null"]
+
+    CaseLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        tripId:
+          type: integer
+        participantId:
+          type: ["integer", "null"]
+        actionType:
+          type: string
+        operator:
+          type: ["string", "null"]
+        participantName:
+          type: ["string", "null"]
+        participantWhatsapp:
+          type: ["string", "null"]
+        messageSent:
+          type: ["string", "null"]
+        replyReceived:
+          type: ["string", "null"]
+        replyCode:
+          type: ["string", "null"]
+        infoLevelAtTime:
+          type: ["integer", "null"]
+        tripStatusAtTime:
+          type: ["string", "null"]
+        outcome:
+          type: ["string", "null"]
+        operatorNote:
+          type: ["string", "null"]
+        twilioMessageSid:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - tripId
+        - actionType
+        - createdAt
 
     DispatchBody:
       type: object
@@ -599,6 +892,9 @@ components:
           type: integer
         customNote:
           type: ["string", "null"]
+        infoLevel:
+          type: integer
+          description: "1=area only(default), 2=route/dest, 3=member name, 4=member phone"
       required:
         - tripId
         - responderId
@@ -612,6 +908,10 @@ components:
           type: ["string", "null"]
         preview:
           type: string
+        participantId:
+          type: ["integer", "null"]
+        caseLogId:
+          type: ["integer", "null"]
       required:
         - sent
         - preview

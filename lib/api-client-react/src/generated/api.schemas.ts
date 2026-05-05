@@ -138,10 +138,25 @@ export interface Responder {
   name: string;
   whatsappNumber: string;
   areaName: string;
+  /** @nullable */
+  suburb?: string | null;
+  /** @nullable */
+  street?: string | null;
+  /** @nullable */
+  province?: string | null;
   homeLat: string;
   homeLon: string;
+  conduitType: string;
   /** @nullable */
-  notes: string | null;
+  supportRadiusKm?: number | null;
+  availabilityStatus: string;
+  trustLevel: string;
+  /** @nullable */
+  linkedNetworkType?: string | null;
+  /** @nullable */
+  linkedNetworkName?: string | null;
+  /** @nullable */
+  notes?: string | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -151,8 +166,23 @@ export interface CreateResponderBody {
   name: string;
   whatsappNumber: string;
   areaName: string;
+  /** @nullable */
+  suburb?: string | null;
+  /** @nullable */
+  street?: string | null;
+  /** @nullable */
+  province?: string | null;
   homeLat: string;
   homeLon: string;
+  conduitType?: string;
+  /** @nullable */
+  supportRadiusKm?: number | null;
+  availabilityStatus?: string;
+  trustLevel?: string;
+  /** @nullable */
+  linkedNetworkType?: string | null;
+  /** @nullable */
+  linkedNetworkName?: string | null;
   /** @nullable */
   notes?: string | null;
   active?: boolean;
@@ -162,11 +192,127 @@ export interface UpdateResponderBody {
   name?: string;
   whatsappNumber?: string;
   areaName?: string;
+  /** @nullable */
+  suburb?: string | null;
+  /** @nullable */
+  street?: string | null;
+  /** @nullable */
+  province?: string | null;
   homeLat?: string;
   homeLon?: string;
+  conduitType?: string;
+  /** @nullable */
+  supportRadiusKm?: number | null;
+  availabilityStatus?: string;
+  trustLevel?: string;
+  /** @nullable */
+  linkedNetworkType?: string | null;
+  /** @nullable */
+  linkedNetworkName?: string | null;
   /** @nullable */
   notes?: string | null;
   active?: boolean;
+}
+
+export type CaseParticipantAccessStatus =
+  (typeof CaseParticipantAccessStatus)[keyof typeof CaseParticipantAccessStatus];
+
+export const CaseParticipantAccessStatus = {
+  invited: "invited",
+  active: "active",
+  declined: "declined",
+  removed: "removed",
+} as const;
+
+export interface CaseParticipant {
+  id: number;
+  tripId: number;
+  participantName: string;
+  whatsappNumber: string;
+  role: string;
+  accessStatus: CaseParticipantAccessStatus;
+  infoLevel: number;
+  /** @nullable */
+  permissions?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  invitedBy?: string | null;
+  invitedAt: string;
+  /** @nullable */
+  removedBy?: string | null;
+  /** @nullable */
+  removedAt?: string | null;
+  /** @nullable */
+  responderId?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InviteCaseParticipantBody {
+  participantName: string;
+  whatsappNumber: string;
+  role: string;
+  infoLevel?: number;
+  /** @nullable */
+  permissions?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  invitedBy: string;
+  /** @nullable */
+  responderId?: number | null;
+}
+
+export type UpdateCaseParticipantBodyAccessStatus =
+  (typeof UpdateCaseParticipantBodyAccessStatus)[keyof typeof UpdateCaseParticipantBodyAccessStatus];
+
+export const UpdateCaseParticipantBodyAccessStatus = {
+  invited: "invited",
+  active: "active",
+  declined: "declined",
+  removed: "removed",
+} as const;
+
+export interface UpdateCaseParticipantBody {
+  accessStatus?: UpdateCaseParticipantBodyAccessStatus;
+  infoLevel?: number;
+  /** @nullable */
+  permissions?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  removedBy?: string | null;
+}
+
+export interface CaseLog {
+  id: number;
+  tripId: number;
+  /** @nullable */
+  participantId?: number | null;
+  actionType: string;
+  /** @nullable */
+  operator?: string | null;
+  /** @nullable */
+  participantName?: string | null;
+  /** @nullable */
+  participantWhatsapp?: string | null;
+  /** @nullable */
+  messageSent?: string | null;
+  /** @nullable */
+  replyReceived?: string | null;
+  /** @nullable */
+  replyCode?: string | null;
+  /** @nullable */
+  infoLevelAtTime?: number | null;
+  /** @nullable */
+  tripStatusAtTime?: string | null;
+  /** @nullable */
+  outcome?: string | null;
+  /** @nullable */
+  operatorNote?: string | null;
+  /** @nullable */
+  twilioMessageSid?: string | null;
+  createdAt: string;
 }
 
 export interface DispatchBody {
@@ -174,6 +320,8 @@ export interface DispatchBody {
   responderId: number;
   /** @nullable */
   customNote?: string | null;
+  /** 1=area only(default), 2=route/dest, 3=member name, 4=member phone */
+  infoLevel?: number;
 }
 
 export interface DispatchResponse {
@@ -181,6 +329,10 @@ export interface DispatchResponse {
   /** @nullable */
   messageSid?: string | null;
   preview: string;
+  /** @nullable */
+  participantId?: number | null;
+  /** @nullable */
+  caseLogId?: number | null;
 }
 
 export type TwilioWebhookBody = {

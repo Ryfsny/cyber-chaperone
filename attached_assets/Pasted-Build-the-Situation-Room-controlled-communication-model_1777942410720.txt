@@ -1,0 +1,256 @@
+Build the Situation Room-controlled communication model for Local Conduits.
+
+This is a control and privacy correction.
+
+Do not touch:
+- Twilio webhook MessageStatus / SmsStatus guard
+- trip creation flow
+- WhatsApp menu flow
+- ETA bullseye logic
+- ICE escalation logic
+- route/radar display unless needed for this control layer
+
+Core rule:
+The Situation Room controls all communication.
+Members do not have the right to communicate directly with responding eblockwatch members.
+Responding eblockwatch members do not have direct access to the member unless Andre/operator approves it.
+Andre/operator can invite a person into the Situation Room case and remove them again.
+
+Terminology:
+Use “Situation Room Case” or “Cyber Chaperone Case”.
+Do not call it a public chat group.
+
+Required model:
+
+1. Create a case-room / participant control layer
+
+Each active trip can have a Situation Room Case.
+
+A case can include:
+- operator / Andre
+- travelling member
+- ICE contact
+- local conduit / responder
+- area coordinator
+- observer / admin
+
+Each participant must have:
+- participant name
+- WhatsApp number
+- role
+- access status: invited / active / removed / declined
+- invited_by
+- invited_at
+- removed_by
+- removed_at
+- permissions
+- notes
+
+2. Permissions
+
+Default permissions:
+
+Traveller/member:
+- can send updates to Situation Room
+- cannot see responder/conduit contact details
+- cannot message conduit directly through the system
+
+Local conduit/responder:
+- can receive minimum necessary request from Situation Room
+- can reply to Situation Room
+- cannot see full trip history
+- cannot see private member notes
+- cannot see dashboard links
+- cannot see member phone number unless operator manually approves
+
+ICE contact:
+- receives only escalation-specific message
+- replies to Situation Room
+- does not receive all trip communication
+
+Operator/Andre:
+- can invite participant
+- can remove participant
+- can send dispatch
+- can approve additional information sharing
+- can close the case
+
+3. Dispatch must be Situation Room mediated
+
+When operator dispatches to a conduit, the message must say:
+
+“Cyber Chaperone request from the eblockwatch Situation Room.
+
+A member may need assistance near [area/location].
+
+Status: [AMBER / RED]
+
+Are you able to assist or help mobilise trusted local support?
+
+Reply:
+1. I can assist directly
+2. I can alert my local safety network
+3. I can contact a trusted responder
+4. I cannot assist now
+5. Please ask the Situation Room to call me”
+
+Do not include:
+- member phone number
+- direct WhatsApp link to member
+- full trip history
+- evidence notes
+- private notes
+- exact home address
+- dashboard links
+- instruction to contact the member directly
+
+4. Member message must remain Situation Room-facing
+
+If a member is told support is being coordinated, use:
+
+“Andre, the Situation Room is reviewing this and coordinating support.
+
+Please keep sending updates here.
+Do not contact anyone else unless the Situation Room asks you to.”
+
+5. Invite/remove control
+
+Operator must be able to:
+- invite a conduit into the case
+- remove a conduit from the case
+- mark a conduit as declined
+- mark a conduit as assisting
+- mark a conduit as mobilising local support
+- mark a conduit as no longer needed
+
+No participant gets permanent access by default.
+
+6. Case log / audit trail
+
+Every action must be logged:
+
+- timestamp
+- trip ID
+- case ID
+- action type
+- operator
+- participant
+- message sent
+- reply received
+- information shared
+- status at time of action
+- outcome
+
+7. Conduit reply handling
+
+If conduit replies:
+
+1 = I can assist directly
+2 = I can alert my local safety network
+3 = I can contact a trusted responder
+4 = I cannot assist now
+5 = Please ask the Situation Room to call me
+
+Then:
+- log the reply
+- update participant status
+- notify operator mirror
+- do not forward the reply directly to the travelling member unless operator approves
+
+Operator mirror:
+
+“CYBER CHAPERONE — LOCAL CONDUIT UPDATE
+
+Trip: [trip title]
+Case: [case ID]
+Conduit: [conduit name]
+Reply: [reply meaning]
+Status: [AMBER / RED]
+Next action: [operator action required]”
+
+8. Radar / trip view
+
+On RED or AMBER trip, show:
+
+Situation Room Case:
+- case status
+- active participants
+- invited conduits
+- ICE contact status
+- pending replies
+- removed participants
+- action log
+
+Nearby Local Conduits:
+- show only to operator
+- draft request button
+- invite to case button
+- remove from case button
+
+9. Privacy gate
+
+Before any extra information is shared, operator must actively approve it.
+
+Information levels:
+Level 1 — approximate area only
+Level 2 — route/destination context
+Level 3 — member name
+Level 4 — member phone/direct contact
+
+Default dispatch = Level 1 only.
+
+10. Tests
+
+A. Dispatch to conduit
+Expected:
+- conduit receives Situation Room request only
+- no member phone number
+- no private notes
+- no direct member link
+- case log created
+
+B. Conduit replies “2”
+Expected:
+- case log records “can alert local safety network”
+- operator mirror receives LOCAL CONDUIT UPDATE
+- travelling member does not receive conduit details
+
+C. Operator invites conduit into case
+Expected:
+- participant status = active
+- invited_by recorded
+- invited_at recorded
+
+D. Operator removes conduit
+Expected:
+- participant status = removed
+- removed_by recorded
+- removed_at recorded
+- no further case messages sent to that conduit unless reinvited
+
+E. Member remains isolated
+Expected:
+- member never receives conduit WhatsApp number
+- member cannot contact conduit through the system
+- conduit cannot contact member through the system
+
+F. Privacy test
+Expected:
+- dispatch message contains only approximate area and status by default
+
+G. Regression tests
+Confirm:
+- Hi → Main Menu
+- 5 → Cyber Chaperone
+- 1 → Start Trip
+- location → destination → ETA → GREEN trip
+- I need help → RED
+- MessageStatus guard unchanged
+
+Report:
+- schema changes
+- screenshots
+- exact WhatsApp messages
+- DB evidence
+- logs
+- limitations
