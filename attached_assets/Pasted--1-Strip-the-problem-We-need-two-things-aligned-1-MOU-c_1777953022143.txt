@@ -1,0 +1,645 @@
+## 1. Strip the problem
+
+We need two things aligned:
+
+1. **MOU / commercial understanding**
+   What Ruka/SmartChat was asked to build, what commercial role they had, and what eblockwatch brought to the table.
+
+2. **WhatsApp to-and-fro wording**
+   Exact member-facing messages, operator mirrors, ICE/conduit messages, and “Reply 0 for Main Menu” rules.
+
+We must not blindly go back to the old spec. The current system has evolved.
+
+---
+
+## 2. What I found
+
+### MOU trail
+
+I found the MOU follow-up email from Samantha, but not the actual MOU file itself.
+
+**Email found:**
+**EBLOCK WATCH || MOU Comments_April2026**
+From: Samantha Gillham
+To: Kriszti Newell, Andre Snyman
+CC: Ronald Magondo
+Date: 17 April 2026
+[Open in Gmail](https://mail.google.com/mail/#all/19d9a6d2546a6ea9)
+
+Samantha wrote that she was following up on “the MOU comments” discussed the previous week and asked whether Kriszti had worked on them. That proves there was an MOU/comments process, but the email itself does not contain the MOU attachment.
+
+### Ruka / SmartChat build spec
+
+The full Ruka/SmartChat handover text is in the pasted/uploaded specification. It describes the commercial opportunity, menu screens, Cyber Chaperone, Situation Room mirror, ETA logic, payment links, Ruka’s build role, and eblockwatch’s commercial value. It also states the locked rule that every WhatsApp screen must have a next action and no dead ends. 
+
+### Samantha technical brief
+
+I also found the earlier attached file:
+
+**Samantha_IT_Technical_Brief_AI_Arnie.docx**
+From: Andre Snyman
+To: Kriszti Newell, Andre Snyman
+Date: 19 March 2026
+[Open in Gmail](https://mail.google.com/mail/#all/19d048d444106fa6)
+
+This brief says AI Arnie is the WhatsApp administrative front end, Cyber Chaperone is the service, eblockshop is the product/payment layer, Paystack is the payment engine, Kriszti is the shop admin handoff, and Ruka/Dean were the WhatsApp development partner.
+
+---
+
+# 3. MOU structure we need now
+
+The MOU must reflect the **current evolved system**, not only the old Ruka brief.
+
+## MOU — key clauses to include
+
+### 1. Parties
+
+```text
+This MOU is between eblockwatch / Andre Snyman and Ruka / SmartChat, with Kriszti Newell involved for eblockshop administration and commercial coordination where applicable.
+```
+
+### 2. Purpose
+
+```text
+The purpose is to support the development, operation, and commercial rollout of AI Arnie, Cyber Chaperone, the eblockwatch WhatsApp member funnel, and associated membership / eblockshop / payment flows.
+```
+
+### 3. What eblockwatch owns
+
+```text
+eblockwatch owns:
+- the eblockwatch brand
+- AI Arnie concept and wording
+- Cyber Chaperone concept and operating model
+- Situation Room model
+- member relationships
+- member data
+- WhatsApp scripts and menu logic
+- eblockshop positioning
+- commercial funnel
+- local conduit network concept
+- Bliksim positioning and confidential capabilities
+```
+
+### 4. What Ruka / SmartChat provides
+
+```text
+Ruka / SmartChat provides:
+- WhatsApp communication platform support
+- SmartChat / WhatsApp automation where used
+- technical implementation support
+- message routing support
+- integration support
+- ongoing platform assistance where agreed
+```
+
+### 5. Current architecture reality
+
+```text
+The current evolved architecture may use Replit, Twilio, ChatGPT, PostgreSQL, OpenStreetMap/OSRM, and other tools in addition to or instead of Ruka / SmartChat.
+
+Ruka is not the exclusive brain of the system unless separately agreed in writing.
+```
+
+### 6. Situation Room privacy
+
+```text
+The Situation Room is private and operator-controlled.
+
+Members, ICE contacts, responders, and local conduits do not have direct access to the Situation Room.
+
+Andre / operator controls:
+- who is invited into a case
+- what information they receive
+- when they are removed
+- what action is taken
+```
+
+### 7. Member data and privacy
+
+```text
+Member data belongs to eblockwatch and must not be copied, reused, sold, exported, marketed to, or exposed without written permission from eblockwatch.
+```
+
+### 8. No direct member-to-responder lane
+
+```text
+Responders / local conduits do not receive direct member access by default.
+
+All communication is mediated by the Situation Room unless Andre/operator approves otherwise.
+```
+
+### 9. Commercial model
+
+```text
+Revenue layers include:
+- Entry / free member funnel
+- Single Membership at R150/month
+- Family Membership at R250/month
+- Bliksim sales / service subscriptions
+- eblockshop products
+- future value-added safety services
+```
+
+### 10. Confidentiality
+
+```text
+Bliksim capabilities, Situation Room methods, member data, trip logic, local conduit logic, commercial flows, and technical implementation details are confidential.
+```
+
+---
+
+# 4. WhatsApp messages — correct to-and-fro
+
+Below is the clean version we should use now.
+
+## A. Main Menu
+
+**Trigger:** `Hi`, `Hello`, `Menu`, `Start`, `0`
+
+Hi Andre, I’m AI Arnie, Andre Snyman’s digital wingman.
+
+You’re on a Single Membership.
+
+We are here to make you safer.
+
+1. What is eblockwatch?
+2. Membership Options
+3. Activate my membership
+4. Update my profile
+5. Travel with Cyber Chaperone
+6. eblockshop — safer products to make you safer
+7. Request contact from a human
+
+URGENT? Reply 10 for immediate human review.
+
+Reply with the number of your choice. Reply 0 for Main Menu.
+
+**Correction from old Ruka spec:** use **URGENT**, not **EMERGENCY**, because eblockwatch is not an emergency service.
+
+---
+
+## B. What is eblockwatch?
+
+**Member sends:** `1`
+
+Andre, eblockwatch is a trusted human support network built around real people, real relationships, and looking after people properly.
+
+For more than 25 years, Andre Snyman has built trusted relationships with members across South Africa. That is what gives eblockwatch its strength.
+
+When something goes wrong, eblockwatch uses those relationships and networks to connect the right people, in the right place, at the right time, with the right solutions to your predicament.
+
+This is not just a page or a group. It is a real network.
+
+When you register, the relationship starts, and each member makes the spine of eblockwatch stronger.
+
+1. Membership Options
+2. Update my profile
+3. Travel with Cyber Chaperone
+4. eblockshop — safer products to make you safer
+
+Reply 0 for Main Menu.
+
+---
+
+## C. Membership Options
+
+**Member sends:** `2`
+
+Andre, here are your eblockwatch membership options.
+
+1. Entry Level — your starting point in eblockwatch
+2. Single Membership — R150/month
+3. Family Membership — R250/month
+
+The stronger your membership, the stronger your support layer.
+
+Reply 3 to activate your membership.
+Reply 0 for Main Menu.
+
+---
+
+## D. Activate Membership
+
+**Member sends:** `3`
+
+Andre, let’s get your membership activated.
+
+1. Entry Level — free
+2. Single Membership — R150/month
+3. Family Membership — R250/month
+
+Reply with the number of your choice.
+Reply 0 for Main Menu.
+
+### If Single Membership
+
+Andre, to finalise your Single Membership, please use this secure link:
+
+[https://paystack.shop/pay/cyber-chaperone](https://paystack.shop/pay/cyber-chaperone)
+
+Once complete, reply:
+
+1. I have finalised my membership
+2. I need help
+
+Reply 0 for Main Menu.
+
+### If Family Membership
+
+Andre, to finalise your Family Membership, please use this secure link:
+
+[https://paystack.shop/pay/family-cyber-chaperone](https://paystack.shop/pay/family-cyber-chaperone)
+
+Once complete, reply:
+
+1. I have finalised my membership
+2. I need help
+
+Reply 0 for Main Menu.
+
+**Rule:** do not use “pay” as the action word. Use “finalise” or “confirm”.
+
+---
+
+## E. Update Profile
+
+**Member sends:** `4`
+
+Andre, your profile helps the Situation Room support you properly.
+
+What would you like to update?
+
+1. My personal details
+2. My home location
+3. My vehicle details
+4. My ICE contact
+5. My family members
+6. My local network / conduit details
+
+Reply 0 for Main Menu.
+
+### ICE contact prompt
+
+Andre, please send your ICE contact like this:
+
+ICE: Full Name, 0821234567
+
+Your ICE contact is only contacted when escalation rules are met.
+
+Reply 0 for Main Menu.
+
+---
+
+# 5. Cyber Chaperone messages
+
+## A. Cyber Chaperone Menu
+
+**Member sends:** `5`
+
+Andre, Cyber Chaperone is your travel support link into eblockwatch.
+
+What do you want to do?
+
+1. Start a new trip
+2. Update my current trip
+3. Change my destination
+4. I have arrived
+5. I need help
+6. How Cyber Chaperone works
+7. Speak to Andre
+
+Reply 0 for Main Menu.
+
+---
+
+## B. Start Trip
+
+**Member sends:** `1`
+
+Andre, let’s start your trip.
+
+Please send your current location pin 📍.
+
+Reply 0 for Main Menu.
+
+---
+
+## C. Location Pin Received
+
+**Member sends:** location pin
+
+Got it — I have your starting location.
+
+Where are you heading to?
+
+Reply 0 for Main Menu.
+
+---
+
+## D. Destination Received
+
+**Member sends:** `Oyster Box Durban`
+
+Got it — your destination is Oyster Box Durban.
+
+Please send your ETA.
+
+Example:
+ETA 23:30
+
+Reply 0 for Main Menu.
+
+---
+
+## E. ETA Received / Trip Started
+
+**Member sends:** `ETA 23:30`
+
+Andre, your Cyber Chaperone trip is active.
+
+Route: [start] → [destination]
+ETA: 23:30
+Status: GREEN
+
+For stronger backup, you can also share:
+
+1. Your WhatsApp live location to the Situation Room
+2. Your Waze / Google Maps route link
+3. Updates if your ETA changes
+
+We are monitoring your journey.
+
+Reply 4 when you arrive.
+Reply 5 if you need help.
+Reply 0 for Main Menu.
+
+---
+
+## F. Check-in Prompt
+
+Andre, Cyber Chaperone check-in.
+
+Are you still okay on your route to [destination]?
+
+1. I am okay
+2. I am delayed
+3. My ETA changed
+4. I have stopped
+5. I need help
+6. I will send my location pin
+
+Reply 0 for Main Menu.
+
+---
+
+## G. ETA Drift Prompt
+
+Andre, Cyber Chaperone check-in.
+
+Your ETA appears to have shifted.
+
+According to our route calculation, you should be near:
+[checkpoint / area]
+
+Please reply:
+
+1. I am okay
+2. I am delayed
+3. My ETA changed
+4. I have stopped
+5. I need help
+6. I will send my location pin
+
+Reply 0 for Main Menu.
+
+---
+
+## H. Ambiguous Destination
+
+**Member sends:** `I am going to Oyster Box in Durban`
+
+Andre, I need to confirm what you mean.
+
+You already have an active trip:
+
+[current trip route]
+
+Your message says you are going to:
+
+Oyster Box in Durban
+
+What must I do?
+
+1. Start a new trip
+2. Change my current destination
+3. Add this as a note only
+4. Ignore this message
+
+Reply 0 for Main Menu.
+
+---
+
+## I. Arrived
+
+**Member sends:** `I have arrived`
+
+Andre, confirmed.
+
+Your trip has been closed as arrived safely.
+
+Status: COMPLETED
+
+Reply 0 for Main Menu.
+
+---
+
+## J. Help / RED
+
+**Member sends:** `I need help`
+
+Andre, I have marked this for immediate human review.
+
+The Situation Room has been notified.
+
+Please reply with one number:
+
+1. I am in danger
+2. I have broken down
+3. I am lost
+4. Medical issue
+5. Call me
+
+Reply 0 for Main Menu.
+
+---
+
+# 6. Situation Room mirror messages
+
+## A. New Trip
+
+```text
+CYBER CHAPERONE — NEW TRIP
+
+Member: Andre Snyman
+Known member: YES
+Trip: Fourways → Oyster Box Durban
+ETA: 23:30
+Status: GREEN
+
+Location layers:
+1. Situation Room trip monitor: ACTIVE
+2. WhatsApp live location backup: PENDING
+3. Waze / Google Maps route link: PENDING
+
+ETA bullseye: 23:30
+Next action: Monitor route and checkpoint behaviour.
+```
+
+## B. Amber
+
+```text
+CYBER CHAPERONE — AMBER
+
+Member: Andre Snyman
+Trip: Fourways → Oyster Box Durban
+Reason: ETA drift / missed check-in / unclear movement
+Original ETA: 23:30
+Current concern: [detail]
+Status: AMBER
+
+Next action: Ask member to confirm status.
+```
+
+## C. Red
+
+```text
+CYBER CHAPERONE — RED
+
+Member: Andre Snyman
+Trip: Fourways → Oyster Box Durban
+Reason: Member requested help / distress / no response after escalation
+Status: RED
+
+Next action: Immediate human review required.
+```
+
+## D. Local Conduit Update
+
+```text
+CYBER CHAPERONE — LOCAL CONDUIT UPDATE
+
+Trip: [trip title]
+Case: [case ID]
+Conduit: [conduit name]
+Reply: [reply meaning]
+Status: [AMBER / RED]
+
+Next action: [operator action required]
+```
+
+---
+
+# 7. ICE message
+
+```text
+Hi [ICE Name], this is Cyber Chaperone from eblockwatch.
+
+You are listed as [Member Name]’s ICE contact.
+
+We are monitoring their trip:
+[origin] → [destination].
+
+We have not received the expected check-in.
+
+Please try to contact [Member Name] and reply:
+
+1. I reached them — they are okay
+2. I reached them — they need help
+3. I could not reach them
+4. Please ask the Situation Room to call me
+```
+
+**Rule:** ICE does not receive all normal trip communications.
+
+---
+
+# 8. Local Conduit dispatch message
+
+This must be controlled by the Situation Room.
+
+```text
+Cyber Chaperone request from the eblockwatch Situation Room.
+
+A member may need assistance near [area/location].
+
+Status: [AMBER / RED]
+
+Are you able to assist or help mobilise trusted local support?
+
+Reply:
+1. I can assist directly
+2. I can alert my local safety network
+3. I can contact a trusted responder
+4. I cannot assist now
+5. Please ask the Situation Room to call me
+```
+
+**Do not include by default:**
+
+```text
+member phone number
+direct WhatsApp link to member
+full trip history
+evidence notes
+private notes
+exact home address
+dashboard links
+```
+
+---
+
+# 9. What to tell the Agent now
+
+```text
+Create a WhatsApp Message Canonical Script document in the project docs.
+
+Do not change production code yet.
+
+Use the current evolved system, not the old Ruka spec alone.
+
+Document:
+1. Main Menu messages
+2. Membership messages
+3. Profile update messages
+4. Cyber Chaperone trip messages
+5. ETA/check-in messages
+6. Help/RED messages
+7. Situation Room mirror messages
+8. ICE contact messages
+9. Local Conduit dispatch messages
+10. Messages that must include Reply 0 for Main Menu
+11. Messages that must NOT include Reply 0 for Main Menu
+12. Privacy rules
+13. MOU alignment notes
+
+Also create an MOU alignment note:
+- Ruka spec gave the original menu/funnel/commercial logic.
+- Current Replit build has evolved into the Situation Room operating system.
+- Future MOU must protect eblockwatch ownership of member data, WhatsApp wording, AI Arnie, Cyber Chaperone, Situation Room, Local Conduit Network, Bliksim, and eblockshop.
+- Ruka/SmartChat is a possible platform/build partner, not owner of the system.
+- Situation Room remains private and operator-controlled.
+- No member-to-responder direct lane by default.
+
+Report the document path only.
+No code changes.
+No deploy.
+```
+
+---
+
+## Final answer
+
+We have enough to create the **canonical WhatsApp message script** and the **MOU alignment note**.
+
+The actual MOU attachment was not found in Gmail yet — only Samantha’s follow-up about MOU comments. But the Ruka build/commercial spec is clear enough to produce the correct MOU clauses and align the WhatsApp messages.
