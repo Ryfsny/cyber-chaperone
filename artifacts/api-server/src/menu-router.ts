@@ -292,10 +292,29 @@ async function createTrip(
 
   await saveMessage(from, to, body, messageSid, newTrip.id);
 
+  const name = member?.displayName ?? from;
   await sendWhatsApp(
     from,
     to,
-    `✅ Trip started.\n\n${startLocation} → ${destination}${etaNote}\n\nWe are monitoring your journey. Send your location pin 📍, ETA updates, or ARRIVED when you get there.\n\nReply 0 for Main Menu.`,
+    [
+      `${name}, your Cyber Chaperone trip is active.`,
+      ``,
+      `Route: ${startLocation} → ${destination}`,
+      eta ? `ETA: ${normaliseEta(eta)}` : null,
+      `Status: GREEN`,
+      ``,
+      `For stronger backup, you can also share:`,
+      ``,
+      `1. Your WhatsApp live location to the Situation Room`,
+      `2. Your Waze / Google Maps route link`,
+      `3. Updates if your ETA changes`,
+      ``,
+      `We are monitoring your journey.`,
+      ``,
+      `Reply 4 when you arrive.`,
+      `Reply 5 if you need help.`,
+      `Reply 0 for Main Menu.`,
+    ].filter((l) => l !== null).join("\n"),
   );
 
   log.info(
@@ -474,7 +493,7 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
         .where(eq(tripsTable.id, trip.id));
     }
     await resetConvState(from);
-    await sendWhatsApp(from, to, `Understood. We have noted that you have stopped and will monitor closely.\n\nIf you move again, send your location pin 📍 or a message.\nReply 0 for Main Menu.`);
+    await sendWhatsApp(from, to, `Understood. We have noted that you have stopped and will monitor closely.\n\nIf you move again, send your location pin 📍 or a message.\n\nReply 0 for Main Menu.`);
     log.info({ from, tripId: trip?.id }, "Check-in: member stopped — AMBER");
     if (trip) {
       await sendOperatorMirror(to, [
@@ -541,7 +560,7 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
 // ── Menu text builders ────────────────────────────────────────────────────────
 
 function membershipStatusLine(memberStatus: string, membershipTier: string | null): string {
-  if (membershipTier) return `Your current eblockwatch membership: ${membershipTier}.`;
+  if (membershipTier) return `You're on a ${membershipTier}.`;
   if (memberStatus === "pending") return `Your eblockwatch membership is being confirmed.`;
   return `Your eblockwatch membership status is not confirmed yet.`;
 }
@@ -552,7 +571,8 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
     member?.membershipTier ?? null,
   );
   return [
-    `Hi ${name}, I'm AI Arnie, ${name}'s digital wingman.`,
+    `Hi ${name}, I'm AI Arnie, Andre Snyman's digital wingman.`,
+    ``,
     statusLine,
     `We are here to make you safer.`,
     ``,
@@ -606,9 +626,7 @@ async function handleMembershipChoice(ctx: MenuContext): Promise<void> {
       await resetConvState(from);
       await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
       await sendWhatsApp(from, to, [
-        `Thank you, ${name}. We have noted that you have finalised your ${tier}.`,
-        ``,
-        `We will verify and update your membership profile.`,
+        `Thank you, ${name}. We will check your membership confirmation and update your profile.`,
         ``,
         `Reply 0 for Main Menu.`,
       ].join("\n"));
@@ -1102,7 +1120,7 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
     await sendWhatsApp(
       from,
       to,
-      `Got it — I have your starting location.\n\nWhere are you heading to?\nReply 0 for Main Menu.`,
+      `Got it — I have your starting location.\n\nWhere are you heading to?\n\nReply 0 for Main Menu.`,
     );
     log.info({ from, startLocation }, "Trip flow: start location collected");
     return;
@@ -1243,12 +1261,31 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
   if (choice === "10") {
     const activeTrip = await findActiveTrip(from);
     await saveMessage(from, to, body, messageSid, activeTrip?.id ?? null);
-    await sendWhatsApp(from, to, withMenu(`Immediate human review requested. eblockwatch has been notified. Stay safe.`));
+    if (activeTrip) {
+      await db.update(tripsTable).set({ status: "red", nextAction: "Immediate human review." }).where(eq(tripsTable.id, activeTrip.id));
+    }
+    await resetConvState(from);
+    await sendWhatsApp(from, to, [
+      `${name}, I have marked this for immediate human review.`,
+      ``,
+      `The Situation Room has been notified.`,
+      ``,
+      `Please reply with one number:`,
+      ``,
+      `1. I am in danger`,
+      `2. I have broken down`,
+      `3. I am lost`,
+      `4. Medical issue`,
+      `5. Call me`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
     await sendOperatorMirror(to, [
       `🚨 CYBER CHAPERONE — IMMEDIATE HUMAN REVIEW`,
       `Member: ${name}`,
       `Known member: ${member?.isKnown ? "YES" : "NO"}`,
       activeTrip ? `Trip: ${activeTrip.title} (ID: ${activeTrip.id})` : `Trip: None`,
+      `Status: RED`,
       `Next action: Call member immediately.`,
     ].join("\n"));
     return true;
@@ -1507,9 +1544,9 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
     await sendWhatsApp(from, to, [
       `${name}, here are your eblockwatch membership options.`,
       ``,
-      `• Entry Level — your starting point in eblockwatch`,
-      `• Single Membership — R150/month`,
-      `• Family Membership — R250/month`,
+      `1. Entry Level — your starting point in eblockwatch`,
+      `2. Single Membership — R150/month`,
+      `3. Family Membership — R250/month`,
       ``,
       `The stronger your membership, the stronger your support layer.`,
       ``,
@@ -1560,7 +1597,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
 
   if (choice === "7") {
     await saveMessage(from, to, body, messageSid, null);
-    await sendWhatsApp(from, to, `A human from eblockwatch will contact you shortly.\n\nIf this is urgent, reply 10.\n\nReply 0 for Main Menu.`);
+    await sendWhatsApp(from, to, `${name}, a human from eblockwatch will contact you.\n\nIf this is urgent, reply 10.\n\nReply 0 for Main Menu.`);
     await sendOperatorMirror(to, [
       `CYBER CHAPERONE — CONTACT REQUEST`,
       `Member: ${name}`,
