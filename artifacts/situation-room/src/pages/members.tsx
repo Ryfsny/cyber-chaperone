@@ -100,7 +100,7 @@ export default function Members() {
 
   const { data: members = [], isLoading, error } = useQuery<Member[]>({
     queryKey: ["/api/members"],
-    queryFn: () => fetch("/api/members").then((r) => r.json()),
+    queryFn: () => fetch("/api/members", { credentials: "include" }).then((r) => r.json()),
     refetchInterval: 30000,
   });
 

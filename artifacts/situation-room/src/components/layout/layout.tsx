@@ -1,12 +1,14 @@
 import { Link, useLocation } from "wouter";
-import { MessageSquare, Plus, Shield, Bot, Radio, Users, BookUser } from "lucide-react";
+import { MessageSquare, Plus, Shield, Bot, Radio, Users, BookUser, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { AiAssistant } from "@/components/ai/AiAssistant";
+import { useAuth } from "@/hooks/use-auth";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [showAi, setShowAi] = useState(false);
+  const { logout } = useAuth();
 
   const navItems = [
     { href: "/", label: "Situation Room", icon: Shield },
@@ -59,7 +61,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             AI Assistant
           </button>
         </nav>
-        <div className="p-4 border-t border-border">
+        <div className="p-4 border-t border-border space-y-2">
           <Link
             href="/trips/new"
             className="flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground py-2 text-sm uppercase tracking-widest font-bold hover:bg-primary/90 transition-colors"
@@ -67,6 +69,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <Plus className="w-4 h-4" />
             New Trip
           </Link>
+          <button
+            onClick={() => logout()}
+            className="flex items-center justify-center gap-2 w-full border border-border text-muted-foreground py-2 text-xs uppercase tracking-widest hover:text-foreground hover:border-foreground/30 transition-colors"
+          >
+            <LogOut className="w-3 h-3" />
+            Lock
+          </button>
         </div>
       </aside>
       <main className="flex-1 flex min-w-0 overflow-hidden">

@@ -12,6 +12,7 @@ import Radar from "@/pages/radar";
 import Responders from "@/pages/responders";
 import Members from "@/pages/members";
 import { Layout } from "@/components/layout/layout";
+import { AuthGuard } from "@/components/auth-guard";
 
 const queryClient = new QueryClient();
 
@@ -41,7 +42,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
+          <AuthGuard>
+            <Router />
+          </AuthGuard>
         </WouterRouter>
         <Toaster />
       </TooltipProvider>
