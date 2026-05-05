@@ -49,7 +49,7 @@ Method: **POST** — paste this into Twilio Sandbox "WHEN A MESSAGE COMES IN"
 
 ## Database Schema
 
-- `trips` — traveler trip records (id, title, traveler_name, traveler_phone, status, evidence_notes, inference_notes, next_action, operator_notes, original_member_eta, current_route_confidence, last_member_checkin_time, eta_drift_minutes, ice_escalation_status, created_at, updated_at)
+- `trips` — traveler trip records (id, title, traveler_name, traveler_phone, status, evidence_notes, inference_notes, next_action, operator_notes, original_member_eta, current_route_confidence, last_member_checkin_time, eta_drift_minutes, ice_escalation_status, start_lat, start_lon, dest_lat, dest_lon, route_polyline, route_eta_minutes, route_eta_time, checkpoint_list, created_at, updated_at)
 - `messages` — raw WhatsApp messages (id, from_number, to_number, body, message_sid, trip_id, received_at)
 - `members` — known member registry (id, first_name, last_name, display_name, whatsapp_number, member_status, role, notes, ice_contact_name, ice_contact_phone, created_at, updated_at)
 - `conversation_states` — per-member menu state (id, whatsapp_number, current_flow, current_step, pending_trip_data, updated_at)
@@ -137,8 +137,13 @@ PILOT_MEMBERS hardcoded fallback in webhook.ts still covers Andre if the DB look
 - ICE reply "3" (could not reach) → AMBER + operator mirror.
 - ICE reply "4" (call me) → operator mirror with ICE phone.
 
-### Google Maps stubs
-- `routePolyline`, `calculatedGoogleEta`, `checkpointList` are currently NULL — requires `GOOGLE_MAPS_API_KEY` env var + Directions API enabled. Add key as secret to activate route geofence and checkpoint logic.
+### Route enrichment (OpenStreetMap stack — no API key)
+- After every trip is created, `enrichTripWithRoute(tripId, startLocation, destination)` fires async (non-blocking).
+- **Geocoding**: Nominatim (`nominatim.openstreetmap.org`) with `countrycodes=za` bias. Stores `startLat/Lon` and `destLat/Lon`.
+- **Routing**: OSRM public API (`router.project-osrm.org`) for driving route. Stores `routePolyline` (GeoJSON LineString), `routeEtaMinutes`, and `routeEtaTime` (SAST wall-clock).
+- **Checkpoints**: 0 checkpoints ≤15 min, 1 at 50% if ≤45 min, 2 at 33%+67% if >45 min. Stored as JSON in `checkpointList`.
+- **Dashboard map**: `TripRouteMap` component (react-leaflet + OpenStreetMap tiles) renders on every trip detail page — coloured route line (green/amber/red matching trip status), start/dest CircleMarkers, checkpoint pins, ETA legend overlay. Shows "Route calculating…" placeholder for old/missing data.
+- **WhatsApp checkpoint check-in** (section 7a, before ETA drift): if a checkpoint time has passed and the member hasn't checked in since, fires the CHECKIN flow with a checkpoint-specific prompt ("Route checkpoint — Midpoint check-in.") instead of the ETA drift message.
 
 ## MVP Production Proof — 2026-05-04
 

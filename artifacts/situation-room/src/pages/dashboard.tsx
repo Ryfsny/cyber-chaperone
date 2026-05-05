@@ -1,10 +1,9 @@
 import { useListTrips } from "@workspace/api-client-react";
+import type { Trip } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { AlertCircle, CheckCircle2, AlertTriangle, MessageSquare, Clock } from "lucide-react";
-
-type Trip = ReturnType<typeof useListTrips>["data"] extends (infer T)[] | undefined ? T : never;
 
 function TripCard({ trip }: { trip: Trip }) {
   const StatusIcon =

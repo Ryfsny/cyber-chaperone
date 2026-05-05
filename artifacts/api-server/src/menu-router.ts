@@ -1,6 +1,7 @@
 import { db, membersTable, tripsTable, messagesTable, conversationStatesTable } from "@workspace/db";
 import { and, eq, ne, desc } from "drizzle-orm";
 import twilio from "twilio";
+import { enrichTripWithRoute } from "./route-service.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -278,6 +279,8 @@ async function createTrip(
     })
     .returning();
 
+  void enrichTripWithRoute(newTrip.id, startLocation, destination, log);
+
   await saveMessage(from, to, body, messageSid, newTrip.id);
 
   await sendWhatsApp(
@@ -309,11 +312,14 @@ async function createTrip(
 
 // ── Check-in text ─────────────────────────────────────────────────────────────
 
-function checkinText(name: string, driftMin: number, tripTitle: string): string {
+function checkinText(name: string, driftMin: number, tripTitle: string, checkpointLabel?: string): string {
+  const prompt = checkpointLabel
+    ? `Route checkpoint — ${checkpointLabel}.`
+    : `Your ETA appears to have shifted — ${driftMin} minute${driftMin === 1 ? "" : "s"} past expected arrival.`;
   return [
     `${name}, Cyber Chaperone check-in.`,
     ``,
-    `Your ETA appears to have shifted — ${driftMin} minute${driftMin === 1 ? "" : "s"} past expected arrival.`,
+    prompt,
     ``,
     `Trip: ${tripTitle}`,
     ``,
@@ -334,9 +340,10 @@ async function sendCheckinPrompt(
   ctx: MenuContext,
   trip: typeof tripsTable.$inferSelect,
   driftMin: number,
+  checkpointLabel?: string,
 ): Promise<void> {
   const name = ctx.member?.displayName ?? ctx.from;
-  await sendWhatsApp(ctx.from, ctx.to, checkinText(name, driftMin, trip.title));
+  await sendWhatsApp(ctx.from, ctx.to, checkinText(name, driftMin, trip.title, checkpointLabel));
 }
 
 // ── ICE escalation ────────────────────────────────────────────────────────────
@@ -1404,6 +1411,44 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
 
   // Fetch active trip once for the remaining checks
   const activeTrip = await findActiveTrip(from);
+
+  // 7a. Route checkpoint check-in — time-based intermediate checks
+  if (
+    member?.isKnown &&
+    activeTrip?.checkpointList &&
+    activeTrip.status !== "completed" &&
+    activeTrip.status !== "red" &&
+    state.currentFlow !== FLOW_CHECKIN
+  ) {
+    try {
+      const checkpoints = JSON.parse(activeTrip.checkpointList) as Array<{
+        label: string;
+        minutesFromStart: number;
+        fraction: number;
+      }>;
+      const tripStart = new Date(activeTrip.createdAt).getTime();
+      const now = Date.now();
+      const lastCheckin = activeTrip.lastMemberCheckinTime
+        ? new Date(activeTrip.lastMemberCheckinTime).getTime()
+        : 0;
+      for (const cp of checkpoints) {
+        const cpDue = tripStart + cp.minutesFromStart * 60000;
+        if (now > cpDue && lastCheckin < cpDue && shouldSendCheckin(activeTrip)) {
+          await sendCheckinPrompt(ctx, activeTrip, 0, cp.label);
+          await setConvState(from, {
+            currentFlow: FLOW_CHECKIN,
+            currentStep: null,
+            pendingTripData: { clarificationActiveTripId: activeTrip.id },
+          });
+          await saveMessage(from, to, body, messageSid, activeTrip.id);
+          log.info({ from, checkpoint: cp.label, tripId: activeTrip.id }, "Route checkpoint check-in sent");
+          return { handled: true };
+        }
+      }
+    } catch {
+      // best-effort
+    }
+  }
 
   // 7. ETA drift monitoring — reactive check on every unhandled message
   if (member?.isKnown && activeTrip?.originalMemberEta && activeTrip.status !== "completed" && activeTrip.status !== "red") {

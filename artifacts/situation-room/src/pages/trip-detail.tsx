@@ -1,4 +1,4 @@
-import { useGetTrip, useGetTripMessages, useUpdateTrip, getGetTripQueryKey, getListTripsQueryKey } from "@workspace/api-client-react";
+import { useGetTrip, useGetTripMessages, useUpdateTrip, getGetTripQueryKey, getListTripsQueryKey, getGetTripMessagesQueryKey } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { ArrowLeft, Loader2, Save, Activity, XCircle } from "lucide-react";
 import { format } from "date-fns";
@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { TripAiPanel } from "@/components/ai/TripAiPanel";
+import { TripRouteMap } from "@/components/TripRouteMap";
 
 export default function TripDetail() {
   const { id } = useParams();
@@ -17,7 +18,7 @@ export default function TripDetail() {
     query: { enabled: !!tripId, queryKey: getGetTripQueryKey(tripId) } 
   });
   const { data: messages = [], isLoading: isLoadingMessages } = useGetTripMessages(tripId, {
-    query: { enabled: !!tripId }
+    query: { enabled: !!tripId, queryKey: getGetTripMessagesQueryKey(tripId) }
   });
   
   const updateTrip = useUpdateTrip();
@@ -150,6 +151,8 @@ export default function TripDetail() {
           )}
         </div>
       </header>
+
+      <TripRouteMap trip={trip} />
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Structured Notes */}

@@ -21,6 +21,32 @@ export interface Trip {
   nextAction: string | null;
   /** @nullable */
   operatorNotes: string | null;
+  /** @nullable */
+  originalMemberEta?: string | null;
+  /** @nullable */
+  currentRouteConfidence?: string | null;
+  /** @nullable */
+  lastMemberCheckinTime?: Date | null;
+  /** @nullable */
+  etaDriftMinutes?: number | null;
+  /** @nullable */
+  iceEscalationStatus?: string | null;
+  /** @nullable */
+  startLat?: string | null;
+  /** @nullable */
+  startLon?: string | null;
+  /** @nullable */
+  destLat?: string | null;
+  /** @nullable */
+  destLon?: string | null;
+  /** @nullable */
+  routePolyline?: string | null;
+  /** @nullable */
+  routeEtaMinutes?: number | null;
+  /** @nullable */
+  routeEtaTime?: string | null;
+  /** @nullable */
+  checkpointList?: string | null;
   messageCount: number;
   createdAt: Date;
   updatedAt: Date;

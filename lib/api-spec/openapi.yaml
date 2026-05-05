@@ -272,6 +272,33 @@ components:
           type: ["string", "null"]
         operatorNotes:
           type: ["string", "null"]
+        originalMemberEta:
+          type: ["string", "null"]
+        currentRouteConfidence:
+          type: ["string", "null"]
+        lastMemberCheckinTime:
+          type: ["string", "null"]
+          format: date-time
+        etaDriftMinutes:
+          type: ["integer", "null"]
+        iceEscalationStatus:
+          type: ["string", "null"]
+        startLat:
+          type: ["string", "null"]
+        startLon:
+          type: ["string", "null"]
+        destLat:
+          type: ["string", "null"]
+        destLon:
+          type: ["string", "null"]
+        routePolyline:
+          type: ["string", "null"]
+        routeEtaMinutes:
+          type: ["integer", "null"]
+        routeEtaTime:
+          type: ["string", "null"]
+        checkpointList:
+          type: ["string", "null"]
         messageCount:
           type: integer
         createdAt:
