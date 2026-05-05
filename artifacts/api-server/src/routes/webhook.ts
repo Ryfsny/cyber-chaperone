@@ -4,6 +4,7 @@ import { and, eq, ne, desc, count } from "drizzle-orm";
 import twilio from "twilio";
 import { assessRisk } from "./ai.js";
 import { handleMenuRouter } from "../menu-router.js";
+import { withMenu } from "../message-utils.js";
 
 const router: IRouter = Router();
 
@@ -390,7 +391,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
         await sendReply(
           from,
           to,
-          "I don't yet have your member profile linked to this WhatsApp number. Please reply with your name, surname, and registered eblockwatch cellphone number so we can connect your trip to your profile.",
+          withMenu("I don't yet have your member profile linked to this WhatsApp number. Please reply with your name, surname, and registered eblockwatch cellphone number so we can connect your trip to your profile."),
         );
 
         await sendOperatorMirror(
@@ -788,7 +789,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
             await sendReply(
               from,
               to,
-              "Help message received. Stay as safe as possible. Your trip has been marked RED for immediate human review.",
+              withMenu("Help message received. Stay as safe as possible. Your trip has been marked RED for immediate human review."),
             );
             req.log.info({ tripId: activeTrip.id }, "Trip escalated to RED — distress keyword");
 
@@ -816,7 +817,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
               .set({ status: "completed", evidenceNotes: note })
               .where(eq(tripsTable.id, activeTrip.id));
 
-            await sendReply(from, to, "Arrival recorded. Your trip is now closed. Travel safe! 🟢\n\nReply Hi or 0 to start a new trip.");
+            await sendReply(from, to, withMenu("Arrival recorded. Your trip is now closed. Travel safe! 🟢"));
             req.log.info({ tripId: activeTrip.id }, "Trip closed — arrival keyword");
 
             await sendOperatorMirror(

@@ -2,6 +2,7 @@ import { db, membersTable, tripsTable, messagesTable, conversationStatesTable } 
 import { and, eq, ne, desc } from "drizzle-orm";
 import twilio from "twilio";
 import { enrichTripWithRoute } from "./route-service.js";
+import { withMenu } from "./message-utils.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -654,7 +655,7 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
       await db.update(tripsTable).set({ status: "red", nextAction: "Immediate human review." }).where(eq(tripsTable.id, trip.id));
     }
     await resetConvState(from);
-    await sendWhatsApp(from, to, `Help message received. Your trip has been flagged for immediate human review.`);
+    await sendWhatsApp(from, to, withMenu("Help message received. Your trip has been flagged for immediate human review."));
     return;
   }
 
@@ -767,7 +768,7 @@ async function handleDistress(ctx: MenuContext, activeTrip: Awaited<ReturnType<t
     log.info({ from }, "Distress received — no active trip — RED mirror sent");
   }
 
-  await sendWhatsApp(from, to, "Help message received. Stay as safe as possible. Your situation has been flagged RED for immediate human review.");
+  await sendWhatsApp(from, to, withMenu("Help message received. Stay as safe as possible. Your situation has been flagged RED for immediate human review."));
 
   await resetConvState(from);
 
@@ -807,7 +808,7 @@ async function handleArrival(ctx: MenuContext, activeTrip: Awaited<ReturnType<ty
   await saveMessage(from, to, body, messageSid, activeTrip.id);
   await resetConvState(from);
 
-  await sendWhatsApp(from, to, "Arrival recorded. Your trip is now closed. Travel safe! 🟢\n\nReply Hi or 0 to start a new trip.");
+  await sendWhatsApp(from, to, withMenu("Arrival recorded. Your trip is now closed. Travel safe! 🟢"));
 
   log.info({ tripId: activeTrip.id }, "Trip closed — arrival (menu router)");
 
@@ -1209,7 +1210,7 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
   if (choice === "10") {
     const activeTrip = await findActiveTrip(from);
     await saveMessage(from, to, body, messageSid, activeTrip?.id ?? null);
-    await sendWhatsApp(from, to, `Immediate human review requested. eblockwatch has been notified. Stay safe.`);
+    await sendWhatsApp(from, to, withMenu(`Immediate human review requested. eblockwatch has been notified. Stay safe.`));
     await sendOperatorMirror(to, [
       `🚨 CYBER CHAPERONE — IMMEDIATE HUMAN REVIEW`,
       `Member: ${name}`,
@@ -1298,7 +1299,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   if (choice === "10") {
     const activeTrip = await findActiveTrip(from);
     await saveMessage(from, to, body, messageSid, activeTrip?.id ?? null);
-    await sendWhatsApp(from, to, `Immediate human review requested. eblockwatch has been notified. Stay safe.`);
+    await sendWhatsApp(from, to, withMenu(`Immediate human review requested. eblockwatch has been notified. Stay safe.`));
     await sendOperatorMirror(to, [
       `🚨 CYBER CHAPERONE — IMMEDIATE HUMAN REVIEW`,
       `Member: ${name}`,
