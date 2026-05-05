@@ -1346,13 +1346,21 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     return { handled: true };
   }
 
-  // 0. ICE contact detection — runs before all other handlers
-  //    Skipped when GLOBAL_MENU_OVERRIDE fires above.
-  const iceCtx = await detectIceContact(from);
-  if (iceCtx) {
-    await handleIceReply(ctx, iceCtx.memberRow, iceCtx.activeTrip);
-    log.info({ from, handler: "ICE_CONTACT" }, "Menu router: ICE contact reply handler");
-    return { handled: true };
+  // 0. ICE contact detection — ONLY for non-members
+  //    A person who is BOTH a known member AND stored as an ICE contact for
+  //    another member must always be routed through the normal member flows.
+  //    Routing them through the ICE handler causes every message they send to
+  //    be treated as an ICE escalation reply instead of a member interaction.
+  //    ICE replies are only valid for contacts who are NOT members themselves.
+  if (!member?.isKnown) {
+    const iceCtx = await detectIceContact(from);
+    if (iceCtx) {
+      await handleIceReply(ctx, iceCtx.memberRow, iceCtx.activeTrip);
+      log.info({ from, handler: "ICE_CONTACT" }, "Menu router: ICE contact reply handler");
+      return { handled: true };
+    }
+  } else {
+    log.info({ from, handler: "ICE_CHECK_SKIPPED" }, "menu-router: known member — ICE contact check skipped");
   }
 
   // 1. PRIORITY: Distress — always handled first
