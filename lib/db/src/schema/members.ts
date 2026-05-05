@@ -9,6 +9,7 @@ export const membersTable = pgTable("members", {
   displayName: text("display_name").notNull(),
   whatsappNumber: text("whatsapp_number").notNull().unique(),
   memberStatus: text("member_status").notNull().default("unknown"),
+  membershipTier: text("membership_tier"),
   role: text("role"),
   notes: text("notes"),
   iceContactName: text("ice_contact_name"),

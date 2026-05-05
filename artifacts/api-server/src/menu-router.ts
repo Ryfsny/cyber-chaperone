@@ -10,6 +10,7 @@ export interface MemberInfo {
   displayName: string;
   role: string | null;
   memberStatus: string;
+  membershipTier: string | null;
   isKnown: boolean;
 }
 
@@ -62,6 +63,7 @@ const STEP_WAITING_FOR_ETA = "WAITING_FOR_ETA";
 
 const FLOW_CHECKIN = "CHECKIN";
 const STEP_WAITING_FOR_NEW_ETA = "WAITING_FOR_NEW_ETA";
+const FLOW_MEMBERSHIP = "MEMBERSHIP";
 
 // ── Keyword detectors ─────────────────────────────────────────────────────────
 
@@ -370,7 +372,7 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
   if (choice === "0") {
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, mainMenuText(name));
+    await sendWhatsApp(from, to, mainMenuText(name, member));
     return;
   }
 
@@ -502,10 +504,20 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
 
 // ── Menu text builders ────────────────────────────────────────────────────────
 
-function mainMenuText(name: string): string {
+function membershipStatusLine(memberStatus: string, membershipTier: string | null): string {
+  if (membershipTier) return `Your current eblockwatch membership: ${membershipTier}.`;
+  if (memberStatus === "pending") return `Your eblockwatch membership is being confirmed.`;
+  return `Your eblockwatch membership status is not confirmed yet.`;
+}
+
+function mainMenuText(name: string, member: MemberInfo | null): string {
+  const statusLine = membershipStatusLine(
+    member?.memberStatus ?? "unknown",
+    member?.membershipTier ?? null,
+  );
   return [
     `Hi ${name}, I'm AI Arnie, ${name}'s digital wingman.`,
-    `You're on a Single Membership.`,
+    statusLine,
     `We are here to make you safer.`,
     ``,
     `1. What is eblockwatch?`,
@@ -520,6 +532,91 @@ function mainMenuText(name: string): string {
     ``,
     `Reply with the number of your choice. Reply 0 for Main Menu.`,
   ].join("\n");
+}
+
+function membershipActivationText(name: string): string {
+  return [
+    `${name}, this is where you finalise your eblockwatch membership.`,
+    ``,
+    `Please choose:`,
+    ``,
+    `1. Single Membership — R150/month`,
+    `2. Family Membership — R250/month`,
+    `3. I have already finalised my membership`,
+    `4. I need help from a human`,
+    ``,
+    `Reply 0 for Main Menu.`,
+  ].join("\n");
+}
+
+async function handleMembershipChoice(ctx: MenuContext): Promise<void> {
+  const { from, to, body, member, messageSid } = ctx;
+  const name = member?.displayName ?? from;
+  const choice = body.trim();
+
+  await saveMessage(from, to, body, messageSid, null);
+
+  if (choice === "0") {
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, mainMenuText(name, member));
+    return;
+  }
+
+  if (choice === "1") {
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, [
+      `Single Membership — R150/month`,
+      ``,
+      `Tap the link below to complete your payment securely via Paystack:`,
+      `https://paystack.shop/pay/cyber-chaperone`,
+      ``,
+      `Once payment is confirmed your membership will be activated.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (choice === "2") {
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, [
+      `Family Membership — R250/month`,
+      ``,
+      `Tap the link below to complete your payment securely via Paystack:`,
+      `https://paystack.shop/pay/family-cyber-chaperone`,
+      ``,
+      `Once payment is confirmed your membership will be activated.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (choice === "3") {
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, `Thank you, ${name}. We will check your membership confirmation and update your profile.\n\nReply 0 for Main Menu.`);
+    return;
+  }
+
+  if (choice === "4") {
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, `A human from eblockwatch will contact you shortly.\n\nIf this is urgent, reply 10.\n\nReply 0 for Main Menu.`);
+    await sendOperatorMirror(to, [
+      `CYBER CHAPERONE — MEMBERSHIP HELP REQUEST`,
+      `Member: ${name}`,
+      `Known member: ${member?.isKnown ? "YES" : "NO"}`,
+      `Next action: Member needs help with membership activation.`,
+    ].join("\n"));
+    return;
+  }
+
+  // Unknown choice — repeat the membership menu
+  await sendWhatsApp(from, to, membershipActivationText(name));
 }
 
 function ccMenuText(name: string): string {
@@ -738,7 +835,7 @@ async function handleClarificationChoice(ctx: MenuContext, state: ConvState): Pr
 
   if (choice === "0") {
     await resetConvState(from);
-    await sendWhatsApp(from, to, mainMenuText(name));
+    await sendWhatsApp(from, to, mainMenuText(name, member));
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     return;
   }
@@ -835,7 +932,7 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
 
   if (body.trim() === "0") {
     await resetConvState(from);
-    await sendWhatsApp(from, to, mainMenuText(name));
+    await sendWhatsApp(from, to, mainMenuText(name, member));
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     return;
   }
@@ -940,7 +1037,7 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
 
   // Unknown step — reset
   await resetConvState(from);
-  await sendWhatsApp(from, to, mainMenuText(name));
+  await sendWhatsApp(from, to, mainMenuText(name, member));
   await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
 }
 
@@ -953,7 +1050,7 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
 
   if (choice === "0") {
     await resetConvState(from);
-    await sendWhatsApp(from, to, mainMenuText(name));
+    await sendWhatsApp(from, to, mainMenuText(name, member));
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     await saveMessage(from, to, body, messageSid, null);
     return true;
@@ -1093,7 +1190,8 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
 
   if (choice === "3") {
     await saveMessage(from, to, body, messageSid, null);
-    await sendWhatsApp(from, to, `To activate your membership, please contact eblockwatch directly or reply 7 to request a human.\n\nReply 0 for Main Menu.`);
+    await setConvState(from, { currentFlow: FLOW_MEMBERSHIP, currentStep: null });
+    await sendWhatsApp(from, to, membershipActivationText(name));
     return true;
   }
 
@@ -1163,7 +1261,7 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   if (isMenuOverride) {
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, mainMenuText(name));
+    await sendWhatsApp(from, to, mainMenuText(name, member));
     await saveMessage(from, to, body, messageSid, null);
     log.info({ from, body: trimmed, handler: "GLOBAL_MENU_OVERRIDE" }, "menu-router: MENU_OVERRIDE triggered");
     return { handled: true };
@@ -1189,7 +1287,7 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   if (MAIN_MENU_TRIGGER.test(trimmed)) {
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, mainMenuText(name));
+    await sendWhatsApp(from, to, mainMenuText(name, member));
     await saveMessage(from, to, body, messageSid, null);
     log.info({ from, handler: "MAIN_MENU_TRIGGER" }, "menu-router: main menu trigger");
     return { handled: true };
@@ -1198,6 +1296,11 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   // 4. Conversation state routing
   const state = await getConvState(from);
   log.info({ from, currentFlow: state.currentFlow, currentStep: state.currentStep }, "Menu router: conv state");
+
+  if (state.currentFlow === FLOW_MEMBERSHIP) {
+    await handleMembershipChoice(ctx);
+    return { handled: true };
+  }
 
   if (state.currentFlow === FLOW_TRIP_FLOW) {
     await handleTripFlowStep(ctx, state);

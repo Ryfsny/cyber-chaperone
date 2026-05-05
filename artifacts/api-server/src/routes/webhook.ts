@@ -150,6 +150,7 @@ interface MemberInfo {
   displayName: string;
   role: string | null;
   memberStatus: string;
+  membershipTier: string | null;
   isKnown: boolean;
 }
 
@@ -164,6 +165,7 @@ const PILOT_MEMBERS: Record<string, MemberInfo> = {
     displayName: "Andre Snyman",
     role: "Founder / test operator",
     memberStatus: "verified",
+    membershipTier: null,
     isKnown: true,
   },
 };
@@ -180,6 +182,7 @@ async function lookupMember(whatsappNumber: string): Promise<MemberInfo | null> 
         displayName: member.displayName,
         role: member.role,
         memberStatus: member.memberStatus,
+        membershipTier: member.membershipTier ?? null,
         isKnown: member.memberStatus === "verified" || member.memberStatus === "active",
       };
     }
