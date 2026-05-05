@@ -749,6 +749,7 @@ function askForLocationText(name: string): string {
     `${name}, let's start your trip.`,
     ``,
     `Please send your current location pin 📍.`,
+    ``,
     `Reply 0 for Main Menu.`,
   ].join("\n");
 }
@@ -1219,7 +1220,7 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
         currentStep: "WAITING_FOR_NEW_DESTINATION",
         pendingTripData: { clarificationActiveTripId: activeTrip.id },
       });
-      await sendWhatsApp(from, to, `What is the new destination?\nReply 0 for Main Menu.`);
+      await sendWhatsApp(from, to, `What is the new destination?\n\nReply 0 for Main Menu.`);
     }
     return true;
   }
@@ -1247,7 +1248,7 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
     await sendWhatsApp(
       from,
       to,
-      `${name}, a human from eblockwatch will contact you shortly.\n\nIf this is urgent, reply 10 or send HELP.\n\nReply 0 for Main Menu.`,
+      `${name}, a human from eblockwatch will contact you.\n\nIf this is urgent, reply 10 or send HELP.\n\nReply 0 for Main Menu.`,
     );
     await sendOperatorMirror(to, [
       `CYBER CHAPERONE — CONTACT REQUEST`,
@@ -1610,12 +1611,31 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   if (choice === "10") {
     const activeTrip = await findActiveTrip(from);
     await saveMessage(from, to, body, messageSid, activeTrip?.id ?? null);
-    await sendWhatsApp(from, to, withMenu(`Immediate human review requested. eblockwatch has been notified. Stay safe.`));
+    if (activeTrip) {
+      await db.update(tripsTable).set({ status: "red", nextAction: "Immediate human review." }).where(eq(tripsTable.id, activeTrip.id));
+    }
+    await resetConvState(from);
+    await sendWhatsApp(from, to, [
+      `${name}, I have marked this for immediate human review.`,
+      ``,
+      `The Situation Room has been notified.`,
+      ``,
+      `Please reply with one number:`,
+      ``,
+      `1. I am in danger`,
+      `2. I have broken down`,
+      `3. I am lost`,
+      `4. Medical issue`,
+      `5. Call me`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
     await sendOperatorMirror(to, [
       `🚨 CYBER CHAPERONE — IMMEDIATE HUMAN REVIEW`,
       `Member: ${name}`,
       `Known member: ${member?.isKnown ? "YES" : "NO"}`,
       activeTrip ? `Trip: ${activeTrip.title} (ID: ${activeTrip.id})` : `Trip: None`,
+      `Status: RED`,
       `Next action: Call member immediately.`,
     ].join("\n"));
     return true;
