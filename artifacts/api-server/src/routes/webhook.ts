@@ -52,6 +52,18 @@ function normaliseBody(raw: string): string {
     .trim();
 }
 
+/**
+ * Normalise a Twilio WhatsApp number to canonical format: whatsapp:+XXXXXXXXXXX
+ * Twilio sometimes sends "whatsapp: 27825611065" (space, no +) instead of "whatsapp:+27825611065".
+ */
+function normaliseFrom(raw: string): string {
+  // Remove any spaces around the colon
+  let n = raw.replace(/^whatsapp:\s+/i, "whatsapp:");
+  // Ensure the digits part starts with +
+  n = n.replace(/^(whatsapp:)(\d)/, "$1+$2");
+  return n;
+}
+
 // ── Trip-start parser ────────────────────────────────────────────────────────
 
 interface ParsedTripStart {
@@ -318,7 +330,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
   }
 
   const body = req.body?.Body ?? "";
-  const from = req.body?.From ?? "";
+  const from = normaliseFrom(req.body?.From ?? "");
   const to = req.body?.To ?? "";
   const messageSid = req.body?.MessageSid ?? null;
 
