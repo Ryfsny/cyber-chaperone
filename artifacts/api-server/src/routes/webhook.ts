@@ -5,6 +5,7 @@ import twilio from "twilio";
 import { assessRisk } from "./ai.js";
 import { handleMenuRouter } from "../menu-router.js";
 import { withMenu } from "../message-utils.js";
+import { sendOperatorEmail, type EmailCategory } from "../email-service.js";
 
 const router: IRouter = Router();
 
@@ -280,7 +281,14 @@ async function sendOperatorMirror(
   twilioNumber: string,
   mirrorBody: string,
   kind: MirrorKind,
+  emailCategory?: EmailCategory,
 ): Promise<void> {
+  // Email — always fire if category provided, regardless of WhatsApp mirror mode
+  if (emailCategory) {
+    const firstLine = mirrorBody.split("\n")[0] ?? "Update";
+    void sendOperatorEmail(emailCategory, firstLine, mirrorBody);
+  }
+
   const operatorNumber = process.env.OPERATOR_WHATSAPP_NUMBER;
   if (!operatorNumber || !mirrorEnabled(kind)) return;
   try {
@@ -640,6 +648,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
             excerpt(body, 120),
           ].join("\n"),
           "trip-start",
+          "trip-started",
         );
       } else {
         await sendOperatorMirror(
@@ -656,6 +665,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
             excerpt(body, 120),
           ].join("\n"),
           "trip-start",
+          "trip-started",
         );
       }
 
@@ -820,6 +830,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
                 `Next action: Immediate human review required.`,
               ].join("\n"),
               "red",
+              "red-alert",
             );
 
           } else if (kind === "arrival") {
@@ -846,6 +857,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
                 `Arrival: "${excerpt(body, 100)}"`,
               ].join("\n"),
               "arrival",
+              "arrived",
             );
 
           } else if (kind === "delay") {

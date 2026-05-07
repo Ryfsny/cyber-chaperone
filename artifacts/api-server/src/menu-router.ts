@@ -3,6 +3,7 @@ import { and, eq, ne, desc } from "drizzle-orm";
 import twilio from "twilio";
 import { enrichTripWithRoute, calculateRouteInfo, reverseGeocodeCoords, minutesToSastTime, type RouteInfo } from "./route-service.js";
 import { withMenu } from "./message-utils.js";
+import { sendOperatorEmail, type EmailCategory } from "./email-service.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -156,9 +157,16 @@ async function sendWhatsApp(from: string, to: string, body: string): Promise<voi
   }
 }
 
-async function sendOperatorMirror(twilioNumber: string, body: string): Promise<void> {
+async function sendOperatorMirror(twilioNumber: string, body: string, emailCategory?: EmailCategory): Promise<void> {
   const operatorNumber = process.env.OPERATOR_WHATSAPP_NUMBER;
   const mode = (process.env.OPERATOR_MIRROR_MODE ?? "off").toLowerCase();
+
+  // Email — always fire if configured, regardless of WhatsApp mirror mode
+  if (emailCategory) {
+    const firstLine = body.split("\n")[0] ?? "Update";
+    void sendOperatorEmail(emailCategory, firstLine, body);
+  }
+
   if (!operatorNumber || mode === "off") return;
   try {
     const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -378,6 +386,7 @@ async function createTrip(
       `ETA bullseye: ${effectiveEta ?? "not set"}`,
       `Next action: Monitor route and checkpoint behaviour.`,
     ].filter((l) => l !== null).join("\n"),
+    "trip-started",
   );
 
   await resetConvState(from);
@@ -544,7 +553,7 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
           `Trip: ${trip.title} (ID: ${trip.id})`,
           `Status: COMPLETED`,
           `Member confirmed: arrived at destination.`,
-        ].join("\n"));
+        ].join("\n"), "arrived");
       }
       return;
     }
@@ -570,7 +579,7 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
           `Status: RED`,
           `Triggered: Member pressed help at pre-arrival checkpoint.`,
           `Next action: Immediate human review required.`,
-        ].join("\n"));
+        ].join("\n"), "red-alert");
       }
       return;
     }
@@ -605,7 +614,7 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
         `Trip: ${trip.title} (ID: ${trip.id})`,
         `Status: GREEN`,
         `Member confirmed: okay.`,
-      ].join("\n"));
+      ].join("\n"), "checkpoint");
     }
     return;
   }
