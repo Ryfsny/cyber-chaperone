@@ -25,6 +25,7 @@ export type EmailCategory =
   | "checkpoint"
   | "pre-arrival"
   | "arrived"
+  | "trip-complete"
   | "amber"
   | "red-alert"
   | "ice-escalation"
@@ -35,6 +36,7 @@ const SUBJECT_PREFIX: Record<EmailCategory, string> = {
   "checkpoint":       "🔵 CHECKPOINT",
   "pre-arrival":      "🔵 PRE-ARRIVAL",
   "arrived":          "✅ ARRIVED",
+  "trip-complete":    "🏁 TRIP COMPLETE",
   "amber":            "🟡 AMBER ALERT",
   "red-alert":        "🔴 RED ALERT",
   "ice-escalation":   "🚨 ICE ESCALATION",

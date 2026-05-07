@@ -1915,14 +1915,17 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
           nextAction: "Trip closed by member.",
         })
         .where(eq(tripsTable.id, activeTrip.id));
-      await sendWhatsApp(from, to, `Your trip has been ended. Stay safe, ${name}.\n\nReply 0 for Main Menu.`);
+      await sendWhatsApp(from, to, `✅ Trip complete. You have arrived safely. Stay safe, Andre is here if you need anything.`);
+      await sendWhatsApp(from, to, mainMenuText(name, member));
       await sendOperatorMirror(to, [
-        `CYBER CHAPERONE — TRIP ENDED (STOP)`,
+        `🏁 TRIP COMPLETE`,
         `Member: ${name}`,
-        `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+        `Trip ID: ${activeTrip.id}`,
+        `Arrived safely at ${ts}`,
+        `Trip: ${activeTrip.title}`,
         `Status: COMPLETED`,
         `Reason: Member sent STOP.`,
-      ].join("\n"), "arrival", "arrived");
+      ].join("\n"), "arrival", "trip-complete");
     } else {
       await sendWhatsApp(from, to, `No active trip to end.\n\nReply 0 for Main Menu.`);
     }
