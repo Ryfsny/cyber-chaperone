@@ -6,13 +6,23 @@ interface Coords {
   lon: string;
 }
 
-interface Checkpoint {
+export interface Checkpoint {
   label: string;
   minutesFromStart: number;
   fraction: number;
 }
 
+export interface RouteInfo {
+  durationMinutes: number;
+  etaTime: string;
+  checkpoints: Checkpoint[];
+  startCoords: Coords;
+  destCoords: Coords;
+  polylineGeoJson: string;
+}
+
 const NOMINATIM_BASE = "https://nominatim.openstreetmap.org/search";
+const NOMINATIM_REVERSE_BASE = "https://nominatim.openstreetmap.org/reverse";
 const OSRM_BASE = "https://router.project-osrm.org/route/v1/driving";
 const UA = "CyberChaperone-eblockwatch/1.0 (https://eblockwatch.com)";
 
@@ -24,6 +34,43 @@ async function geocodeAddress(query: string): Promise<Coords | null> {
     const data = (await res.json()) as Array<{ lat: string; lon: string }>;
     if (!data.length) return null;
     return { lat: data[0].lat, lon: data[0].lon };
+  } catch {
+    return null;
+  }
+}
+
+export async function reverseGeocodeCoords(lat: string, lon: string): Promise<string | null> {
+  try {
+    const url = `${NOMINATIM_REVERSE_BASE}?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&format=json`;
+    const res = await fetch(url, { headers: { "User-Agent": UA } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      display_name?: string;
+      address?: {
+        suburb?: string;
+        neighbourhood?: string;
+        city_district?: string;
+        city?: string;
+        town?: string;
+        village?: string;
+        county?: string;
+        state?: string;
+      };
+    };
+    const addr = data.address;
+    if (addr) {
+      const name =
+        addr.suburb ??
+        addr.neighbourhood ??
+        addr.city_district ??
+        addr.city ??
+        addr.town ??
+        addr.village ??
+        addr.county ??
+        addr.state;
+      if (name) return name;
+    }
+    return data.display_name?.split(",")[0]?.trim() ?? null;
   } catch {
     return null;
   }
@@ -54,7 +101,7 @@ function buildCheckpoints(durationMinutes: number): Checkpoint[] {
   ];
 }
 
-function minutesToSastTime(minutesFromNow: number): string {
+export function minutesToSastTime(minutesFromNow: number): string {
   const d = new Date(Date.now() + minutesFromNow * 60000);
   const h = (d.getUTCHours() + 2) % 24;
   const m = d.getUTCMinutes();
@@ -89,6 +136,34 @@ async function getOsrmRoute(
   }
 }
 
+export async function calculateRouteInfo(
+  startLocation: string,
+  destination: string,
+  startCoordsOverride?: { lat: string; lon: string },
+): Promise<RouteInfo | null> {
+  try {
+    const [startCoords, destCoords] = await Promise.all([
+      startCoordsOverride ? Promise.resolve(startCoordsOverride) : geocodeAddress(startLocation),
+      geocodeAddress(destination),
+    ]);
+    if (!startCoords || !destCoords) return null;
+    const osrm = await getOsrmRoute(startCoords.lat, startCoords.lon, destCoords.lat, destCoords.lon);
+    if (!osrm) return null;
+    const checkpoints = buildCheckpoints(osrm.durationMinutes);
+    const etaTime = minutesToSastTime(osrm.durationMinutes);
+    return {
+      durationMinutes: osrm.durationMinutes,
+      etaTime,
+      checkpoints,
+      startCoords,
+      destCoords,
+      polylineGeoJson: osrm.polylineGeoJson,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function enrichTripWithRoute(
   tripId: number,
   startLocation: string,
@@ -97,78 +172,38 @@ export async function enrichTripWithRoute(
     info: (obj: unknown, msg?: string) => void;
     error: (obj: unknown, msg?: string) => void;
   },
+  startCoordsOverride?: { lat: string; lon: string },
 ): Promise<void> {
   try {
-    const [startCoords, destCoords] = await Promise.all([
-      geocodeAddress(startLocation),
-      geocodeAddress(destination),
-    ]);
+    const info = await calculateRouteInfo(startLocation, destination, startCoordsOverride);
 
-    if (!startCoords || !destCoords) {
-      log.info(
-        { tripId, startLocation, destination },
-        "Route enrichment: geocoding failed for one or both addresses",
-      );
-      if (startCoords || destCoords) {
-        await db
-          .update(tripsTable)
-          .set({
-            startLat: startCoords?.lat ?? null,
-            startLon: startCoords?.lon ?? null,
-            destLat: destCoords?.lat ?? null,
-            destLon: destCoords?.lon ?? null,
-          })
-          .where(eq(tripsTable.id, tripId));
-      }
+    if (!info) {
+      log.info({ tripId, startLocation, destination }, "Route enrichment: failed");
       return;
     }
-
-    const osrm = await getOsrmRoute(
-      startCoords.lat,
-      startCoords.lon,
-      destCoords.lat,
-      destCoords.lon,
-    );
-
-    if (!osrm) {
-      log.info({ tripId }, "Route enrichment: OSRM route not found — storing coords only");
-      await db
-        .update(tripsTable)
-        .set({
-          startLat: startCoords.lat,
-          startLon: startCoords.lon,
-          destLat: destCoords.lat,
-          destLon: destCoords.lon,
-        })
-        .where(eq(tripsTable.id, tripId));
-      return;
-    }
-
-    const checkpoints = buildCheckpoints(osrm.durationMinutes);
-    const routeEtaTime = minutesToSastTime(osrm.durationMinutes);
 
     await db
       .update(tripsTable)
       .set({
-        startLat: startCoords.lat,
-        startLon: startCoords.lon,
-        destLat: destCoords.lat,
-        destLon: destCoords.lon,
-        routePolyline: osrm.polylineGeoJson,
-        routeEtaMinutes: osrm.durationMinutes,
-        routeEtaTime,
-        checkpointList: JSON.stringify(checkpoints),
+        startLat: info.startCoords.lat,
+        startLon: info.startCoords.lon,
+        destLat: info.destCoords.lat,
+        destLon: info.destCoords.lon,
+        routePolyline: info.polylineGeoJson,
+        routeEtaMinutes: info.durationMinutes,
+        routeEtaTime: info.etaTime,
+        checkpointList: JSON.stringify(info.checkpoints),
       })
       .where(eq(tripsTable.id, tripId));
 
     log.info(
       {
         tripId,
-        durationMinutes: osrm.durationMinutes,
-        routeEtaTime,
-        checkpoints: checkpoints.length,
-        startCoords,
-        destCoords,
+        durationMinutes: info.durationMinutes,
+        routeEtaTime: info.etaTime,
+        checkpoints: info.checkpoints.length,
+        startCoords: info.startCoords,
+        destCoords: info.destCoords,
       },
       "Route enrichment: complete",
     );

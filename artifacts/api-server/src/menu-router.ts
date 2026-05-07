@@ -1,7 +1,7 @@
 import { db, membersTable, tripsTable, messagesTable, conversationStatesTable } from "@workspace/db";
 import { and, eq, ne, desc } from "drizzle-orm";
 import twilio from "twilio";
-import { enrichTripWithRoute } from "./route-service.js";
+import { enrichTripWithRoute, calculateRouteInfo, reverseGeocodeCoords, minutesToSastTime, type RouteInfo } from "./route-service.js";
 import { withMenu } from "./message-utils.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -59,7 +59,8 @@ const FLOW_CLARIFICATION = "CLARIFICATION";
 
 const STEP_WAITING_FOR_START_LOCATION = "WAITING_FOR_START_LOCATION";
 const STEP_WAITING_FOR_DESTINATION = "WAITING_FOR_DESTINATION";
-const STEP_WAITING_FOR_ETA = "WAITING_FOR_ETA";
+const STEP_WAITING_FOR_ETA = "WAITING_FOR_ETA"; // kept for backward compat with in-flight conversations
+const STEP_WAITING_FOR_DEPARTURE = "WAITING_FOR_DEPARTURE";
 
 const FLOW_CHECKIN = "CHECKIN";
 const STEP_WAITING_FOR_NEW_ETA = "WAITING_FOR_NEW_ETA";
@@ -253,9 +254,11 @@ async function createTrip(
   body: string,
   messageSid: string | null,
   log: MenuContext["log"],
+  routeInfo?: RouteInfo | null,
 ): Promise<void> {
   const title = `${startLocation} → ${destination}`;
-  const etaNote = eta ? ` ETA ${eta}.` : "";
+  const effectiveEta = eta ?? routeInfo?.etaTime ?? null;
+  const etaNote = effectiveEta ? ` ETA ${effectiveEta}.` : "";
   const ts = nowUtc();
 
   const closedTrips = await db
@@ -283,16 +286,47 @@ async function createTrip(
       status: "green",
       evidenceNotes: initialNote,
       inferenceNotes: `Trip started via menu flow.${etaNote}`,
-      originalMemberEta: eta ? normaliseEta(eta) : null,
+      originalMemberEta: effectiveEta ? normaliseEta(effectiveEta) : null,
       currentRouteConfidence: "green",
+      ...(routeInfo
+        ? {
+            startLat: routeInfo.startCoords.lat,
+            startLon: routeInfo.startCoords.lon,
+            destLat: routeInfo.destCoords.lat,
+            destLon: routeInfo.destCoords.lon,
+            routePolyline: routeInfo.polylineGeoJson,
+            routeEtaMinutes: routeInfo.durationMinutes,
+            routeEtaTime: routeInfo.etaTime,
+            checkpointList: JSON.stringify(routeInfo.checkpoints),
+          }
+        : {}),
     })
     .returning();
 
-  void enrichTripWithRoute(newTrip.id, startLocation, destination, log);
+  // Only run async enrichment if we didn't already calculate the route
+  if (!routeInfo) {
+    void enrichTripWithRoute(newTrip.id, startLocation, destination, log);
+  }
 
   await saveMessage(from, to, body, messageSid, newTrip.id);
 
   const name = member?.displayName ?? from;
+
+  // Build checkpoint lines for confirmation message
+  const checkpointLines: string[] = [];
+  if (routeInfo && routeInfo.checkpoints.length > 0) {
+    checkpointLines.push(``, `Checkpoints:`);
+    for (const cp of routeInfo.checkpoints) {
+      const cpTime = minutesToSastTime(cp.minutesFromStart);
+      checkpointLines.push(`• ${cp.label} — expected ${cpTime}`);
+    }
+  }
+
+  // Duration display
+  const durationText = routeInfo
+    ? ` (approx. ${Math.floor(routeInfo.durationMinutes / 60)}h ${routeInfo.durationMinutes % 60}min)`
+    : "";
+
   await sendWhatsApp(
     from,
     to,
@@ -300,8 +334,9 @@ async function createTrip(
       `${name}, your Cyber Chaperone trip is active.`,
       ``,
       `Route: ${startLocation} → ${destination}`,
-      eta ? `ETA: ${normaliseEta(eta)}` : null,
+      effectiveEta ? `ETA: ${normaliseEta(effectiveEta)}${durationText}` : null,
       `Status: GREEN`,
+      ...checkpointLines,
       ``,
       `For stronger backup, you can also share:`,
       ``,
@@ -318,7 +353,7 @@ async function createTrip(
   );
 
   log.info(
-    { tripId: newTrip.id, title, startLocation, destination, eta, isKnownMember: member?.isKnown ?? false },
+    { tripId: newTrip.id, title, startLocation, destination, eta: effectiveEta, isKnownMember: member?.isKnown ?? false },
     "New trip created from menu flow",
   );
 
@@ -332,15 +367,16 @@ async function createTrip(
       `Trip: ${title}${etaNote}`,
       `Trip ID: ${newTrip.id}`,
       `Status: GREEN`,
+      routeInfo ? `Route duration: ${Math.floor(routeInfo.durationMinutes / 60)}h ${routeInfo.durationMinutes % 60}min` : null,
       ``,
       `Location layers:`,
       `1. Situation Room trip monitor: ACTIVE`,
       `2. WhatsApp live location backup: PENDING`,
       `3. Waze / Google Maps route link: PENDING`,
       ``,
-      `ETA bullseye: ${eta ?? "not set"}`,
+      `ETA bullseye: ${effectiveEta ?? "not set"}`,
       `Next action: Monitor route and checkpoint behaviour.`,
-    ].join("\n"),
+    ].filter((l) => l !== null).join("\n"),
   );
 
   await resetConvState(from);
@@ -1102,9 +1138,20 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
 
   if (step === STEP_WAITING_FOR_START_LOCATION) {
     const hasPin = latitude !== "" && longitude !== "";
-    const startLocation = hasPin
-      ? ([label, address].filter(Boolean).join(", ") || `${latitude},${longitude}`)
-      : body.trim();
+    let startLocation: string;
+
+    if (hasPin) {
+      const twilioName = [label, address].filter(Boolean).join(", ");
+      if (twilioName) {
+        startLocation = twilioName;
+      } else {
+        // Twilio gave no label — reverse geocode the coordinates
+        const geocoded = await reverseGeocodeCoords(latitude, longitude);
+        startLocation = geocoded ?? `${latitude},${longitude}`;
+      }
+    } else {
+      startLocation = body.trim();
+    }
 
     const updatedPending: PendingTripData = {
       ...pending,
@@ -1121,7 +1168,7 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
     await sendWhatsApp(
       from,
       to,
-      `Got it — I have your starting location.\n\nWhere are you heading to?\n\nReply 0 for Main Menu.`,
+      `Got it — I have your starting location: ${startLocation}.\n\nWhere are you heading to?\n\nReply 0 for Main Menu.`,
     );
     log.info({ from, startLocation }, "Trip flow: start location collected");
     return;
@@ -1132,18 +1179,56 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
     const updatedPending: PendingTripData = { ...pending, destination };
     await setConvState(from, {
       currentFlow: FLOW_TRIP_FLOW,
-      currentStep: STEP_WAITING_FOR_ETA,
+      currentStep: STEP_WAITING_FOR_DEPARTURE,
       pendingTripData: updatedPending,
     });
     await sendWhatsApp(
       from,
       to,
-      `Got it — your destination is ${destination}.\n\nPlease send your ETA.\n\nExample:\nETA 23:30\n\nReply 0 for Main Menu.`,
+      `Got it — your destination is ${destination}.\n\nAre you leaving now?\n\nReply YES to start the trip.\nOr send your departure time (e.g. 14:30).\n\nReply 0 for Main Menu.`,
     );
     log.info({ from, destination }, "Trip flow: destination collected");
     return;
   }
 
+  if (step === STEP_WAITING_FOR_DEPARTURE) {
+    const trimmed = body.trim();
+    const isLeavingNow = /^(yes|y|ja|ok|okay|now|leaving|leaving now)$/i.test(trimmed);
+    const timeMatch = trimmed.match(/^(?:ETA\s+)?(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)$/i);
+
+    if (!isLeavingNow && !timeMatch) {
+      await sendWhatsApp(
+        from,
+        to,
+        `Please reply YES if you are leaving now, or send your departure time (e.g. 14:30).\n\nReply 0 for Main Menu.`,
+      );
+      return;
+    }
+
+    const { startLocation, destination, startLat, startLon } = pending;
+    if (!startLocation || !destination) {
+      await resetConvState(from);
+      await sendWhatsApp(from, to, `Something went wrong collecting your trip details. Please start again.\n\nReply 0 for Main Menu.`);
+      return;
+    }
+
+    // Calculate route synchronously so ETA and checkpoints appear in confirmation
+    const routeInfo = await calculateRouteInfo(
+      startLocation,
+      destination,
+      startLat && startLon ? { lat: startLat, lon: startLon } : undefined,
+    );
+
+    // If member gave a specific time use it; if YES use route ETA
+    const statedEta = isLeavingNow ? null : (timeMatch?.[1] ?? null);
+    const eta = statedEta ?? routeInfo?.etaTime ?? null;
+
+    log.info({ from, pendingData: pending, eta, routeAvailable: !!routeInfo }, "Trip flow: departure confirmed — creating trip");
+    await createTrip(from, to, member, startLocation, destination, eta, body, messageSid, log, routeInfo);
+    return;
+  }
+
+  // STEP_WAITING_FOR_ETA — legacy fallback for in-flight conversations
   if (step === STEP_WAITING_FOR_ETA) {
     const eta = body.trim();
     const updatedPending: PendingTripData = { ...pending, eta };
@@ -1154,7 +1239,7 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
       return;
     }
 
-    log.info({ from, pendingTripData: updatedPending }, "Trip flow: all fields collected — creating trip");
+    log.info({ from, pendingTripData: updatedPending }, "Trip flow: all fields collected (legacy ETA step) — creating trip");
     await createTrip(
       from, to, member,
       updatedPending.startLocation,
