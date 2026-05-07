@@ -76,6 +76,64 @@ export async function reverseGeocodeCoords(lat: string, lon: string): Promise<st
   }
 }
 
+// ── Polyline sampling ─────────────────────────────────────────────────────────
+
+/**
+ * Linearly interpolates along a GeoJSON LineString and returns [lon, lat]
+ * at the given fraction (0–1) of the total route distance.
+ */
+function samplePolylineAtFraction(coords: number[][], fraction: number): [number, number] {
+  if (coords.length === 0) return [0, 0];
+  if (fraction <= 0) return coords[0] as [number, number];
+  if (fraction >= 1) return coords[coords.length - 1] as [number, number];
+
+  // Calculate cumulative segment lengths
+  const lengths: number[] = [0];
+  for (let i = 1; i < coords.length; i++) {
+    const dx = coords[i][0] - coords[i - 1][0];
+    const dy = coords[i][1] - coords[i - 1][1];
+    lengths.push(lengths[i - 1] + Math.sqrt(dx * dx + dy * dy));
+  }
+  const total = lengths[lengths.length - 1];
+  const target = fraction * total;
+
+  for (let i = 1; i < lengths.length; i++) {
+    if (lengths[i] >= target) {
+      const segFraction = (target - lengths[i - 1]) / (lengths[i] - lengths[i - 1]);
+      const lon = coords[i - 1][0] + segFraction * (coords[i][0] - coords[i - 1][0]);
+      const lat = coords[i - 1][1] + segFraction * (coords[i][1] - coords[i - 1][1]);
+      return [lon, lat];
+    }
+  }
+  return coords[coords.length - 1] as [number, number];
+}
+
+/**
+ * For checkpoints that are not PRE_ARRIVAL, reverse geocode the polyline point
+ * at their fraction to produce a real town name label.
+ */
+async function labelCheckpointsWithTowns(
+  checkpoints: Checkpoint[],
+  polylineGeoJson: string,
+): Promise<Checkpoint[]> {
+  let coords: number[][] = [];
+  try {
+    const geo = JSON.parse(polylineGeoJson) as { coordinates: number[][] };
+    coords = geo.coordinates;
+  } catch {
+    return checkpoints;
+  }
+
+  return Promise.all(
+    checkpoints.map(async (cp) => {
+      if (cp.label === "PRE_ARRIVAL") return cp;
+      const [lon, lat] = samplePolylineAtFraction(coords, cp.fraction);
+      const town = await reverseGeocodeCoords(String(lat), String(lon));
+      return { ...cp, label: town ?? cp.label };
+    }),
+  );
+}
+
 function buildCheckpoints(durationMinutes: number): Checkpoint[] {
   if (durationMinutes <= 15) return [];
   if (durationMinutes <= 45) {
@@ -159,7 +217,8 @@ export async function calculateRouteInfo(
     if (!startCoords || !destCoords) return null;
     const osrm = await getOsrmRoute(startCoords.lat, startCoords.lon, destCoords.lat, destCoords.lon);
     if (!osrm) return null;
-    const checkpoints = buildCheckpoints(osrm.durationMinutes);
+    const rawCheckpoints = buildCheckpoints(osrm.durationMinutes);
+    const checkpoints = await labelCheckpointsWithTowns(rawCheckpoints, osrm.polylineGeoJson);
     const etaTime = minutesToSastTime(osrm.durationMinutes);
     return {
       durationMinutes: osrm.durationMinutes,
