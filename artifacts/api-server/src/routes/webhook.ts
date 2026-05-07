@@ -6,6 +6,7 @@ import { assessRisk } from "./ai.js";
 import { handleMenuRouter } from "../menu-router.js";
 import { withMenu } from "../message-utils.js";
 import { sendOperatorEmail, type EmailCategory } from "../email-service.js";
+import { reverseGeocodeStreetAddress } from "../route-service.js";
 
 const router: IRouter = Router();
 
@@ -701,7 +702,8 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
 
         if (hasNativeLocation) {
           const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
-          const humanAddress = [label, address].filter(Boolean).join(", ") || "Address unavailable — use map link";
+          const twilioAddress = [label, address].filter(Boolean).join(", ");
+          const humanAddress = twilioAddress || await reverseGeocodeStreetAddress(latitude, longitude) || "Address unavailable — use map link";
           const noteEntry = `[${ts}] LOCATION received: ${humanAddress} (${latitude},${longitude})`;
           const note = appendNote(activeTrip.evidenceNotes, noteEntry);
           const routeNote = "Location received. Route calculation unavailable. Quiet monitor using member ETA.";
