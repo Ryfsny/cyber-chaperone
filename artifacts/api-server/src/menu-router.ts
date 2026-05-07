@@ -107,6 +107,14 @@ function nowUtc(): string {
   return new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
 }
 
+function etaMinusOneHour(etaTime: string): string | null {
+  const match = etaTime.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const h = ((parseInt(match[1], 10) - 1) + 24) % 24;
+  const m = parseInt(match[2], 10);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 function excerpt(body: string, maxLen = 80): string {
   const clean = body.replace(/\s+/g, " ").trim();
   return clean.length > maxLen ? clean.slice(0, maxLen) + "…" : clean;
@@ -322,45 +330,17 @@ async function createTrip(
 
   const name = member?.displayName ?? from;
 
-  // Build checkpoint lines for confirmation message
-  const checkpointLines: string[] = [];
-  if (routeInfo && routeInfo.checkpoints.length > 0) {
-    checkpointLines.push(``, `Checkpoints:`);
-    for (const cp of routeInfo.checkpoints) {
-      const cpTime = minutesToSastTime(cp.minutesFromStart);
-      checkpointLines.push(`• ${cp.label} — expected ${cpTime}`);
-    }
-  }
-
-  // Duration display
-  const durationText = routeInfo
-    ? ` (approx. ${Math.floor(routeInfo.durationMinutes / 60)}h ${routeInfo.durationMinutes % 60}min)`
-    : "";
+  const normEta = effectiveEta ? normaliseEta(effectiveEta) : null;
+  const nextCheckin = normEta ? etaMinusOneHour(normEta) : null;
+  const checkinLine = nextCheckin ? ` Your next check-in is at ${nextCheckin}.` : "";
 
   await sendWhatsApp(
     from,
     to,
-    [
-      `${name}, your Cyber Chaperone trip is active.`,
-      ``,
-      `Route: ${startLocation} → ${destination}`,
-      effectiveEta ? `ETA: ${normaliseEta(effectiveEta)}${durationText}` : null,
-      `Status: GREEN`,
-      ...checkpointLines,
-      ``,
-      `For stronger backup, you can also share:`,
-      ``,
-      `1. Your WhatsApp live location to the Situation Room`,
-      `2. Your Waze / Google Maps route link`,
-      `3. Updates if your ETA changes`,
-      ``,
-      `We are monitoring your journey.`,
-      ``,
-      `Reply 4 when you arrive.`,
-      `Reply 5 if you need help.`,
-      `Reply 0 for Main Menu.`,
-    ].filter((l) => l !== null).join("\n"),
+    `✅ Your trip is active. Trip ID: ${newTrip.id}.${checkinLine} Reply STOP at any time to end your trip.`,
   );
+
+  await sendWhatsApp(from, to, mainMenuText(name, member));
 
   log.info(
     { tripId: newTrip.id, title, startLocation, destination, eta: effectiveEta, isKnownMember: member?.isKnown ?? false },
@@ -1921,7 +1901,38 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     return { handled: true };
   }
 
-  // 2. PRIORITY: Arrival — always handled second
+  // 2a. STOP — member ending their trip explicitly
+  if (/^stop$/i.test(trimmed)) {
+    const activeTrip = await findActiveTrip(from);
+    const name = member?.displayName ?? from;
+    const ts = nowUtc();
+    if (activeTrip) {
+      await db
+        .update(tripsTable)
+        .set({
+          status: "completed",
+          evidenceNotes: appendNote(activeTrip.evidenceNotes, `[${ts}] TRIP ENDED: Member sent STOP.`),
+          nextAction: "Trip closed by member.",
+        })
+        .where(eq(tripsTable.id, activeTrip.id));
+      await sendWhatsApp(from, to, `Your trip has been ended. Stay safe, ${name}.\n\nReply 0 for Main Menu.`);
+      await sendOperatorMirror(to, [
+        `CYBER CHAPERONE — TRIP ENDED (STOP)`,
+        `Member: ${name}`,
+        `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+        `Status: COMPLETED`,
+        `Reason: Member sent STOP.`,
+      ].join("\n"), "arrival", "arrived");
+    } else {
+      await sendWhatsApp(from, to, `No active trip to end.\n\nReply 0 for Main Menu.`);
+    }
+    await saveMessage(from, to, body, messageSid, activeTrip?.id ?? null);
+    await resetConvState(from);
+    log.info({ from, handler: "STOP" }, "menu-router: STOP handler");
+    return { handled: true };
+  }
+
+  // 2b. PRIORITY: Arrival — always handled second
   if (isArrival(trimmed)) {
     const activeTrip = await findActiveTrip(from);
     await handleArrival(ctx, activeTrip);
