@@ -7,6 +7,7 @@ import { handleMenuRouter } from "../menu-router.js";
 import { withMenu } from "../message-utils.js";
 import { sendOperatorEmail, type EmailCategory } from "../email-service.js";
 import { reverseGeocodeStreetAddress } from "../route-service.js";
+import { isVoiceNote, downloadTwilioMedia, transcribeVoiceNote } from "../voice-service.js";
 
 const router: IRouter = Router();
 
@@ -338,7 +339,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
     return;
   }
 
-  const body = req.body?.Body ?? "";
+  let body = req.body?.Body ?? "";
   const from = normaliseFrom(req.body?.From ?? "");
   const to = req.body?.To ?? "";
   const messageSid = req.body?.MessageSid ?? null;
@@ -348,7 +349,30 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
   const address: string = req.body?.Address ?? "";
   const label: string = req.body?.Label ?? "";
 
-  req.log.info({ from, messageSid: messageSid ? "[redacted]" : null }, "Incoming WhatsApp message");
+  // ── Voice note transcription ──────────────────────────────────────────────
+  const numMedia = Number(req.body?.NumMedia ?? "0");
+  const mediaUrl: string = req.body?.MediaUrl0 ?? "";
+  const mediaContentType: string = req.body?.MediaContentType0 ?? "";
+  let voiceTranscribed = false;
+
+  if (body === "" && isVoiceNote(numMedia, mediaContentType) && mediaUrl) {
+    try {
+      const { buffer, contentType } = await downloadTwilioMedia(mediaUrl);
+      const transcription = await transcribeVoiceNote(buffer, contentType);
+      if (transcription) {
+        body = transcription;
+        voiceTranscribed = true;
+        req.log.info({ from, transcription: transcription.slice(0, 200) }, "Voice note transcribed");
+      }
+    } catch (err) {
+      req.log.error({ err }, "Voice note transcription failed — continuing with empty body");
+    }
+  }
+
+  req.log.info(
+    { from, messageSid: messageSid ? "[redacted]" : null, voiceTranscribed },
+    "Incoming WhatsApp message",
+  );
 
   try {
     // ── Member lookup — runs on every inbound message ───────────────────────
