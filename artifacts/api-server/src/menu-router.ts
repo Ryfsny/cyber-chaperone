@@ -1239,14 +1239,11 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
     let startLocation: string;
 
     if (hasPin) {
+      // Always prefer Nominatim reverse geocode (road-level accuracy) over Twilio's
+      // suburb-only label, falling back to Twilio then raw coords if all else fails.
+      const geocoded = await reverseGeocodeStreetAddress(latitude, longitude);
       const twilioName = [label, address].filter(Boolean).join(", ");
-      if (twilioName) {
-        startLocation = twilioName;
-      } else {
-        // Twilio gave no label — reverse geocode to full street address
-        const geocoded = await reverseGeocodeStreetAddress(latitude, longitude);
-        startLocation = geocoded ?? `${latitude},${longitude}`;
-      }
+      startLocation = (geocoded ?? twilioName) || `${latitude},${longitude}`;
     } else {
       startLocation = body.trim();
     }
