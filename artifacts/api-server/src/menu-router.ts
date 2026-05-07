@@ -25,6 +25,7 @@ interface PendingTripData {
   clarificationActiveTripId?: number;
   clarificationNewDestination?: string;
   clarificationOriginalMessage?: string;
+  isPreArrival?: boolean;
 }
 
 interface ConvState {
@@ -399,15 +400,15 @@ function checkinText(
       `${name}, Cyber Chaperone.`,
       ``,
       `You should be arriving at ${destination} soon.`,
+      `We have one job — to get you there safely.`,
       ``,
-      `We have one job — to get you there safely. You are almost done.`,
+      `Please reply:`,
       ``,
-      `Please reply YES when you arrive so we can close your trip.`,
-      ``,
-      `Or reply:`,
+      `1. I have arrived ✅`,
       `2. I am delayed`,
-      `3. My ETA changed`,
-      `5. I need help`,
+      `3. I need help 🆘`,
+      ``,
+      `Reply 0 for Main Menu.`,
     ].join("\n");
   }
 
@@ -416,18 +417,18 @@ function checkinText(
       `${name}, Cyber Chaperone check-in.`,
       ``,
       `You are ${driftMin} minute${driftMin === 1 ? "" : "s"} past your expected arrival at ${destination}.`,
-      ``,
       `We don't want to disturb you — we just need to know you are okay.`,
-      `Our one job is to get you to your destination safely.`,
       ``,
-      `Reply YES if all is good.`,
+      `Please reply:`,
       ``,
-      `Or reply:`,
+      `1. I am okay ✅`,
       `2. I am delayed`,
-      `3. My ETA changed`,
+      `3. My ETA has changed`,
       `4. I have stopped`,
-      `5. I need help`,
-      `6. Send my location pin`,
+      `5. I need help 🆘`,
+      `6. Send my location pin 📍`,
+      ``,
+      `Reply 0 for Main Menu.`,
     ].join("\n");
   }
 
@@ -438,14 +439,16 @@ function checkinText(
     `We don't want to disturb you — this is just a checkpoint on your route to ${destination}.`,
     `Our one job is to get you there safely.`,
     ``,
-    `Reply YES if all is good.`,
+    `Please reply:`,
     ``,
-    `Or reply:`,
+    `1. I am okay ✅`,
     `2. I am delayed`,
-    `3. My ETA changed`,
+    `3. My ETA has changed`,
     `4. I have stopped`,
-    `5. I need help`,
-    `6. Send my location pin`,
+    `5. I need help 🆘`,
+    `6. Send my location pin 📍`,
+    ``,
+    `Reply 0 for Main Menu.`,
   ].join("\n");
 }
 
@@ -515,7 +518,69 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
     return;
   }
 
-  const isOkay = choice === "1" || /^(yes|y|ja|ok|okay|fine|good|all good)$/i.test(choice);
+  // Pre-arrival checkpoint: 1 = arrived, 2 = delayed, 3 = help
+  if (pending.isPreArrival) {
+    if (choice === "1") {
+      // Member arrived — close trip
+      if (trip) {
+        await db
+          .update(tripsTable)
+          .set({
+            status: "completed",
+            currentRouteConfidence: "green",
+            lastMemberCheckinTime: new Date(),
+            evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] ARRIVED: Member confirmed arrival at destination.`),
+            nextAction: "Trip completed.",
+          })
+          .where(eq(tripsTable.id, trip.id));
+      }
+      await resetConvState(from);
+      await sendWhatsApp(from, to, `${name}, you have arrived safely. Your Cyber Chaperone trip is now closed.\n\nThank you for travelling with us. Stay safe.`);
+      log.info({ from, tripId: trip?.id }, "Pre-arrival: member confirmed arrived — trip closed");
+      if (trip) {
+        await sendOperatorMirror(to, [
+          `CYBER CHAPERONE — TRIP COMPLETED`,
+          `Member: ${name}`,
+          `Trip: ${trip.title} (ID: ${trip.id})`,
+          `Status: COMPLETED`,
+          `Member confirmed: arrived at destination.`,
+        ].join("\n"));
+      }
+      return;
+    }
+    if (choice === "2") {
+      if (trip) {
+        await db.update(tripsTable).set({ status: "amber", currentRouteConfidence: "amber" }).where(eq(tripsTable.id, trip.id));
+      }
+      await setConvState(from, { currentFlow: FLOW_CHECKIN, currentStep: STEP_WAITING_FOR_NEW_ETA, pendingTripData: pending });
+      await sendWhatsApp(from, to, `Understood — you are delayed.\n\nPlease send your new ETA (e.g. 18:30).\n\nReply 0 for Main Menu.`);
+      return;
+    }
+    if (choice === "3") {
+      if (trip) {
+        await db.update(tripsTable).set({ status: "red", nextAction: "Immediate human review." }).where(eq(tripsTable.id, trip.id));
+      }
+      await resetConvState(from);
+      await sendWhatsApp(from, to, `${name}, I have alerted the Situation Room. Help is on the way.\n\nReply 0 for Main Menu.`);
+      if (trip) {
+        await sendOperatorMirror(to, [
+          `🚨 CYBER CHAPERONE — RED (PRE-ARRIVAL HELP)`,
+          `Member: ${name}`,
+          `Trip: ${trip.title} (ID: ${trip.id})`,
+          `Status: RED`,
+          `Triggered: Member pressed help at pre-arrival checkpoint.`,
+          `Next action: Immediate human review required.`,
+        ].join("\n"));
+      }
+      return;
+    }
+    // Unrecognised — re-send pre-arrival menu
+    if (trip) await sendCheckinPrompt(ctx, trip, 0, "PRE_ARRIVAL");
+    return;
+  }
+
+  // Regular checkpoint / ETA drift: 1 = okay
+  const isOkay = choice === "1";
   if (isOkay) {
     if (trip) {
       await db
@@ -1921,7 +1986,10 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
           await setConvState(from, {
             currentFlow: FLOW_CHECKIN,
             currentStep: null,
-            pendingTripData: { clarificationActiveTripId: activeTrip.id },
+            pendingTripData: {
+              clarificationActiveTripId: activeTrip.id,
+              isPreArrival: cp.label === "PRE_ARRIVAL",
+            },
           });
           await saveMessage(from, to, body, messageSid, activeTrip.id);
           log.info({ from, checkpoint: cp.label, tripId: activeTrip.id }, "Route checkpoint check-in sent");
