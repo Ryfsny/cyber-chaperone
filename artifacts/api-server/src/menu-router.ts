@@ -387,16 +387,15 @@ function checkinText(
 
   if (isPreArrival) {
     return [
-      `${name}, Cyber Chaperone.`,
+      `${name} 👋 Cyber Chaperone here.`,
       ``,
-      `You should be arriving at ${destination} soon.`,
-      `We have one job — to get you there safely.`,
+      `You should be getting close to ${destination} now. You've done great — almost there!`,
       ``,
       `Please reply:`,
       ``,
-      `1. I have arrived ✅`,
-      `2. I am delayed`,
-      `3. I need help 🆘`,
+      `1. ✅ I have arrived safely`,
+      `2. 🕐 I am delayed`,
+      `3. 🆘 I need help`,
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n");
@@ -404,19 +403,19 @@ function checkinText(
 
   if (isEtaDrift) {
     return [
-      `${name}, Cyber Chaperone check-in.`,
+      `${name} 👋 Cyber Chaperone check-in.`,
       ``,
-      `You are ${driftMin} minute${driftMin === 1 ? "" : "s"} past your expected arrival at ${destination}.`,
-      `We don't want to disturb you — we just need to know you are okay.`,
+      `You are ${driftMin} minute${driftMin === 1 ? "" : "s"} past your ETA for ${destination}.`,
+      `No stress — just let us know you are okay and we will update your trip.`,
       ``,
       `Please reply:`,
       ``,
-      `1. I am okay ✅`,
-      `2. I am delayed`,
-      `3. My ETA has changed`,
-      `4. I have stopped`,
-      `5. I need help 🆘`,
-      `6. Send my location pin 📍`,
+      `1. ✅ I am okay`,
+      `2. 🕐 I am delayed`,
+      `3. 🕒 My ETA has changed`,
+      `4. 🛑 I have stopped`,
+      `5. 🆘 I need help`,
+      `6. 📍 Send my location pin`,
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n");
@@ -424,19 +423,18 @@ function checkinText(
 
   // Named checkpoint (First checkpoint, Second checkpoint, Midpoint)
   return [
-    `${name}, Cyber Chaperone checkpoint.`,
+    `${name} 👋 Cyber Chaperone — ${checkpointLabel}.`,
     ``,
-    `We don't want to disturb you — this is just a checkpoint on your route to ${destination}.`,
-    `Our one job is to get you there safely.`,
+    `You are on your way to ${destination}. We've got your back. Just a quick check-in.`,
     ``,
     `Please reply:`,
     ``,
-    `1. I am okay ✅`,
-    `2. I am delayed`,
-    `3. My ETA has changed`,
-    `4. I have stopped`,
-    `5. I need help 🆘`,
-    `6. Send my location pin 📍`,
+    `1. ✅ I am okay`,
+    `2. 🕐 I am delayed`,
+    `3. 🕒 My ETA has changed`,
+    `4. 🛑 I have stopped`,
+    `5. 🆘 I need help`,
+    `6. 📍 Send my location pin`,
     ``,
     `Reply 0 for Main Menu.`,
   ].join("\n");
@@ -648,14 +646,14 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
     }
     await resetConvState(from);
     await sendWhatsApp(from, to, [
-      `${name}, I have marked this for immediate human review.`,
+      `${name}, we are on it. 🆘`,
       ``,
-      `The Situation Room has been notified.`,
+      `Andre has been notified and the Situation Room is on alert. You are not alone.`,
       ``,
       `Please reply with one number:`,
       ``,
-      `1. I am in danger`,
-      `2. I have broken down`,
+      `1. 🚨 I am in danger`,
+      `2. 🚗 I have broken down`,
       `3. I am lost`,
       `4. Medical issue`,
       `5. Call me`,
@@ -705,22 +703,22 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
     member?.membershipTier ?? null,
   );
   return [
-    `Hi ${name}, I'm AI Arnie, Andre Snyman's digital wingman.`,
+    `Hi ${name} 👋 I'm AI Arnie — Andre's digital safety sidekick at eblockwatch.`,
     ``,
     statusLine,
-    `We are here to make you safer.`,
+    `We are here to keep you and your family safer. What can I help you with today?`,
     ``,
     `1. What is eblockwatch?`,
-    `2. Membership Options`,
+    `2. Membership options`,
     `3. Activate my membership`,
     `4. Update my profile`,
-    `5. Travel with Cyber Chaperone`,
-    `6. eblockshop — safer products to make you safer`,
-    `7. Request contact from a human`,
+    `5. Travel with Cyber Chaperone 🛡️`,
+    `6. eblockshop — safer products for you`,
+    `7. Speak to a human`,
     ``,
-    `URGENT? Reply 10 for immediate human review.`,
+    `🚨 URGENT? Reply 10 — we will get a human on it right away.`,
     ``,
-    `Reply with the number of your choice. Reply 0 for Main Menu.`,
+    `Reply with a number to choose.`,
   ].join("\n");
 }
 
@@ -862,15 +860,15 @@ async function handleMembershipChoice(ctx: MenuContext): Promise<void> {
 
 function ccMenuText(name: string): string {
   return [
-    `${name}, Cyber Chaperone is your travel support link into eblockwatch.`,
+    `${name}, you are in Cyber Chaperone. 🛡️`,
     ``,
-    `What do you want to do?`,
+    `We've got your back. What do you need?`,
     ``,
     `1. Start a new trip`,
     `2. Update my current trip`,
     `3. Change my destination`,
-    `4. I have arrived`,
-    `5. I need help`,
+    `4. I have arrived safely ✅`,
+    `5. I need help 🆘`,
     `6. How Cyber Chaperone works`,
     `7. Speak to Andre`,
     ``,
@@ -880,9 +878,11 @@ function ccMenuText(name: string): string {
 
 function askForLocationText(name: string): string {
   return [
-    `${name}, let's start your trip.`,
+    `${name}, let's get you covered. 🛡️`,
     ``,
-    `Please send your current location pin 📍.`,
+    `Please send your current location pin 📍`,
+    ``,
+    `(Tap the 📎 clip → Location → Send Your Current Location)`,
     ``,
     `Reply 0 for Main Menu.`,
   ].join("\n");
@@ -890,13 +890,15 @@ function askForLocationText(name: string): string {
 
 function ccInfoText(name: string): string {
   return [
-    `${name}, here's how Cyber Chaperone works:`,
+    `${name}, here is how Cyber Chaperone works:`,
     ``,
-    `1. You start a trip by sending your location and destination.`,
-    `2. We monitor your journey and the Situation Room watches over you.`,
-    `3. Send updates along the way — delays, ETA changes, or your location pin.`,
-    `4. When you arrive, send ARRIVED and we close the trip.`,
-    `5. If you need help, send HELP or reply 5 from the Cyber Chaperone menu.`,
+    `🟢 Start — drop your pin and tell us where you are heading.`,
+    `🔵 Monitor — we watch your route. No news is good news.`,
+    `📍 Check-ins — we send gentle check-ins along the way.`,
+    `✅ Arrive — send ARRIVED or STOP and your trip is closed.`,
+    `🆘 Emergency — send HELP and we escalate immediately.`,
+    ``,
+    `Andre is watching. You are not alone on the road.`,
     ``,
     `Reply 0 for Main Menu.`,
   ].join("\n");
@@ -933,14 +935,14 @@ async function handleDistress(ctx: MenuContext, activeTrip: Awaited<ReturnType<t
   }
 
   await sendWhatsApp(from, to, [
-    `${memberLabel}, I have marked this for immediate human review.`,
+    `${memberLabel}, we are on it. 🆘`,
     ``,
-    `The Situation Room has been notified.`,
+    `Andre has been notified and the Situation Room is on alert. You are not alone.`,
     ``,
     `Please reply with one number:`,
     ``,
-    `1. I am in danger`,
-    `2. I have broken down`,
+    `1. 🚨 I am in danger`,
+    `2. 🚗 I have broken down`,
     `3. I am lost`,
     `4. Medical issue`,
     `5. Call me`,
@@ -987,11 +989,9 @@ async function handleArrival(ctx: MenuContext, activeTrip: Awaited<ReturnType<ty
   await resetConvState(from);
 
   await sendWhatsApp(from, to, [
-    `${memberLabel}, confirmed.`,
+    `${memberLabel}, welcome home. 🏡`,
     ``,
-    `Your trip has been closed as arrived safely.`,
-    ``,
-    `Status: COMPLETED`,
+    `Your trip is closed. You travelled safely and Andre is glad you made it.`,
     ``,
     `Reply 0 for Main Menu.`,
   ].join("\n"));
@@ -1038,17 +1038,17 @@ async function handleAmbiguousDestination(
     from,
     to,
     [
-      `${memberLabel}, I need to confirm what you mean.`,
+      `${memberLabel}, just a quick check. 🛡️`,
       ``,
-      `You already have an active trip:`,
+      `You have an active trip already:`,
       ``,
       `${activeTrip.title}`,
       ``,
-      `Your message says you are going to:`,
+      `Your message mentions:`,
       ``,
       `${newDestination}`,
       ``,
-      `What must I do?`,
+      `What would you like to do?`,
       ``,
       `1. Start a new trip`,
       `2. Change my current destination`,
@@ -1263,7 +1263,7 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
     await sendWhatsApp(
       from,
       to,
-      `Got it — I have your starting location: ${startLocation}.\n\nWhere are you heading to?\n\nReply 0 for Main Menu.`,
+      `Got it — starting from ${startLocation}. 📍\n\nWhere are you heading today?\n\nReply 0 for Main Menu.`,
     );
     log.info({ from, startLocation }, "Trip flow: start location collected");
     return;
@@ -1280,7 +1280,7 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
     await sendWhatsApp(
       from,
       to,
-      `Got it — your destination is ${destination}.\n\nAre you leaving now?\n\n1. Leave now\n2. Set a departure time\n\nReply 0 for Main Menu.`,
+      `Perfect — heading to ${destination}. 🗺️\n\nAre you leaving now?\n\n1. Leave now\n2. Set a departure time\n\nReply 0 for Main Menu.`,
     );
     log.info({ from, destination }, "Trip flow: destination collected");
     return;
@@ -1297,7 +1297,7 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
         currentStep: STEP_WAITING_FOR_DEPARTURE_TIME,
         pendingTripData: pending,
       });
-      await sendWhatsApp(from, to, `What time are you departing? (e.g. 14:30)\n\nReply 0 for Main Menu.`);
+      await sendWhatsApp(from, to, `What time are you planning to leave? (e.g. 14:30)\n\nReply 0 for Main Menu.`);
       return;
     }
 
@@ -1482,14 +1482,14 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
     }
     await resetConvState(from);
     await sendWhatsApp(from, to, [
-      `${name}, I have marked this for immediate human review.`,
+      `${name}, we are on it. 🆘`,
       ``,
-      `The Situation Room has been notified.`,
+      `Andre has been notified and the Situation Room is on alert. You are not alone.`,
       ``,
       `Please reply with one number:`,
       ``,
-      `1. I am in danger`,
-      `2. I have broken down`,
+      `1. 🚨 I am in danger`,
+      `2. 🚗 I have broken down`,
       `3. I am lost`,
       `4. Medical issue`,
       `5. Call me`,
@@ -1831,14 +1831,14 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
     }
     await resetConvState(from);
     await sendWhatsApp(from, to, [
-      `${name}, I have marked this for immediate human review.`,
+      `${name}, we are on it. 🆘`,
       ``,
-      `The Situation Room has been notified.`,
+      `Andre has been notified and the Situation Room is on alert. You are not alone.`,
       ``,
       `Please reply with one number:`,
       ``,
-      `1. I am in danger`,
-      `2. I have broken down`,
+      `1. 🚨 I am in danger`,
+      `2. 🚗 I have broken down`,
       `3. I am lost`,
       `4. Medical issue`,
       `5. Call me`,
