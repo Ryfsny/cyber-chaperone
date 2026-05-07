@@ -85,6 +85,11 @@ function buildCheckpoints(durationMinutes: number): Checkpoint[] {
         minutesFromStart: Math.round(durationMinutes * 0.5),
         fraction: 0.5,
       },
+      {
+        label: "PRE_ARRIVAL",
+        minutesFromStart: Math.round(durationMinutes * 0.88),
+        fraction: 0.88,
+      },
     ];
   }
   return [
@@ -97,6 +102,11 @@ function buildCheckpoints(durationMinutes: number): Checkpoint[] {
       label: "Second checkpoint",
       minutesFromStart: Math.round(durationMinutes * 0.67),
       fraction: 0.67,
+    },
+    {
+      label: "PRE_ARRIVAL",
+      minutesFromStart: Math.round(durationMinutes * 0.88),
+      fraction: 0.88,
     },
   ];
 }

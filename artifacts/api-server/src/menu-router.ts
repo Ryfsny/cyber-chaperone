@@ -384,27 +384,68 @@ async function createTrip(
 
 // ── Check-in text ─────────────────────────────────────────────────────────────
 
-function checkinText(name: string, driftMin: number, tripTitle: string, checkpointLabel?: string): string {
-  const prompt = checkpointLabel
-    ? `Route checkpoint — ${checkpointLabel}.`
-    : `Your ETA appears to have shifted — ${driftMin} minute${driftMin === 1 ? "" : "s"} past expected arrival.`;
+function checkinText(
+  name: string,
+  driftMin: number,
+  tripTitle: string,
+  destination: string,
+  checkpointLabel?: string,
+): string {
+  const isPreArrival = checkpointLabel === "PRE_ARRIVAL";
+  const isEtaDrift = !checkpointLabel;
+
+  if (isPreArrival) {
+    return [
+      `${name}, Cyber Chaperone.`,
+      ``,
+      `You should be arriving at ${destination} soon.`,
+      ``,
+      `We have one job — to get you there safely. You are almost done.`,
+      ``,
+      `Please reply YES when you arrive so we can close your trip.`,
+      ``,
+      `Or reply:`,
+      `2. I am delayed`,
+      `3. My ETA changed`,
+      `5. I need help`,
+    ].join("\n");
+  }
+
+  if (isEtaDrift) {
+    return [
+      `${name}, Cyber Chaperone check-in.`,
+      ``,
+      `You are ${driftMin} minute${driftMin === 1 ? "" : "s"} past your expected arrival at ${destination}.`,
+      ``,
+      `We don't want to disturb you — we just need to know you are okay.`,
+      `Our one job is to get you to your destination safely.`,
+      ``,
+      `Reply YES if all is good.`,
+      ``,
+      `Or reply:`,
+      `2. I am delayed`,
+      `3. My ETA changed`,
+      `4. I have stopped`,
+      `5. I need help`,
+      `6. Send my location pin`,
+    ].join("\n");
+  }
+
+  // Named checkpoint (First checkpoint, Second checkpoint, Midpoint)
   return [
-    `${name}, Cyber Chaperone check-in.`,
+    `${name}, Cyber Chaperone checkpoint.`,
     ``,
-    prompt,
+    `We don't want to disturb you — this is just a checkpoint on your route to ${destination}.`,
+    `Our one job is to get you there safely.`,
     ``,
-    `Trip: ${tripTitle}`,
+    `Reply YES if all is good.`,
     ``,
-    `Please reply:`,
-    ``,
-    `1. I am okay`,
+    `Or reply:`,
     `2. I am delayed`,
     `3. My ETA changed`,
     `4. I have stopped`,
     `5. I need help`,
-    `6. I will send my location pin`,
-    ``,
-    `Reply 0 for Main Menu.`,
+    `6. Send my location pin`,
   ].join("\n");
 }
 
@@ -415,7 +456,8 @@ async function sendCheckinPrompt(
   checkpointLabel?: string,
 ): Promise<void> {
   const name = ctx.member?.displayName ?? ctx.from;
-  await sendWhatsApp(ctx.from, ctx.to, checkinText(name, driftMin, trip.title, checkpointLabel));
+  const destination = trip.title.includes(" → ") ? trip.title.split(" → ").pop()! : trip.title;
+  await sendWhatsApp(ctx.from, ctx.to, checkinText(name, driftMin, trip.title, destination, checkpointLabel));
 }
 
 // ── Check-in flow handler ─────────────────────────────────────────────────────
@@ -473,7 +515,8 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
     return;
   }
 
-  if (choice === "1") {
+  const isOkay = choice === "1" || /^(yes|y|ja|ok|okay|fine|good|all good)$/i.test(choice);
+  if (isOkay) {
     if (trip) {
       await db
         .update(tripsTable)
@@ -488,7 +531,7 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
         .where(eq(tripsTable.id, trip.id));
     }
     await resetConvState(from);
-    await sendWhatsApp(from, to, `✅ Check-in confirmed. We are still monitoring your trip.\n\nReply 0 for Main Menu.`);
+    await sendWhatsApp(from, to, `Received. We are still watching over your journey.\n\nReply 0 for Main Menu.`);
     log.info({ from, tripId: trip?.id }, "Check-in: member okay");
     if (trip) {
       await sendOperatorMirror(to, [
@@ -496,7 +539,7 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
         `Member: ${name}`,
         `Trip: ${trip.title} (ID: ${trip.id})`,
         `Status: GREEN`,
-        `Member: I am okay.`,
+        `Member confirmed: okay.`,
       ].join("\n"));
     }
     return;
