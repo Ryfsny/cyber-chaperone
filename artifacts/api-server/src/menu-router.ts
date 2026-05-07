@@ -60,6 +60,7 @@ const FLOW_TRIP_FLOW = "TRIP_FLOW";
 const FLOW_CLARIFICATION = "CLARIFICATION";
 
 const STEP_WAITING_FOR_START_LOCATION = "WAITING_FOR_START_LOCATION";
+const STEP_WAITING_FOR_HOME_OVERRIDE = "WAITING_FOR_HOME_OVERRIDE";
 const STEP_WAITING_FOR_DESTINATION = "WAITING_FOR_DESTINATION";
 const STEP_WAITING_FOR_ETA = "WAITING_FOR_ETA"; // kept for backward compat with in-flight conversations
 const STEP_WAITING_FOR_DEPARTURE = "WAITING_FOR_DEPARTURE";
@@ -888,6 +889,29 @@ function askForLocationText(name: string): string {
   ].join("\n");
 }
 
+async function sendStartLocationPrompt(from: string, to: string, name: string): Promise<void> {
+  const [memberRow] = await db
+    .select({ homeAddress: membersTable.homeAddress })
+    .from(membersTable)
+    .where(eq(membersTable.whatsappNumber, from))
+    .limit(1);
+
+  if (memberRow?.homeAddress) {
+    await sendWhatsApp(from, to, [
+      `${name}, are you starting from Home 🏠?`,
+      ``,
+      `1. Yes — start from Home 🏠`,
+      `2. No — I am somewhere else`,
+      ``,
+      `Or share your location pin 📍 to start from a different place.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+  } else {
+    await sendWhatsApp(from, to, askForLocationText(name));
+  }
+}
+
 function ccInfoText(name: string): string {
   return [
     `${name}, here is how Cyber Chaperone works:`,
@@ -1105,13 +1129,13 @@ async function handleClarificationChoice(ctx: MenuContext, state: ConvState): Pr
   }
 
   if (choice === "1") {
-    // Start new trip — ask for location
+    // Start new trip — ask for location (home-aware)
     await setConvState(from, {
       currentFlow: FLOW_TRIP_FLOW,
       currentStep: STEP_WAITING_FOR_START_LOCATION,
       pendingTripData: {},
     });
-    await sendWhatsApp(from, to, askForLocationText(name));
+    await sendStartLocationPrompt(from, to, name);
     log.info({ from }, "Clarification: start new trip flow");
     return;
   }
@@ -1236,36 +1260,108 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
 
   if (step === STEP_WAITING_FOR_START_LOCATION) {
     const hasPin = latitude !== "" && longitude !== "";
-    let startLocation: string;
+    const choice = body.trim();
 
-    if (hasPin) {
-      // Always prefer Nominatim reverse geocode (road-level accuracy) over Twilio's
-      // suburb-only label, falling back to Twilio then raw coords if all else fails.
-      const geocoded = await reverseGeocodeStreetAddress(latitude, longitude);
-      const twilioName = [label, address].filter(Boolean).join(", ");
-      startLocation = (geocoded ?? twilioName) || `${latitude},${longitude}`;
-    } else {
-      startLocation = body.trim();
+    const [memberRow] = await db
+      .select({ homeLat: membersTable.homeLat, homeLon: membersTable.homeLon, homeAddress: membersTable.homeAddress })
+      .from(membersTable)
+      .where(eq(membersTable.whatsappNumber, from))
+      .limit(1);
+    const savedHome = memberRow?.homeAddress ? memberRow : null;
+
+    // ── Has saved home — numbered choice ──────────────────────────────────────
+    if (savedHome && !hasPin) {
+      if (choice === "1") {
+        const updatedPending: PendingTripData = {
+          ...pending,
+          startLocation: "Home 🏠",
+          startLat: savedHome.homeLat ?? undefined,
+          startLon: savedHome.homeLon ?? undefined,
+        };
+        await setConvState(from, { currentFlow: FLOW_TRIP_FLOW, currentStep: STEP_WAITING_FOR_DESTINATION, pendingTripData: updatedPending });
+        await sendWhatsApp(from, to, `Got it — starting from Home 🏠.\n\nWhere are you heading today?\n\nReply 0 for Main Menu.`);
+        log.info({ from }, "Trip flow: using saved home address");
+        return;
+      }
+      if (choice === "2") {
+        await setConvState(from, { currentFlow: FLOW_TRIP_FLOW, currentStep: STEP_WAITING_FOR_HOME_OVERRIDE, pendingTripData: pending });
+        await sendWhatsApp(from, to, [
+          `No problem — please share your current location pin 📍`,
+          ``,
+          `(Tap the 📎 clip → Location → Send Your Current Location)`,
+          ``,
+          `Reply 0 for Main Menu.`,
+        ].join("\n"));
+        return;
+      }
+      // Unrecognised text — re-show the home menu
+      await sendWhatsApp(from, to, [
+        `${name}, are you starting from Home 🏠?`,
+        ``,
+        `1. Yes — start from Home 🏠`,
+        `2. No — I am somewhere else`,
+        ``,
+        `Or share your location pin 📍 to start from a different place.`,
+        ``,
+        `Reply 0 for Main Menu.`,
+      ].join("\n"));
+      return;
     }
 
-    const updatedPending: PendingTripData = {
-      ...pending,
-      startLocation,
-      ...(hasPin ? { startLat: latitude, startLon: longitude } : {}),
-    };
+    // ── Has saved home — sent a pin (override) ────────────────────────────────
+    if (savedHome && hasPin) {
+      const geocoded = await reverseGeocodeStreetAddress(latitude, longitude);
+      const twilioName = [label, address].filter(Boolean).join(", ");
+      const startLocation = (geocoded ?? twilioName) || `${latitude},${longitude}`;
+      const updatedPending: PendingTripData = { ...pending, startLocation, startLat: latitude, startLon: longitude };
+      await setConvState(from, { currentFlow: FLOW_TRIP_FLOW, currentStep: STEP_WAITING_FOR_DESTINATION, pendingTripData: updatedPending });
+      await sendWhatsApp(from, to, `Got it — starting from ${startLocation}. 📍\n\nWhere are you heading today?\n\nReply 0 for Main Menu.`);
+      log.info({ from, startLocation }, "Trip flow: pin override (home exists)");
+      return;
+    }
 
-    await setConvState(from, {
-      currentFlow: FLOW_TRIP_FLOW,
-      currentStep: STEP_WAITING_FOR_DESTINATION,
-      pendingTripData: updatedPending,
-    });
+    // ── No home saved — first pin becomes home ────────────────────────────────
+    if (!savedHome && hasPin) {
+      const geocoded = await reverseGeocodeStreetAddress(latitude, longitude);
+      const twilioName = [label, address].filter(Boolean).join(", ");
+      const startLocation = (geocoded ?? twilioName) || `${latitude},${longitude}`;
+      await db
+        .update(membersTable)
+        .set({ homeLat: latitude, homeLon: longitude, homeAddress: startLocation })
+        .where(eq(membersTable.whatsappNumber, from));
+      const updatedPending: PendingTripData = { ...pending, startLocation: "Home 🏠", startLat: latitude, startLon: longitude };
+      await setConvState(from, { currentFlow: FLOW_TRIP_FLOW, currentStep: STEP_WAITING_FOR_DESTINATION, pendingTripData: updatedPending });
+      await sendWhatsApp(from, to, `Got it — I've saved this as your Home 🏠.\n\nWhere are you heading today?\n\nReply 0 for Main Menu.`);
+      log.info({ from, startLocation }, "Trip flow: home saved from first pin");
+      return;
+    }
 
-    await sendWhatsApp(
-      from,
-      to,
-      `Got it — starting from ${startLocation}. 📍\n\nWhere are you heading today?\n\nReply 0 for Main Menu.`,
-    );
-    log.info({ from, startLocation }, "Trip flow: start location collected");
+    // ── No home, no pin — ask for location pin ────────────────────────────────
+    await sendWhatsApp(from, to, askForLocationText(name));
+    return;
+  }
+
+  if (step === STEP_WAITING_FOR_HOME_OVERRIDE) {
+    const hasPin = latitude !== "" && longitude !== "";
+
+    if (!hasPin) {
+      await sendWhatsApp(from, to, [
+        `Please share your current location pin 📍`,
+        ``,
+        `(Tap the 📎 clip → Location → Send Your Current Location)`,
+        ``,
+        `Reply 0 for Main Menu.`,
+      ].join("\n"));
+      return;
+    }
+
+    const geocoded = await reverseGeocodeStreetAddress(latitude, longitude);
+    const twilioName = [label, address].filter(Boolean).join(", ");
+    const startLocation = (geocoded ?? twilioName) || `${latitude},${longitude}`;
+    const updatedPending: PendingTripData = { ...pending, startLocation, startLat: latitude, startLon: longitude };
+    await setConvState(from, { currentFlow: FLOW_TRIP_FLOW, currentStep: STEP_WAITING_FOR_DESTINATION, pendingTripData: updatedPending });
+    await sendWhatsApp(from, to, `Got it — starting from ${startLocation}. 📍\n\nWhere are you heading today?\n\nReply 0 for Main Menu.`);
+    log.info({ from, startLocation }, "Trip flow: home override pin received");
     return;
   }
 
@@ -1407,7 +1503,7 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
       currentStep: STEP_WAITING_FOR_START_LOCATION,
       pendingTripData: {},
     });
-    await sendWhatsApp(from, to, askForLocationText(name));
+    await sendStartLocationPrompt(from, to, name);
     await saveMessage(from, to, body, messageSid, null);
     log.info({ from }, "CC menu: start trip flow");
     return true;
