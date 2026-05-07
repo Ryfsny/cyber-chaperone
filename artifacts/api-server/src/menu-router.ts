@@ -1,7 +1,7 @@
 import { db, membersTable, tripsTable, messagesTable, conversationStatesTable } from "@workspace/db";
 import { and, eq, ne, desc } from "drizzle-orm";
 import twilio from "twilio";
-import { enrichTripWithRoute, calculateRouteInfo, reverseGeocodeCoords, minutesToSastTime, type RouteInfo } from "./route-service.js";
+import { enrichTripWithRoute, calculateRouteInfo, reverseGeocodeCoords, reverseGeocodeStreetAddress, minutesToSastTime, type RouteInfo } from "./route-service.js";
 import { withMenu } from "./message-utils.js";
 import { sendOperatorEmail, type EmailCategory } from "./email-service.js";
 
@@ -63,6 +63,7 @@ const STEP_WAITING_FOR_START_LOCATION = "WAITING_FOR_START_LOCATION";
 const STEP_WAITING_FOR_DESTINATION = "WAITING_FOR_DESTINATION";
 const STEP_WAITING_FOR_ETA = "WAITING_FOR_ETA"; // kept for backward compat with in-flight conversations
 const STEP_WAITING_FOR_DEPARTURE = "WAITING_FOR_DEPARTURE";
+const STEP_WAITING_FOR_DEPARTURE_TIME = "WAITING_FOR_DEPARTURE_TIME";
 
 const FLOW_CHECKIN = "CHECKIN";
 const STEP_WAITING_FOR_NEW_ETA = "WAITING_FOR_NEW_ETA";
@@ -1262,8 +1263,8 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
       if (twilioName) {
         startLocation = twilioName;
       } else {
-        // Twilio gave no label — reverse geocode the coordinates
-        const geocoded = await reverseGeocodeCoords(latitude, longitude);
+        // Twilio gave no label — reverse geocode to full street address
+        const geocoded = await reverseGeocodeStreetAddress(latitude, longitude);
         startLocation = geocoded ?? `${latitude},${longitude}`;
       }
     } else {
@@ -1302,7 +1303,7 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
     await sendWhatsApp(
       from,
       to,
-      `Got it — your destination is ${destination}.\n\nAre you leaving now?\n\nReply YES to start the trip.\nOr send your departure time (e.g. 14:30).\n\nReply 0 for Main Menu.`,
+      `Got it — your destination is ${destination}.\n\nAre you leaving now?\n\n1. Leave now\n2. Set a departure time\n\nReply 0 for Main Menu.`,
     );
     log.info({ from, destination }, "Trip flow: destination collected");
     return;
@@ -1310,14 +1311,24 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
 
   if (step === STEP_WAITING_FOR_DEPARTURE) {
     const trimmed = body.trim();
-    const isLeavingNow = /^(yes|y|ja|ok|okay|now|leaving|leaving now)$/i.test(trimmed);
-    const timeMatch = trimmed.match(/^(?:ETA\s+)?(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)$/i);
+    const isLeavingNow = trimmed === "1" || /^(yes|y|ja|ok|okay|now|leaving|leaving now)$/i.test(trimmed);
+    const isSettingTime = trimmed === "2";
 
-    if (!isLeavingNow && !timeMatch) {
+    if (isSettingTime) {
+      await setConvState(from, {
+        currentFlow: FLOW_TRIP_FLOW,
+        currentStep: STEP_WAITING_FOR_DEPARTURE_TIME,
+        pendingTripData: pending,
+      });
+      await sendWhatsApp(from, to, `What time are you departing? (e.g. 14:30)\n\nReply 0 for Main Menu.`);
+      return;
+    }
+
+    if (!isLeavingNow) {
       await sendWhatsApp(
         from,
         to,
-        `Please reply YES if you are leaving now, or send your departure time (e.g. 14:30).\n\nReply 0 for Main Menu.`,
+        `Please choose:\n\n1. Leave now\n2. Set a departure time\n\nReply 0 for Main Menu.`,
       );
       return;
     }
@@ -1336,12 +1347,37 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
       startLat && startLon ? { lat: startLat, lon: startLon } : undefined,
     );
 
-    // If member gave a specific time use it; if YES use route ETA
-    const statedEta = isLeavingNow ? null : (timeMatch?.[1] ?? null);
-    const eta = statedEta ?? routeInfo?.etaTime ?? null;
-
-    log.info({ from, pendingData: pending, eta, routeAvailable: !!routeInfo }, "Trip flow: departure confirmed — creating trip");
+    const eta = routeInfo?.etaTime ?? null;
+    log.info({ from, pendingData: pending, eta, routeAvailable: !!routeInfo }, "Trip flow: departure confirmed (leaving now) — creating trip");
     await createTrip(from, to, member, startLocation, destination, eta, body, messageSid, log, routeInfo);
+    return;
+  }
+
+  if (step === STEP_WAITING_FOR_DEPARTURE_TIME) {
+    const trimmed = body.trim();
+    const timeMatch = trimmed.match(/^(?:ETA\s+)?(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)$/i);
+
+    if (!timeMatch) {
+      await sendWhatsApp(from, to, `Please send your departure time in HH:MM format (e.g. 14:30).\n\nReply 0 for Main Menu.`);
+      return;
+    }
+
+    const statedEta = timeMatch[1];
+    const { startLocation, destination, startLat, startLon } = pending;
+    if (!startLocation || !destination) {
+      await resetConvState(from);
+      await sendWhatsApp(from, to, `Something went wrong collecting your trip details. Please start again.\n\nReply 0 for Main Menu.`);
+      return;
+    }
+
+    const routeInfo = await calculateRouteInfo(
+      startLocation,
+      destination,
+      startLat && startLon ? { lat: startLat, lon: startLon } : undefined,
+    );
+
+    log.info({ from, pendingData: pending, statedEta, routeAvailable: !!routeInfo }, "Trip flow: departure time set — creating trip");
+    await createTrip(from, to, member, startLocation, destination, statedEta, body, messageSid, log, routeInfo);
     return;
   }
 

@@ -39,41 +39,75 @@ async function geocodeAddress(query: string): Promise<Coords | null> {
   }
 }
 
-export async function reverseGeocodeCoords(lat: string, lon: string): Promise<string | null> {
+interface NominatimAddress {
+  house_number?: string;
+  road?: string;
+  suburb?: string;
+  neighbourhood?: string;
+  city_district?: string;
+  city?: string;
+  town?: string;
+  village?: string;
+  municipality?: string;
+  county?: string;
+  state?: string;
+}
+
+async function nominatimReverse(lat: string, lon: string): Promise<{ display_name?: string; address?: NominatimAddress } | null> {
   try {
     const url = `${NOMINATIM_REVERSE_BASE}?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&format=json`;
     const res = await fetch(url, { headers: { "User-Agent": UA } });
     if (!res.ok) return null;
-    const data = (await res.json()) as {
-      display_name?: string;
-      address?: {
-        suburb?: string;
-        neighbourhood?: string;
-        city_district?: string;
-        city?: string;
-        town?: string;
-        village?: string;
-        county?: string;
-        state?: string;
-      };
-    };
-    const addr = data.address;
-    if (addr) {
-      const name =
-        addr.suburb ??
-        addr.neighbourhood ??
-        addr.city_district ??
-        addr.city ??
-        addr.town ??
-        addr.village ??
-        addr.county ??
-        addr.state;
-      if (name) return name;
-    }
-    return data.display_name?.split(",")[0]?.trim() ?? null;
+    return (await res.json()) as { display_name?: string; address?: NominatimAddress };
   } catch {
     return null;
   }
+}
+
+/**
+ * Returns a real town/city name for checkpoint labelling.
+ * Prefers proper town names over ward/suburb administrative labels.
+ */
+export async function reverseGeocodeCoords(lat: string, lon: string): Promise<string | null> {
+  const data = await nominatimReverse(lat, lon);
+  if (!data) return null;
+  const addr = data.address;
+  if (addr) {
+    const name =
+      addr.city ??
+      addr.town ??
+      addr.village ??
+      addr.municipality ??
+      addr.county ??
+      addr.suburb ??
+      addr.neighbourhood ??
+      addr.city_district ??
+      addr.state;
+    if (name) return name;
+  }
+  return data.display_name?.split(",")[0]?.trim() ?? null;
+}
+
+/**
+ * Returns a full street address for a GPS pin start location.
+ * Format: "Road Name, Town" or "Town" if no road available.
+ */
+export async function reverseGeocodeStreetAddress(lat: string, lon: string): Promise<string | null> {
+  const data = await nominatimReverse(lat, lon);
+  if (!data) return null;
+  const addr = data.address;
+  if (addr) {
+    const road = addr.road;
+    const number = addr.house_number;
+    const locality = addr.suburb ?? addr.neighbourhood ?? addr.city ?? addr.town ?? addr.village ?? addr.municipality ?? addr.county;
+    if (road && locality) {
+      const streetPart = number ? `${number} ${road}` : road;
+      return `${streetPart}, ${locality}`;
+    }
+    if (road) return road;
+    if (locality) return locality;
+  }
+  return data.display_name?.split(",").slice(0, 2).join(",").trim() ?? null;
 }
 
 // ── Polyline sampling ─────────────────────────────────────────────────────────
