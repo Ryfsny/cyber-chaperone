@@ -6,6 +6,7 @@ export default function LoginPage() {
   const { login, loginPending, loginError } = useAuth();
   const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const [forgotStatus, setForgotStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -18,6 +19,16 @@ export default function LoginPage() {
       await login(password);
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : "Login failed.");
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setForgotStatus("sending");
+    try {
+      const res = await fetch("/api/auth/forgot-password", { method: "POST" });
+      setForgotStatus(res.ok ? "sent" : "error");
+    } catch {
+      setForgotStatus("error");
     }
   };
 
@@ -74,9 +85,28 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-xs text-muted-foreground mt-4">
-          Restricted access. Operators only.
-        </p>
+        <div className="mt-4 text-center space-y-2">
+          {forgotStatus === "idle" && (
+            <button
+              onClick={handleForgotPassword}
+              className="text-xs text-muted-foreground hover:text-primary underline underline-offset-2 transition-colors"
+            >
+              Forgot password? Email it to me
+            </button>
+          )}
+          {forgotStatus === "sending" && (
+            <p className="text-xs text-muted-foreground">Sending…</p>
+          )}
+          {forgotStatus === "sent" && (
+            <p className="text-xs text-green-500">Password sent to your Gmail ✓</p>
+          )}
+          {forgotStatus === "error" && (
+            <p className="text-xs text-destructive">Could not send email. Try again.</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Restricted access. Operators only.
+          </p>
+        </div>
       </div>
     </div>
   );
