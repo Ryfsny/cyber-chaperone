@@ -1,0 +1,423 @@
+# MASTER INSTRUCTION SET — eblockwatch Projects
+**Consolidated Brief | All Projects | Single Copy-Paste**
+**Last Updated: 2026-05-08 | Apply to all active projects**
+
+---
+
+## HOW TO USE THIS FILE
+
+1. Copy the entire contents of this file
+2. Open each Replit project one at a time
+3. Create a file called `INSTRUCTIONS.md` in each project root
+4. Paste the entire contents into that file
+5. Each section auto-identifies your project and applies only the rules for that project
+
+The file will work across all projects. You don't need different versions. Just paste once, read your section.
+
+---
+
+## UNIVERSAL CORE PRINCIPLES
+### (These apply to ALL projects, always)
+
+**TONE & VOICE**
+- Calm, operational, presence-first
+- No corporate, no fluff, no panic
+- Usefulness is warmth; attention beats sweetness; clarity beats friendliness
+- Precision, leverage, strategic depth
+- Sound like Andre Snyman's operational mind, scaled
+
+**TRUTH-FIRST FRAMING**
+- All copy verified, evidence-based, court-ready
+- Separate fact, inference, argument clearly
+- No waffle, no excessive adjectives, no hype
+- Locked language stays locked (pre-approved copy must not change)
+
+**MEMBER-FIRST POSITIONING**
+- Treat each member as potential client without hard-selling
+- Goal: Make each member safer than yesterday
+- No dead ends in any funnel flow
+- Every step guides deeper into understanding and engagement
+
+**NETWORK IDENTITY**
+- eblockwatch = trusted human support network (not crime stats page)
+- Brand = 25+ years of Andre Snyman's real relationships across South Africa
+- Core concept: "The spine of eblockwatch" — each member makes it stronger
+- Andre is the face and relationship anchor
+
+**METHODOLOGY FOR SOLVING PROBLEMS**
+Use this six-step process when stuck:
+1. Strip the problem
+2. Find the gap
+3. Build uncharted questions
+4. Establish exact question that solves it
+5. Give reasons
+6. Give final answer
+
+---
+
+## PROJECT-SPECIFIC RULES
+
+### IF YOU ARE PROJECT 1: EBLOCKWATCH BOOK/MANUAL
+
+**What this project does:**
+- Explains eblockwatch system in simple, structured, relatable way
+- Target: people with ADD, need clear visual hierarchy
+- Format: Book-style chapters explaining how system works, what it achieves, practical examples
+
+**Key content to include:**
+- CB radio analogy (WhatsApp = CB channel; Bliksim tag = fleet tracking map)
+- Decentralized fleet analogy (members as trackable network vehicles)
+- Netstar integration (Bliksim technology and infrastructure)
+- Fidelity integration (Light Up Gauteng visibility campaign)
+- 25+ years of trusted relationships as the foundation
+
+**Locked messaging:**
+- "The spine of eblockwatch"
+- "Each member makes that spine stronger"
+- eblockwatch (lowercase, never "blockwatch")
+
+**Deliverable:**
+- Complete book/manual structure
+- All chapters connected
+- Analogies clear and relatable
+- Integration points with Netstar and Fidelity visible
+
+**Next step after this:**
+- Send complete draft to Andre for approval
+- Be ready to adjust examples based on ADD-friendly feedback
+
+---
+
+### IF YOU ARE PROJECT 2: CYBER CHAPERONE
+
+**What this project does:**
+- Builds the travel safety workflow
+- Real-time location sharing via WhatsApp and Waze
+- Proactive escalation when member fails to check in
+
+**Core logic (LOCKED):**
+- Auto-breadcrumbing runs silently in background
+- Trip registers on dashboard ONLY when movement exceeds defined speed threshold
+- This qualifies as a "real trip" and triggers monitoring
+
+**Escalation sequence (LOCKED):**
+1. Member fails to check in at estimated arrival time
+2. WhatsApp follow-up message
+3. Direct call to member
+4. Emergency contact outreach
+5. Authority escalation if needed
+
+**Closing line (LOCKED):**
+"You never have to ask for help. We come to you."
+
+**Consent wording (LOCKED):**
+"We will use your details to link you to CyberChaperone"
+(NOT "safety alerts" — this distinction is critical)
+
+**Onboarding principle (LOCKED):**
+- Lead with actionable steps, not welcome text
+- Vague steps erode trust in a safety product
+- Every step must be clear and executable
+
+**Member instruction (LOCKED):**
+"Build your safety cell" = core instruction for Cyber Chaperone setup
+
+**Key principle:**
+- Proactive outreach before member has to ask
+- System acts automatically; member doesn't need to ask for help
+
+**Deliverable:**
+- Complete escalation flow documented
+- WhatsApp message templates written
+- Speed threshold defined (in meters/second)
+- Emergency contact collection form designed
+
+**Next step after this:**
+- Test escalation sequence end-to-end
+- Get approval on emergency contact wording
+- Prepare WhatsApp message copy for Andre review
+
+---
+
+### IF YOU ARE PROJECT 3: WHATSAPP / AI ARNIE (AIA) FUNNEL
+
+**What this project does:**
+- Member-facing flows via WhatsApp
+- AI Arnie guides members through registration, education, onboarding
+- Routes members toward eblockwatch membership tiers and eblockshop
+
+**Locked main menu header (DO NOT CHANGE):**
+"Hi Andre, I'm AI Arnie, Andre Snyman's digital wingman. We are here to make you safer. Please choose an option below to make yourself safer."
+
+**Locked menu options (DO NOT CHANGE):**
+1. What is eblockwatch?
+2. Membership Options
+3. Activate my membership
+4. Update my profile
+5. Travel with Cyber Chaperone
+6. eblockshop — safer products to make you safer
+7. Request contact from a human
+(EMERGENCY? Reply 10 for immediate assistance)
+
+**Locked "What is eblockwatch?" response:**
+"Andre, eblockwatch is a trusted human support network built around real people, real relationships, and looking after people properly. For more than 25 years, Andre has built trusted relationships with members across South Africa. That is what gives eblockwatch its strength. When something goes wrong, eblockwatch uses those relationships and networks to connect the right people, in the right place, at the right time, with the right solutions to your predicament. This is not just a page or a group. It is a real network. When you register, the relationship starts, and each member makes the spine of eblockwatch stronger."
+
+**Locked home location instruction:**
+"Please send your home location pin 📍. This is part of the spine of eblockwatch. For more than 25 years, Andre has built trusted personal relationships with members across South Africa. That is what makes this network work. By knowing where you live, Andre can understand your home support base and, wherever you roam, call on the right members and trusted local networks to help mobilize support for your situation."
+
+**Language rules (LOCKED):**
+- Avoid "pay" → use "finalize membership" or "confirm membership"
+- eblockshop = "safer products to make you safer" (extra service, not forced)
+- Free community service first, then soft-sell based on safety outcomes
+
+**Membership tier wording (LOCKED):**
+- Entry Level Membership: "Entry Level Membership is where you officially become part of eblockwatch. This is where the relationship begins. When you register, Andre has your number, and you have his. AI Arnie is Andre's wingman — here to guide you through the digital side and help connect you into the network properly. If you need help, you call on AI Arnie, and AI Arnie helps bring Andre and the network into the picture where needed. This is your entry into the spine of eblockwatch. Every member can use Cyber Chaperone, and for many people this is the best place to start."
+- Single Membership: [Position as strong support layer]
+- Family Membership: [Position as strong support layer]
+
+**Member interaction rules:**
+- Present numbered options, not open-ended questions
+- One question at a time to save typing effort
+- Explain WHY each profile question matters (increases network effectiveness)
+- Treat member as potential client without hard-selling
+- Goal: Make them safer than yesterday
+
+**Funnel principle (LOCKED):**
+"Never end flow in a dead end. Always guide users deeper to understand system, how it works, what's in it for them. Make them feel safer. Position as must-have."
+
+**Deliverable:**
+- Complete menu flow mapped
+- All locked copy integrated exactly
+- Membership tier explanations written
+- eblockshop routing logic clear
+- No dead ends identified
+
+**Next step after this:**
+- Test full funnel from menu to membership confirmation
+- Get Andre approval on all wording before go-live
+- Prepare WhatsApp handoff to human support
+
+---
+
+### IF YOU ARE PROJECT 4: EBLOCKSHOP
+
+**What this project does:**
+- Product selling layer for existing members
+- Frames safety products as part of safer-outcomes journey
+- Routes transactions through Paystack
+
+**Positioning (LOCKED):**
+"Safer products to make you safer"
+
+**Framing (LOCKED):**
+- Extra services, not core offering
+- Routed through Paystack
+- Part of safety ecosystem, not forced selling
+- Only for Single & Family members + eblockwatch service layer
+
+**Language (LOCKED):**
+- Focus on safety outcomes and problem-solving
+- Avoid product names and marketing speak
+- Lead with "What problem does this solve?" not "Buy this"
+- Example: "This sticker shows you're part of a trusted network. Drivers see it and know help is nearby."
+
+**Product restrictions (LOCKED):**
+- Entry Level members: CANNOT purchase Bliksim
+- Single & Family members: CAN purchase Bliksim + must have eblockwatch service layer
+- All other products: Available to all membership tiers
+- Windshield stickers: Available to all
+- Bliksim tags: Single & Family only (+ service layer)
+- Other safety products: Available to all
+
+**Soft-selling approach:**
+- Ask "What's your biggest safety concern?" before recommending
+- Connect product to member's specific situation
+- Position as investment in peace of mind, not expense
+- Always link back to eblockwatch network benefit
+
+**Integration with funnel:**
+- eblockshop menu option in AIA funnel
+- After member sets up profile, suggest relevant product
+- No pressure; always offer "I'll contact a human" option
+
+**Deliverable:**
+- Product list with tier restrictions
+- Problem-solution messaging for each product
+- Soft-sell scripts written
+- Paystack integration tested
+- Membership check enforced before purchase
+
+**Next step after this:**
+- Add windshield stickers to product lineup (approved 2026-03-27)
+- Get Bliksim inventory numbers
+- Test Paystack flow with test card
+- Prepare member education copy about each product
+
+---
+
+### IF YOU ARE PROJECT 5: LIGHT UP GAUTENG CAMPAIGN
+
+**What this project does:**
+- Fidelity partnership for mass awareness and lead generation
+- Visibility campaign in Gauteng
+- Proof of Concept for eblockwatch/Fidelity collaboration
+
+**Partner (LOCKED):**
+- Fidelity Services Group
+- Mike Kidson, General Manager JHB Region
+- Contact for all escalations and decisions
+
+**Campaign execution (LOCKED):**
+- Approximately 20 Fidelity vehicles
+- Lights activated Friday and Saturday nights
+- Focus area: Bryanston (high-visibility route)
+- Purpose: Create mass awareness → lead generation → activation pipeline
+
+**Brand positioning:**
+- Objective: Position Fidelity as dominant security brand in Gauteng
+- eblockwatch role: Buffer zone between Fidelity and public
+- eblockwatch = independent voice, authentic engagement, can fight back in comments/moderation
+- Fidelity = professional, corporate, protected by eblockwatch's independent stance
+
+**eblockwatch/Fidelity separation (LOCKED):**
+"A blockwatch keeps Fidelity at arm's length from the business. What I say on blockwatch is independent from Fidelity's general focus. I am the buffer zone."
+
+**Required deliverables for POC approval:**
+- [ ] Cost breakdown (setup, vehicles, lights, logistics)
+- [ ] Demo-ready presentation materials for Fidelity executives
+- [ ] Estimated timeline for kickoff (weeks/months)
+- [ ] Metrics to measure effectiveness during trial
+  - Lead volume generated
+  - Lead quality/conversion rate
+  - Brand lift for Fidelity
+  - eblockwatch registration rate
+
+**Governance:**
+- All decisions go through Mike Kidson
+- Weekly check-ins on campaign performance
+- Real-time adjustment if metrics miss targets
+- Document everything (photos, engagement metrics, feedback)
+
+**Success criteria:**
+- Minimum lead volume (define number with Mike)
+- Conversion rate to eblockwatch registration (define % with Mike)
+- Fidelity brand sentiment lift (measure via social/feedback)
+- Cost per lead acceptable to Fidelity
+
+**Deliverable:**
+- Complete POC proposal with cost, timeline, metrics
+- Campaign asset list (vehicle decals, light specs, route map)
+- Lead capture mechanism designed
+- Reporting dashboard prepared
+
+**Next step after this:**
+- Present to Mike Kidson
+- Get Fidelity approval on cost and timeline
+- Prepare vehicle logistics and lighting equipment
+- Set up social media monitoring for campaign period
+- Brief eblockwatch team on lead follow-up process
+
+---
+
+## CROSS-PROJECT LANGUAGE (LOCKED — UNIVERSAL)
+
+**Always use these exact terms:**
+- eblockwatch (lowercase, never "blockwatch" or "eBW")
+- AI Arnie = AIA (shorthand in internal docs)
+- Cyber Chaperone (not "CyberChapro," "CC," or variations)
+- eblockshop (not "eshop," "shop," or variations)
+- Bliksim (exact spelling for product/tag)
+- "The spine of eblockwatch" (exact phrase)
+- "Each member makes that spine stronger" (exact phrase)
+- Entry Level / Single / Family (membership tier names, capitalize)
+- Andre Snyman (full name in public-facing copy)
+- Netstar (tech infrastructure partner)
+- Fidelity (corporate partner)
+
+**Never use these:**
+- "Safety alerts" (use "link you to CyberChaperone")
+- "Pay" (use "finalize membership" or "confirm membership")
+- "Buy" in eblockshop (use "invest in" or "add to your safety setup")
+- "Customers" (use "members")
+- Gendered assumptions in safety copy (use "they/them" or rephrase)
+
+---
+
+## DELIVERABLES CHECKLIST
+
+Use this to verify each project is complete before handoff:
+
+**ALL PROJECTS:**
+- [ ] All locked wording used exactly as written
+- [ ] Tone consistent: calm, operational, presence-first
+- [ ] No corporate speak, fluff, or panic language
+- [ ] Zero dead ends in any funnel or flow
+- [ ] Member education approach applied
+- [ ] Six-step method used to solve any problem
+- [ ] Andre Snyman positioned as face/relationship anchor
+
+**PROJECT 1 (Book/Manual):**
+- [ ] Chapter structure clear and relatable
+- [ ] CB radio analogy explained
+- [ ] Decentralized fleet analogy explained
+- [ ] Netstar integration visible
+- [ ] Fidelity integration visible
+- [ ] 25 years of relationships highlighted
+
+**PROJECT 2 (Cyber Chaperone):**
+- [ ] Speed threshold defined (exact m/s)
+- [ ] Escalation sequence documented step-by-step
+- [ ] WhatsApp messages templated
+- [ ] Emergency contact form designed
+- [ ] Consent wording locked in place
+- [ ] "Build your safety cell" instruction clear
+
+**PROJECT 3 (WhatsApp/AIA):**
+- [ ] Menu header exact and locked
+- [ ] All 7 menu options working
+- [ ] All locked responses in place
+- [ ] Home location instruction visible
+- [ ] Membership tier explanations clear
+- [ ] eblockshop routing logic clear
+- [ ] No dead ends tested
+
+**PROJECT 4 (eblockshop):**
+- [ ] Bliksim restrictions enforced (Single/Family only)
+- [ ] Entry Level members blocked from Bliksim
+- [ ] Paystack integration tested
+- [ ] Soft-sell scripts written
+- [ ] Problem-solution messaging for each product
+- [ ] All locked language in place
+
+**PROJECT 5 (Light Up Campaign):**
+- [ ] POC proposal written (cost, timeline, metrics)
+- [ ] Vehicle count confirmed (~20)
+- [ ] Route finalized (Bryanston)
+- [ ] Campaign days confirmed (Friday/Saturday nights)
+- [ ] Lead capture mechanism designed
+- [ ] Reporting dashboard prepared
+- [ ] Mike Kidson contact info logged
+
+---
+
+## FINAL STEPS
+
+1. **Copy this entire file**
+2. **Open each project in Replit, one at a time**
+3. **Create a file named `INSTRUCTIONS.md` in project root**
+4. **Paste this entire content into that file**
+5. **Read only YOUR project section and follow it**
+6. **Complete the checklist for your project**
+7. **Report done to Andre with status**
+
+The system will work because each project knows who it is. Don't skip sections or modify locked language.
+
+---
+
+**Questions?**
+- Review the six-step method before asking
+- Check locked language first
+- No dead ends = always have a next step for the user
+- Tone = calm authority, precision, presence
+
+**Updated:** 2026-05-08 | **Author:** Claude | **Status:** Ready to deploy
