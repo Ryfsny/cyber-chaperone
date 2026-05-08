@@ -1,0 +1,86 @@
+WhatsApp Sender: +15558889990
+General Information
+Status
+
+Offline
+Business display name
+Andre Snyman eblockwatch
+Quality rating
+Unavailable
+Throughput
+80 messages per second
+Messaging Endpoint Configuration
+Configure WhatsApp to work with your application. All sent and received messages will hit these endpoints.
+
+Messaging service
+Whatsapp Instruction Menu 
+Create a new Messaging Service
+Webhook URL for incoming messages
+ - Optional
+https://eozpxtrhpwmk8yp.m.pipedream.net
+Webhook method for incoming messages URL
+
+HTTP Post
+Fallback URL for incoming messages
+ - Optional
+https://lipsy-5302.twil.io/whatsapp/menu
+For when the incoming messages URL cannot be reached or there is a runtime exception
+Webhook method for fallback URL
+
+HTTP Post
+Status callback URL
+ - Optional
+https://example.com/status_callback
+For delivery status updates from API sends. Learn more.
+Webhook method for status callback URL
+
+HTTP Post
+Only HTTP Post method available
+Voice Endpoint Configuration
+To enable WhatsApp Business Calling, select a TwiML Application below to use with your WhatsApp Sender.
+
+Connect to a TwiML Application
+None
+Create a new TwiML Application
+The TwiML App configuration is for WhatsApp Business Calling only and does not apply to WhatsApp Messaging.
+Business profile information
+To update the business display name for this phone number please submit a support ticket
+Business display name
+Andre Snyman eblockwatch
+This information will be shown to WhatsApp users when they are interacting with your business. Twilio recommends adding this information because it has shown to increase message recipients' trust of your senders and increase engagement.
+
+Profile photo
+ - Optional
+JPG or PNG, 640x640 pixels or larger, square ratio
+
+Select File
+
+Delete file
+Business address
+ - Optional
+Address
+Business website
+ - Optional
+https://www.example.com
+Additional business website
+ - Optional
+https://www.example.com
+Business email
+ - Optional
+Email
+Vertical
+ - Optional
+
+Select a Vertical
+Business description (512 characters)
+ - Optional
+Description
+Limit to 256 characters - currently 0
+Profile about
+Limit to 139 characters - currently 0
+
+Update WhatsApp Sender
+
+Cancel
+
+Delete sender
