@@ -699,6 +699,28 @@ function membershipStatusLine(memberStatus: string, membershipTier: string | nul
 }
 
 function mainMenuText(name: string, member: MemberInfo | null): string {
+  const isOperator = member?.role === "operator";
+
+  if (isOperator) {
+    return [
+      `Hi ${name} 👋 Welcome back, operator.`,
+      ``,
+      `You're logged in as the eblockwatch Situation Room operator.`,
+      ``,
+      `1. What is eblockwatch?`,
+      `2. Membership options`,
+      `3. Activate my membership`,
+      `4. Update my profile`,
+      `5. Travel with Cyber Chaperone 🛡️`,
+      `6. eblockshop — safer products for you`,
+      `7. Speak to a human`,
+      ``,
+      `🚨 URGENT? Reply 10 — we will get a human on it right away.`,
+      ``,
+      `Reply with a number to choose.`,
+    ].join("\n");
+  }
+
   const statusLine = membershipStatusLine(
     member?.memberStatus ?? "unknown",
     member?.membershipTier ?? null,
