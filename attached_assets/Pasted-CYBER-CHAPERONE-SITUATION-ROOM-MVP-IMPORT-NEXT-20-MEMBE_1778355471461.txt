@@ -1,0 +1,59 @@
+CYBER CHAPERONE SITUATION ROOM MVP — IMPORT NEXT 20 MEMBERS
+
+Import these 20 members into the MEMBERS section only.
+
+Do not touch:
+- Twilio
+- webhook logic
+- trip logic
+- Live Radar
+- Situation Room trips
+
+Rules:
+- Import into members table only.
+- Use whatsapp_number as the unique field.
+- Reject duplicates.
+- Keep industry as numeric code.
+- Keep blank location fields blank.
+- source_batch = launch_test_30_members
+- import_status = pending_import before import
+- mark successful rows as imported after import.
+
+Before import, confirm:
+1. database connected: YES/NO
+2. members table exists: YES/NO
+3. current member count
+4. Live Radar still loads
+
+After import, report:
+1. members before import
+2. members after import
+3. imported count
+4. duplicate count
+5. rejected count
+6. list imported names and WhatsApp numbers
+7. confirm Cyber Chaperone trip flow was not touched
+
+CSV DATA:
+
+source_row,first_name,last_name,full_name,email,mobile,whatsapp_number,industry,latitude,longitude,address,street_number,route,suburb,city,province,postal_code,country,source_batch,import_status
+12,Rosalyn,Smith,Rosalyn Smith,ros@jubble.co.za,0833916520,whatsapp:+27833916520,48,-26.035799,27.980546,"Jukskei Park, Randburg, 2153, South Africa",,,Jukskei Park,Randburg,Gauteng,2153,South Africa,launch_test_30_members,pending_import
+13,Karin Petersen,Petersen,Karin Petersen Petersen,communicationcog@gmail.com,0823754083,whatsapp:+27823754083,83,-26.187691,25.57699,"Naauwpoort, 2716, South Africa",,,,Naauwpoort,North West,2716,South Africa,launch_test_30_members,pending_import
+14,Dave,Jacobs,Dave Jacobs,viervoet@gmail.com,0832647249,whatsapp:+27832647249,54,-26.1264,27.86348,"509 Impala Ave, Helderkruin, Roodepoort, 1724, South Africa",509,Impala Avenue,Helderkruin,Roodepoort,Gauteng,1724,South Africa,launch_test_30_members,pending_import
+15,ANDREAS,SIEBOLD,ANDREAS SIEBOLD,dr.siebold@periodontist.co.za,0828828452,whatsapp:+27828828452,68,-26.17428,28.03608,"26 Sherwood Rd, Forest Town, Johannesburg, 2193, South Africa",26,Sherwood Road,Forest Town,Johannesburg,Gauteng,2193,South Africa,launch_test_30_members,pending_import
+16,LYNNE,CAWOOD,LYNNE CAWOOD,children@netactive.co.za,0834934992,whatsapp:+27834934992,131,-26.158649,28.072761,"Norwood, Johannesburg, 2117, South Africa",,,Norwood,Johannesburg,Gauteng,2117,South Africa,launch_test_30_members,pending_import
+17,Susi,Wrathall,Susi Wrathall,jwrathall@icon.co.za,0834531496,whatsapp:+27834531496,70,-26.101542,27.925563,"2090 Earphone Ave, Radiokop, Roodepoort, 1724, South Africa",2090,Earphone Avenue,Radiokop,Roodepoort,Gauteng,1724,South Africa,launch_test_30_members,pending_import
+18,Bryan,Lever,Bryan Lever,blever@intekom.co.za,0824145690,whatsapp:+27824145690,89,-26.09783,27.99703,"268 Surrey Ave, Ferndale, Randburg, 2194, South Africa",268,Surrey Avenue,Ferndale,Randburg,Gauteng,2194,South Africa,launch_test_30_members,pending_import
+19,Desmond,Seoposengwe,Desmond Seoposengwe,desls@telkomsa.net,0827857400,whatsapp:+27827857400,114,-26.284331,27.95389,"179 Malta Rd, Naturena, Johannesburg South, 2095, South Africa",179,Malta Road,Naturena,Johannesburg South,Gauteng,2095,South Africa,launch_test_30_members,pending_import
+20,Joan,Perry,Joan Perry,ralperry@iafrica.com,0832359183,whatsapp:+27832359183,107,-26.092984,27.945102,"28 Hamerkop Rd, Randpark Ridge, Randburg, 2169, South Africa",28,Hamerkop Road,Randpark Ridge,Randburg,Gauteng,2169,South Africa,launch_test_30_members,pending_import
+21,Greg,Dix,Greg Dix,greg@liquiddigital.co.za,0726105553,whatsapp:+27726105553,76,-26.103668,27.954189,"Randpark Ridge, Randburg, 2169, South Africa",,,Randpark Ridge,Randburg,Gauteng,2169,South Africa,launch_test_30_members,pending_import
+22,Chris Stevens,Stevens,Chris Stevens Stevens,chris@fullhouse.co.za,0827834920,whatsapp:+27827834920,76,-26.08552,28.03529,"3 Tessa Rd, Riverclub, Sandton, 2191, South Africa",3,Tessa Road,Riverclub,Sandton,Gauteng,2191,South Africa,launch_test_30_members,pending_import
+23,William,Van Blerk,William Van Blerk,william.vanblerk@graftech.co.za,0827811920,whatsapp:+27827811920,81,-26.659841,27.974689,"Three Rivers, Vereeniging, 1929, South Africa",,,Three Rivers,Vereeniging,Gauteng,1929,South Africa,launch_test_30_members,pending_import
+24,harry,chetty,harry chetty,harry@velocityfilms.com,0823415604,whatsapp:+27823415604,58,-26.056528,28.062518,"Edenburg, Sandton, 2128, South Africa",,,Edenburg,Sandton,Gauteng,2128,South Africa,launch_test_30_members,pending_import
+25,Raymond,Pickavance,Raymond Pickavance,rpickavance@outlook.com,0837023545,whatsapp:+27837023545,112,-26.09047,28.04817,"2 Anneliese Pl, Benmore Gardens, Sandton, 2196, South Africa",2,Anneliese Place,Benmore Gardens,Sandton,Gauteng,2196,South Africa,launch_test_30_members,pending_import
+26,Gordon,Alp,Gordon Alp,gordliz@discoverymail.co.za,0837538894,whatsapp:+27837538894,48,-29.7289,31.083732,"10, 24 Chartwell Dr, Umhlanga, 4320, South Africa",24,Chartwell Drive,Umhlanga,Umhlanga,KwaZulu-Natal,4320,South Africa,launch_test_30_members,pending_import
+27,Dave,Rankin,Dave Rankin,oudekat9@gmail.com,0827812194,whatsapp:+27827812194,98,-26.127654,27.924582,"1130 Cornelius St, Weltevredenpark, Roodepoort, 1709, South Africa",1130,Cornelius Street,Weltevredenpark,Roodepoort,Gauteng,1709,South Africa,launch_test_30_members,pending_import
+28,Sacha Narinx,Narinx,Sacha Narinx Narinx,sacha@springstone.co.za,0832685368,whatsapp:+27832685368,76,-26.00741,28.10388,"86 Elizabeth Fry St, Vorna Valley, Midrand, 1686, South Africa",86,Elizabeth Fry Street,Vorna Valley,Midrand,Gauteng,1686,South Africa,launch_test_30_members,pending_import
+29,Leonora,Wydeman,Leonora Wydeman,aronel@mweb.co.za,0832758070,whatsapp:+27832758070,48,-25.76042,27.89939,"1 Jean Botha Rd, Meerhof, Hartbeespoort, 0216, South Africa",1,Jean Botha Road,Meerhof,Hartbeespoort,North West,216,South Africa,launch_test_30_members,pending_import
+30,Danel Geldenhuys,Geldenhuys,Danel Geldenhuys Geldenhuys,geldenhuys@woodlandsnet.co.za,0824569990,whatsapp:+27824569990,76,-25.824756,28.30455,"Woodlands, Pretoria, 0072, South Africa",,,Woodlands,Pretoria,Gauteng,72,South Africa,launch_test_30_members,pending_import
+31,IAN,TRAILL,IAN TRAILL,ttech@icon.co.za,0824142700,whatsapp:+27824142700,51,-26.034302,28.009319,"57 Turaco St, Norscot, Sandton, 2055, South Africa",57,Turaco Street,Norscot,Sandton,Gauteng,2055,South Africa
