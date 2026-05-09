@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import {
   useListTrips,
   useListResponders,
@@ -10,6 +11,20 @@ import {
 import type { Trip, Responder } from "@workspace/api-client-react";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+
+interface Member {
+  id: number;
+  displayName: string;
+  whatsappNumber: string;
+  memberStatus: string;
+  homeLat: string | null;
+  homeLon: string | null;
+  homeAddress: string | null;
+  suburb: string | null;
+  city: string | null;
+  province: string | null;
+  email: string | null;
+}
 
 const STATUS_COLORS: Record<string, string> = {
   green: "#22c55e",
@@ -203,20 +218,37 @@ function DispatchModal({ trip, responders, onClose }: DispatchModalProps) {
   );
 }
 
+function makeMemberIcon(status: string) {
+  const color = status === "active" || status === "verified" ? "#f97316" : "#6b7280";
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:9px;height:9px;border-radius:50%;background:${color};border:1.5px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.4);opacity:0.85;"></div>`,
+    iconSize: [9, 9],
+    iconAnchor: [4, 4],
+  });
+}
+
 export default function Radar() {
   const mapRef = useRef<L.Map | null>(null);
   const mapDivRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<L.Layer[]>([]);
   const polylinesRef = useRef<L.Layer[]>([]);
+  const memberMarkersRef = useRef<L.Layer[]>([]);
   const [, navigate] = useLocation();
   const [dispatchTrip, setDispatchTrip] = useState<Trip | null>(null);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [showMembers, setShowMembers] = useState(true);
 
   const { data: trips = [] } = useListTrips({
     query: { queryKey: getListTripsQueryKey(), refetchInterval: 30000 },
   });
   const { data: responders = [] } = useListResponders({
     query: { queryKey: getListRespondersQueryKey(), refetchInterval: 60000 },
+  });
+  const { data: members = [] } = useQuery<Member[]>({
+    queryKey: ["/api/members"],
+    queryFn: () => fetch("/api/members", { credentials: "include" }).then((r) => r.json()),
+    refetchInterval: 60000,
   });
 
   useEffect(() => {
@@ -362,8 +394,33 @@ export default function Radar() {
     setLastRefresh(new Date());
   }, [trips, responders, navigate]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    memberMarkersRef.current.forEach((m) => m.remove());
+    memberMarkersRef.current = [];
+    if (!showMembers) return;
+    const withGps = members.filter(
+      (m) => m.homeLat && m.homeLon &&
+        !isNaN(parseFloat(m.homeLat)) && !isNaN(parseFloat(m.homeLon))
+    );
+    for (const m of withGps) {
+      const lat = parseFloat(m.homeLat!);
+      const lon = parseFloat(m.homeLon!);
+      const icon = makeMemberIcon(m.memberStatus);
+      const marker = L.marker([lat, lon], { icon }).addTo(map);
+      const locationLine = [m.suburb, m.city, m.province].filter(Boolean).join(", ");
+      marker.bindTooltip(
+        `${m.displayName}${locationLine ? ` — ${locationLine}` : ""}`,
+        { permanent: false, direction: "top" }
+      );
+      memberMarkersRef.current.push(marker);
+    }
+  }, [members, showMembers]);
+
   const activeCount = trips.filter((t) => t.status !== "completed").length;
   const redCount = trips.filter((t) => t.status === "red").length;
+  const membersWithGps = members.filter((m) => m.homeLat && m.homeLon).length;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -381,6 +438,8 @@ export default function Radar() {
             )}
             {" · "}
             {responders.filter((r) => r.active).length} responder{responders.filter((r) => r.active).length !== 1 ? "s" : ""} online
+            {" · "}
+            {members.length} members
             {" · "}
             <span className="text-muted-foreground/60">
               updated {lastRefresh.toLocaleTimeString("en-ZA")}
@@ -408,6 +467,17 @@ export default function Radar() {
             <span className="inline-block w-3 h-3 rotate-45 bg-indigo-400" />
             Responder
           </span>
+          <button
+            onClick={() => setShowMembers((v) => !v)}
+            className={`flex items-center gap-1.5 border px-2 py-0.5 rounded-sm transition-colors ${
+              showMembers
+                ? "border-orange-500/50 text-orange-400 bg-orange-500/10"
+                : "border-border text-muted-foreground/50"
+            }`}
+          >
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-orange-500" />
+            Members ({membersWithGps})
+          </button>
         </div>
       </div>
 
