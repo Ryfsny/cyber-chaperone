@@ -133,9 +133,17 @@ export default function HomePage() {
       <nav className="ebw-nav" style={{ position: "sticky", top: 0, zIndex: 50, padding: "0 24px" }}>
         <div style={{ maxWidth: "1200px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: "64px" }}>
           <img src={LOGO} alt="eblockwatch" style={{ height: "40px", objectFit: "contain" }} />
-          <button className="ebw-btn-green" onClick={scrollToForm} style={{ padding: "10px 22px", fontSize: "14px" }}>
-            Register for Free
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <a
+              href={`${BASE}/login`}
+              style={{ color: "#d1d5db", fontSize: "14px", textDecoration: "none", fontWeight: 600, padding: "9px 16px", border: "1px solid #374151", borderRadius: "8px" }}
+            >
+              Member Login
+            </a>
+            <button className="ebw-btn-green" onClick={scrollToForm} style={{ padding: "10px 22px", fontSize: "14px" }}>
+              Register for Free
+            </button>
+          </div>
         </div>
       </nav>
 
