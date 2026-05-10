@@ -33,6 +33,7 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
     last_name,
     email,
     mobile,
+    whatsapp_number,
     industry,
     suburb,
     city,
@@ -40,14 +41,21 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
     postal_code,
     country,
     source,
+    source_batch,
+    membership_type,
+    security_provider,
+    fire_reaction_service,
+    car_track_provider,
   } = req.body as Record<string, string | undefined>;
 
-  if (!mobile) {
+  const mobileRaw = mobile ?? whatsapp_number;
+
+  if (!mobileRaw) {
     res.status(400).json({ error: "mobile is required." });
     return;
   }
 
-  const wa = toWaNumber(mobile);
+  const wa = toWaNumber(mobileRaw);
   if (!wa) {
     res.status(400).json({ error: "Invalid mobile number — cannot convert to WhatsApp format." });
     return;
@@ -56,6 +64,13 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
   const firstName = (first_name ?? "").trim() || "Unknown";
   const lastName = (last_name ?? "").trim();
   const displayName = [firstName, lastName].filter(Boolean).join(" ");
+
+  const extraNotes = [
+    membership_type ? `Plan: ${membership_type}` : null,
+    security_provider ? `Security: ${security_provider}` : null,
+    fire_reaction_service ? `Fire: ${fire_reaction_service}` : null,
+    car_track_provider ? `Tracker: ${car_track_provider}` : null,
+  ].filter(Boolean).join(" | ");
 
   try {
     const [member] = await db
@@ -68,14 +83,16 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
         memberStatus: "active",
         role: "member",
         email: email ?? null,
-        mobile: mobile ?? null,
+        mobile: mobileRaw ?? null,
         industry: industry ?? null,
         suburb: suburb ?? null,
         city: city ?? null,
         province: province ?? null,
         postalCode: postal_code ?? null,
         country: country ?? "South Africa",
-        sourceBatch: source ?? "website_registration",
+        sourceBatch: source_batch ?? source ?? "website_registration",
+        membershipTier: membership_type ?? null,
+        notes: extraNotes || null,
         importStatus: "registered",
       })
       .onConflictDoUpdate({
@@ -85,13 +102,15 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
           lastName,
           displayName,
           email: email ?? null,
-          mobile: mobile ?? null,
+          mobile: mobileRaw ?? null,
           industry: industry ?? null,
           suburb: suburb ?? null,
           city: city ?? null,
           province: province ?? null,
           postalCode: postal_code ?? null,
           country: country ?? "South Africa",
+          membershipTier: membership_type ?? null,
+          notes: extraNotes || null,
           importStatus: "registered",
         },
       })
