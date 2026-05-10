@@ -12,6 +12,7 @@ import Radar from "@/pages/radar";
 import Responders from "@/pages/responders";
 import Members from "@/pages/members";
 import Broadcast from "@/pages/broadcast";
+import Conversations from "@/pages/conversations";
 import { Layout } from "@/components/layout/layout";
 import { AuthGuard } from "@/components/auth-guard";
 
@@ -29,6 +30,7 @@ function Router() {
         <Route path="/responders" component={Responders} />
         <Route path="/members" component={Members} />
         <Route path="/broadcast" component={Broadcast} />
+        <Route path="/conversations" component={Conversations} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

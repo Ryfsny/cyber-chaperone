@@ -9,6 +9,7 @@ export const messagesTable = pgTable("messages", {
   body: text("body").notNull(),
   messageSid: text("message_sid"),
   tripId: integer("trip_id"),
+  direction: text("direction").notNull().default("inbound"),
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

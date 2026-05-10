@@ -11,6 +11,7 @@ import caseRouter from "./case";
 import authRouter from "./auth";
 import registerRouter from "./register";
 import broadcastRouter from "./broadcast";
+import conversationsRouter from "./conversations";
 import arnieChatRouter from "./arnie-chat";
 import memberPortalRouter from "./member-portal";
 import { requireAuth } from "../middleware/require-auth";
@@ -39,5 +40,6 @@ router.use(membersRouter);
 router.use(respondersRouter);
 router.use(caseRouter);
 router.use(broadcastRouter);
+router.use(conversationsRouter);
 
 export default router;
