@@ -18,3 +18,9 @@ id = "prjU4ax2ho5a7essMohDE"
 uri = "file://EBLOCKWATCH_BACKUP_PACK.zip"
 type = "unspecified"
 title = "eblockwatch Backup Pack — System Bible + Dev Brief + Locked Source"
+
+[[outputs]]
+id = "l-OMcznSXq8uJxHdFt31z"
+uri = "file://EBLOCKWATCH_MEMBER_EXPORT_20260510.zip"
+type = "unspecified"
+title = "Full Member Export — 91,097 members (10 May 2026)"
