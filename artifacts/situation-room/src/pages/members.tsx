@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useRef } from "react";
-import { Download, Search, UserCheck, UserX, Clock, HelpCircle, Map, List, MapPin, ChevronLeft, ChevronRight, Tag, Copy, AlertTriangle } from "lucide-react";
+import { useLocation } from "wouter";
+import { Download, Search, UserCheck, UserX, Clock, HelpCircle, Map, List, MapPin, ChevronLeft, ChevronRight, Tag, Copy, AlertTriangle, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -336,6 +337,7 @@ function MemberMapView() {
 }
 
 function MemberListView({ members, search }: { members: Member[]; search: string }) {
+  const [, navigate] = useLocation();
   const grouped = groupByLocation(members);
   const provinces = Object.keys(grouped).sort();
 
@@ -370,10 +372,14 @@ function MemberListView({ members, search }: { members: Member[]; search: string
                   )}
                   <div className="space-y-1">
                     {grouped[province][city][suburb].map((m) => (
-                      <div key={m.id} className="ml-4 bg-card border border-border/50 px-4 py-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
+                      <div
+                        key={m.id}
+                        onClick={() => navigate(`/members/${m.id}`)}
+                        className="ml-4 bg-card border border-border/50 px-4 py-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 cursor-pointer hover:bg-secondary hover:border-border transition-colors group"
+                      >
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-xs text-foreground">{m.displayName}</span>
+                            <span className="font-medium text-xs text-foreground group-hover:text-primary transition-colors">{m.displayName}</span>
                             <StatusBadge status={m.memberStatus} />
                             {m.membershipTier && <span className="text-xs text-muted-foreground border border-border px-1">{m.membershipTier}</span>}
                             <SourceBadge source={m.sourceBatch} />
@@ -397,9 +403,13 @@ function MemberListView({ members, search }: { members: Member[]; search: string
                             </div>
                           )}
                         </div>
-                        <div className="text-right text-xs text-muted-foreground shrink-0">
+                        <div className="text-right text-xs text-muted-foreground shrink-0 flex flex-col items-end gap-1">
                           <div>{formatDate(m.createdAt)}</div>
-                          {m.iceContactName && <div className="mt-1 text-amber-500/70">ICE: {m.iceContactName}</div>}
+                          {m.iceContactName && <div className="text-amber-500/70">ICE: {m.iceContactName}</div>}
+                          <div className="flex items-center gap-1 text-primary/60 group-hover:text-primary transition-colors mt-1">
+                            <ExternalLink className="w-2.5 h-2.5" />
+                            <span className="text-[10px]">View profile</span>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -415,6 +425,7 @@ function MemberListView({ members, search }: { members: Member[]; search: string
 }
 
 const LIMIT = 50;
+const STATUS_OPTIONS = ["active", "verified", "pending", "inactive"];
 
 export default function Members() {
   const [search, setSearch] = useState("");
@@ -422,6 +433,7 @@ export default function Members() {
   const [view, setView] = useState<"list" | "map" | "duplicates">("list");
   const [page, setPage] = useState(1);
   const [sourceFilter, setSourceFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -431,8 +443,8 @@ export default function Members() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Reset page when source filter changes
-  useEffect(() => { setPage(1); }, [sourceFilter]);
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [sourceFilter, statusFilter]);
 
   const { data: sourcesData } = useQuery<SourceRow[]>({
     queryKey: ["/api/members/sources"],
@@ -445,11 +457,12 @@ export default function Members() {
     const params = new URLSearchParams({ page: String(p), limit: String(LIMIT) });
     if (s) params.set("search", s);
     if (sourceFilter) params.set("source", sourceFilter);
+    if (statusFilter) params.set("status", statusFilter);
     return `/api/members?${params.toString()}`;
   };
 
   const { data, isLoading, error } = useQuery<PaginatedResponse>({
-    queryKey: ["/api/members/paginated", page, debouncedSearch, sourceFilter],
+    queryKey: ["/api/members/paginated", page, debouncedSearch, sourceFilter, statusFilter],
     queryFn: () =>
       fetch(buildUrl(page, debouncedSearch), { credentials: "include" }).then(async (r) => {
         const json = await r.json();
@@ -495,46 +508,74 @@ export default function Members() {
         </div>
       </div>
 
-      {/* Source filter bar */}
+      {/* Filter + Search bar */}
       {view !== "duplicates" && (
-        <div className="px-6 py-2 border-b border-border shrink-0 flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-muted-foreground uppercase tracking-wider">Source:</span>
-          <button
-            onClick={() => setSourceFilter("")}
-            className={`px-2 py-0.5 text-xs border rounded-sm transition-colors ${sourceFilter === "" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
-            All
-          </button>
-          <button
-            onClick={() => setSourceFilter("none")}
-            className={`px-2 py-0.5 text-xs border rounded-sm transition-colors ${sourceFilter === "none" ? "bg-zinc-700 text-white border-zinc-500" : "border-border text-muted-foreground hover:text-foreground"}`}>
-            Legacy (no source)
-          </button>
-          {sources.filter((s) => s.source).map((s) => (
-            <button
-              key={s.source}
-              onClick={() => setSourceFilter(sourceFilter === s.source! ? "" : s.source!)}
-              className={`px-2 py-0.5 text-xs border rounded-sm transition-colors flex items-center gap-1 ${sourceFilter === s.source ? "bg-blue-800 text-blue-100 border-blue-600" : "border-border text-muted-foreground hover:text-foreground"}`}>
-              <Tag className="w-2.5 h-2.5" />
-              {s.source}
-              <span className="opacity-60">({Number(s.count).toLocaleString()})</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Search bar */}
-      {view !== "duplicates" && (
-        <div className="px-6 py-3 border-b border-border shrink-0">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, number, email, suburb, city… (searches DB)"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 text-sm"
-            />
+        <>
+          {/* Search */}
+          <div className="px-6 py-3 border-b border-border shrink-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, surname, email, cellphone, address, suburb, city…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 text-sm"
+              />
+            </div>
           </div>
-        </div>
+
+          {/* Filter chips */}
+          <div className="px-6 py-2 border-b border-border shrink-0 flex items-center gap-3 flex-wrap">
+            {/* Status filter */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0">Status:</span>
+              {["", ...STATUS_OPTIONS].map((s) => (
+                <button
+                  key={s || "all"}
+                  onClick={() => setStatusFilter(s)}
+                  className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors capitalize ${
+                    statusFilter === s
+                      ? s === "" ? "bg-primary text-primary-foreground border-primary"
+                        : s === "active" || s === "verified" ? "bg-green-800 text-green-200 border-green-600"
+                        : s === "pending" ? "bg-yellow-800 text-yellow-200 border-yellow-600"
+                        : "bg-red-800 text-red-200 border-red-600"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {s || "All"}
+                </button>
+              ))}
+            </div>
+
+            {/* Divider */}
+            <div className="h-4 w-px bg-border shrink-0" />
+
+            {/* Source filter */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0">Source:</span>
+              <button
+                onClick={() => setSourceFilter("")}
+                className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors ${sourceFilter === "" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
+                All
+              </button>
+              <button
+                onClick={() => setSourceFilter("none")}
+                className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors ${sourceFilter === "none" ? "bg-zinc-700 text-white border-zinc-500" : "border-border text-muted-foreground hover:text-foreground"}`}>
+                Legacy
+              </button>
+              {sources.filter((s) => s.source).map((s) => (
+                <button
+                  key={s.source}
+                  onClick={() => setSourceFilter(sourceFilter === s.source! ? "" : s.source!)}
+                  className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors flex items-center gap-1 ${sourceFilter === s.source ? "bg-blue-800 text-blue-100 border-blue-600" : "border-border text-muted-foreground hover:text-foreground"}`}>
+                  <Tag className="w-2 h-2" />
+                  {s.source}
+                  <span className="opacity-60">({Number(s.count).toLocaleString()})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
       )}
 
       {/* Content */}

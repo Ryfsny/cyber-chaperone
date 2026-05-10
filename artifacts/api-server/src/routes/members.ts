@@ -1,12 +1,11 @@
 import { Router, type IRouter } from "express";
-import { db, membersTable } from "@workspace/db";
+import { db, membersTable, tripsTable, messagesTable } from "@workspace/db";
 import { insertMemberSchema } from "@workspace/db";
-import { ilike, or, sql, asc, eq } from "drizzle-orm";
+import { ilike, or, sql, asc, eq, desc } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-// GET /api/members?page=1&limit=50&search=xxx&province=xxx&source=gas
-// Paginated + searchable — never dumps all 91k rows at once
+// ── GET /api/members — paginated + searchable ─────────────────────────────────
 router.get("/members", async (req, res): Promise<void> => {
   const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
   const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10)));
@@ -15,6 +14,8 @@ router.get("/members", async (req, res): Promise<void> => {
   const province = String(req.query.province ?? "").trim();
   const city = String(req.query.city ?? "").trim();
   const source = String(req.query.source ?? "").trim();
+  const status = String(req.query.status ?? "").trim();
+  const tier = String(req.query.tier ?? "").trim();
 
   type WhereClause = ReturnType<typeof ilike> | ReturnType<typeof or> | ReturnType<typeof eq>;
   const conditions: WhereClause[] = [];
@@ -24,10 +25,13 @@ router.get("/members", async (req, res): Promise<void> => {
     conditions.push(
       or(
         ilike(membersTable.displayName, like),
+        ilike(membersTable.firstName, like),
+        ilike(membersTable.lastName, like),
         ilike(membersTable.mobile, like),
         ilike(membersTable.email, like),
         ilike(membersTable.suburb, like),
         ilike(membersTable.city, like),
+        ilike(membersTable.homeAddress, like),
         ilike(membersTable.whatsappNumber, like),
       )!
     );
@@ -38,6 +42,12 @@ router.get("/members", async (req, res): Promise<void> => {
     conditions.push(sql`source_batch IS NULL` as unknown as ReturnType<typeof eq>);
   } else if (source) {
     conditions.push(ilike(membersTable.sourceBatch, source));
+  }
+  if (status) conditions.push(eq(membersTable.memberStatus, status));
+  if (tier === "family") {
+    conditions.push(sql`family_group_id IS NOT NULL` as unknown as ReturnType<typeof eq>);
+  } else if (tier) {
+    conditions.push(ilike(membersTable.membershipTier, tier));
   }
 
   const where = conditions.length === 1
@@ -56,59 +66,42 @@ router.get("/members", async (req, res): Promise<void> => {
   ]);
 
   const total = Number(countResult[0]?.count ?? 0);
-
   res.json({
     data: members,
     pagination: { page, limit, total, pages: Math.ceil(total / limit) },
   });
 });
 
-// GET /api/members/sources — distinct source_batch values and counts
+// ── GET /api/members/sources ──────────────────────────────────────────────────
 router.get("/members/sources", async (_req, res): Promise<void> => {
   const rows = await db
-    .select({
-      source: membersTable.sourceBatch,
-      count: sql<number>`count(*)`,
-    })
+    .select({ source: membersTable.sourceBatch, count: sql<number>`count(*)` })
     .from(membersTable)
     .groupBy(membersTable.sourceBatch)
     .orderBy(sql`count(*) desc`);
-
   res.json(rows);
 });
 
-// GET /api/members/duplicates — members sharing display_name or mobile
+// ── GET /api/members/duplicates ───────────────────────────────────────────────
 router.get("/members/duplicates", async (_req, res): Promise<void> => {
-  // Find all whatsapp_number values that appear more than once
-  const dupePhones = await db.execute(sql`
-    SELECT whatsapp_number, count(*) as cnt
-    FROM members
-    GROUP BY whatsapp_number
-    HAVING count(*) > 1
-    ORDER BY cnt DESC
-  `);
-
-  // Find display_name duplicates (case-insensitive)
-  const dupeNames = await db.execute(sql`
-    SELECT lower(display_name) as name_key, count(*) as cnt, array_agg(id ORDER BY id) as ids
-    FROM members
-    GROUP BY lower(display_name)
-    HAVING count(*) > 1
-    ORDER BY cnt DESC
-    LIMIT 100
-  `);
-
+  const [dupePhones, dupeNames] = await Promise.all([
+    db.execute(sql`
+      SELECT whatsapp_number, count(*) as cnt
+      FROM members GROUP BY whatsapp_number HAVING count(*) > 1 ORDER BY cnt DESC
+    `),
+    db.execute(sql`
+      SELECT lower(display_name) as name_key, count(*) as cnt, array_agg(id ORDER BY id) as ids
+      FROM members GROUP BY lower(display_name) HAVING count(*) > 1 ORDER BY cnt DESC LIMIT 100
+    `),
+  ]);
   res.json({
     byPhone: dupePhones.rows,
     byName: dupeNames.rows,
-    summary: {
-      duplicatePhones: dupePhones.rows.length,
-      duplicateNames: dupeNames.rows.length,
-    },
+    summary: { duplicatePhones: dupePhones.rows.length, duplicateNames: dupeNames.rows.length },
   });
 });
 
-// GET /api/members/map — lightweight GPS-only list for radar map (no pagination)
+// ── GET /api/members/map — GPS-only list for maps ─────────────────────────────
 router.get("/members/map", async (_req, res): Promise<void> => {
   const members = await db
     .select({
@@ -130,12 +123,54 @@ router.get("/members/map", async (_req, res): Promise<void> => {
   res.json(members);
 });
 
+// ── GET /api/members/:id — full member profile ────────────────────────────────
+router.get("/members/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [member] = await db.select().from(membersTable).where(eq(membersTable.id, id));
+  if (!member) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(member);
+});
+
+// ── GET /api/members/:id/trips — all trips for this member ────────────────────
+router.get("/members/:id/trips", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [member] = await db.select({ whatsappNumber: membersTable.whatsappNumber, mobile: membersTable.mobile })
+    .from(membersTable).where(eq(membersTable.id, id));
+  if (!member) { res.status(404).json({ error: "Not found" }); return; }
+
+  // trips are linked by traveler_phone = member's whatsapp_number
+  const trips = await db.select().from(tripsTable)
+    .where(eq(tripsTable.travelerPhone, member.whatsappNumber))
+    .orderBy(desc(tripsTable.createdAt));
+  res.json(trips);
+});
+
+// ── GET /api/members/:id/messages — WhatsApp message history ─────────────────
+router.get("/members/:id/messages", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [member] = await db.select({ whatsappNumber: membersTable.whatsappNumber })
+    .from(membersTable).where(eq(membersTable.id, id));
+  if (!member) { res.status(404).json({ error: "Not found" }); return; }
+
+  const messages = await db.select().from(messagesTable)
+    .where(
+      or(
+        eq(messagesTable.fromNumber, member.whatsappNumber),
+        eq(messagesTable.toNumber, member.whatsappNumber),
+      )!
+    )
+    .orderBy(asc(messagesTable.receivedAt))
+    .limit(300);
+  res.json(messages);
+});
+
+// ── POST /api/members — create / upsert member ───────────────────────────────
 router.post("/members", async (req, res): Promise<void> => {
   const parsed = insertMemberSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
   const [member] = await db
     .insert(membersTable)
     .values(parsed.data)

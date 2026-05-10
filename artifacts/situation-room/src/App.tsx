@@ -11,6 +11,7 @@ import NewTrip from "@/pages/new-trip";
 import Radar from "@/pages/radar";
 import Responders from "@/pages/responders";
 import Members from "@/pages/members";
+import MemberProfile from "@/pages/member-profile";
 import Broadcast from "@/pages/broadcast";
 import Conversations from "@/pages/conversations";
 import { Layout } from "@/components/layout/layout";
@@ -28,6 +29,7 @@ function Router() {
         <Route path="/messages" component={Messages} />
         <Route path="/radar" component={Radar} />
         <Route path="/responders" component={Responders} />
+        <Route path="/members/:id" component={MemberProfile} />
         <Route path="/members" component={Members} />
         <Route path="/broadcast" component={Broadcast} />
         <Route path="/conversations" component={Conversations} />
