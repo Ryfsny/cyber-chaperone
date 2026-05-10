@@ -24,3 +24,9 @@ id = "l-OMcznSXq8uJxHdFt31z"
 uri = "file://EBLOCKWATCH_MEMBER_EXPORT_20260510.zip"
 type = "unspecified"
 title = "Full Member Export — 91,097 members (10 May 2026)"
+
+[[outputs]]
+id = "__p4XGqZn1N0WwiCjQVlH"
+uri = "file://EBLOCKWATCH_MEMBER_IMPORT_CLEAN.csv"
+type = "table"
+title = "EBLOCKWATCH_MEMBER_IMPORT_CLEAN.csv — 850 GaSS Members"
