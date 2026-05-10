@@ -1,11 +1,11 @@
 import { Router, type IRouter } from "express";
 import { db, membersTable } from "@workspace/db";
 import { insertMemberSchema } from "@workspace/db";
-import { ilike, or, sql, asc } from "drizzle-orm";
+import { ilike, or, sql, asc, eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-// GET /api/members?page=1&limit=50&search=xxx&province=xxx
+// GET /api/members?page=1&limit=50&search=xxx&province=xxx&source=gas
 // Paginated + searchable — never dumps all 91k rows at once
 router.get("/members", async (req, res): Promise<void> => {
   const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
@@ -14,8 +14,9 @@ router.get("/members", async (req, res): Promise<void> => {
   const search = String(req.query.search ?? "").trim();
   const province = String(req.query.province ?? "").trim();
   const city = String(req.query.city ?? "").trim();
+  const source = String(req.query.source ?? "").trim();
 
-  type WhereClause = ReturnType<typeof ilike> | ReturnType<typeof or>;
+  type WhereClause = ReturnType<typeof ilike> | ReturnType<typeof or> | ReturnType<typeof eq>;
   const conditions: WhereClause[] = [];
 
   if (search) {
@@ -27,11 +28,17 @@ router.get("/members", async (req, res): Promise<void> => {
         ilike(membersTable.email, like),
         ilike(membersTable.suburb, like),
         ilike(membersTable.city, like),
+        ilike(membersTable.whatsappNumber, like),
       )!
     );
   }
   if (province) conditions.push(ilike(membersTable.province, province));
   if (city) conditions.push(ilike(membersTable.city, `%${city}%`));
+  if (source === "none") {
+    conditions.push(sql`source_batch IS NULL` as unknown as ReturnType<typeof eq>);
+  } else if (source) {
+    conditions.push(ilike(membersTable.sourceBatch, source));
+  }
 
   const where = conditions.length === 1
     ? conditions[0]
@@ -53,6 +60,51 @@ router.get("/members", async (req, res): Promise<void> => {
   res.json({
     data: members,
     pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+  });
+});
+
+// GET /api/members/sources — distinct source_batch values and counts
+router.get("/members/sources", async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      source: membersTable.sourceBatch,
+      count: sql<number>`count(*)`,
+    })
+    .from(membersTable)
+    .groupBy(membersTable.sourceBatch)
+    .orderBy(sql`count(*) desc`);
+
+  res.json(rows);
+});
+
+// GET /api/members/duplicates — members sharing display_name or mobile
+router.get("/members/duplicates", async (_req, res): Promise<void> => {
+  // Find all whatsapp_number values that appear more than once
+  const dupePhones = await db.execute(sql`
+    SELECT whatsapp_number, count(*) as cnt
+    FROM members
+    GROUP BY whatsapp_number
+    HAVING count(*) > 1
+    ORDER BY cnt DESC
+  `);
+
+  // Find display_name duplicates (case-insensitive)
+  const dupeNames = await db.execute(sql`
+    SELECT lower(display_name) as name_key, count(*) as cnt, array_agg(id ORDER BY id) as ids
+    FROM members
+    GROUP BY lower(display_name)
+    HAVING count(*) > 1
+    ORDER BY cnt DESC
+    LIMIT 100
+  `);
+
+  res.json({
+    byPhone: dupePhones.rows,
+    byName: dupeNames.rows,
+    summary: {
+      duplicatePhones: dupePhones.rows.length,
+      duplicateNames: dupeNames.rows.length,
+    },
   });
 });
 
@@ -98,6 +150,14 @@ router.post("/members", async (req, res): Promise<void> => {
         notes: parsed.data.notes,
         iceContactName: parsed.data.iceContactName ?? null,
         iceContactPhone: parsed.data.iceContactPhone ?? null,
+        sourceBatch: parsed.data.sourceBatch ?? undefined,
+        province: parsed.data.province ?? undefined,
+        city: parsed.data.city ?? undefined,
+        suburb: parsed.data.suburb ?? undefined,
+        industry: parsed.data.industry ?? undefined,
+        membershipTier: parsed.data.membershipTier ?? undefined,
+        email: parsed.data.email ?? undefined,
+        mobile: parsed.data.mobile ?? undefined,
       },
     })
     .returning();

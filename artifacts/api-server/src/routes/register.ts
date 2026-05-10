@@ -111,11 +111,12 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
 });
 
 // ── GET /api/members/:id — single member lookup (for website sync checks) ───
-router.get("/members/:id", async (req: Request, res: Response): Promise<void> => {
+// Only handles numeric IDs — non-numeric paths (e.g. /sources, /duplicates) fall through to next router
+router.get("/members/:id", async (req: Request, res: Response, next): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId ?? "", 10);
   if (isNaN(id)) {
-    res.status(400).json({ error: "Invalid id." });
+    next();
     return;
   }
   const apiKey = process.env["REGISTER_API_KEY"];
