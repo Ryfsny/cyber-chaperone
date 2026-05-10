@@ -73,6 +73,13 @@ const STEP_WAITING_FOR_PAYMENT_CONFIRMATION = "WAITING_FOR_PAYMENT_CONFIRMATION"
 const FLOW_PROFILE_UPDATE = "PROFILE_UPDATE";
 const STEP_WAITING_FOR_ICE = "WAITING_FOR_ICE";
 const FLOW_EBLOCKWATCH_INFO = "EBLOCKWATCH_INFO";
+const FLOW_REGISTRATION = "REGISTRATION";
+const STEP_REG_FIRST_NAME = "REG_FIRST_NAME";
+const STEP_REG_LAST_NAME = "REG_LAST_NAME";
+const STEP_REG_EMAIL = "REG_EMAIL";
+const STEP_REG_SUBURB = "REG_SUBURB";
+const STEP_REG_CITY = "REG_CITY";
+const STEP_REG_PROVINCE = "REG_PROVINCE";
 
 // ── Keyword detectors ─────────────────────────────────────────────────────────
 
@@ -1834,6 +1841,174 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
   ].join("\n"));
 }
 
+// ── WhatsApp Registration Flow ────────────────────────────────────────────────
+
+async function handleRegistrationStep(ctx: MenuContext, state: ConvState): Promise<void> {
+  const { from, to, body, messageSid } = ctx;
+  const trimmed = body.trim();
+  const pending = state.pendingTripData ?? {};
+
+  await saveMessage(from, to, body, messageSid, null);
+
+  if (trimmed === "0") {
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    const [row] = await db.select().from(membersTable).where(eq(membersTable.whatsappNumber, from)).limit(1);
+    const member: MemberInfo | null = row
+      ? { displayName: row.displayName, role: row.role, memberStatus: row.memberStatus, membershipTier: row.membershipTier, isKnown: row.memberStatus === "active" || row.memberStatus === "verified" }
+      : null;
+    await sendWhatsApp(from, to, mainMenuText(row?.displayName ?? from, member));
+    return;
+  }
+
+  if (state.currentStep === STEP_REG_FIRST_NAME) {
+    const firstName = trimmed.slice(0, 60);
+    await setConvState(from, {
+      currentFlow: FLOW_REGISTRATION,
+      currentStep: STEP_REG_LAST_NAME,
+      pendingTripData: { ...pending, startLocation: firstName },
+    });
+    await sendWhatsApp(from, to, `Thanks ${firstName}! What is your surname?\n\nReply 0 to cancel.`);
+    return;
+  }
+
+  if (state.currentStep === STEP_REG_LAST_NAME) {
+    const lastName = trimmed.slice(0, 60);
+    await setConvState(from, {
+      currentFlow: FLOW_REGISTRATION,
+      currentStep: STEP_REG_EMAIL,
+      pendingTripData: { ...pending, destination: lastName },
+    });
+    await sendWhatsApp(from, to, `Got it. What is your email address? (or reply SKIP)\n\nReply 0 to cancel.`);
+    return;
+  }
+
+  if (state.currentStep === STEP_REG_EMAIL) {
+    const email = /^skip$/i.test(trimmed) ? null : trimmed.slice(0, 120);
+    await setConvState(from, {
+      currentFlow: FLOW_REGISTRATION,
+      currentStep: STEP_REG_SUBURB,
+      pendingTripData: { ...pending, reason: email ?? "" },
+    });
+    await sendWhatsApp(from, to, `What suburb do you live in? (e.g. Sandton, Fourways)\n\nReply SKIP to skip.\nReply 0 to cancel.`);
+    return;
+  }
+
+  if (state.currentStep === STEP_REG_SUBURB) {
+    const suburb = /^skip$/i.test(trimmed) ? null : trimmed.slice(0, 80);
+    await setConvState(from, {
+      currentFlow: FLOW_REGISTRATION,
+      currentStep: STEP_REG_CITY,
+      pendingTripData: { ...pending, clarificationNewDestination: suburb ?? "" },
+    });
+    await sendWhatsApp(from, to, `What city are you in? (e.g. Johannesburg, Cape Town)\n\nReply SKIP to skip.\nReply 0 to cancel.`);
+    return;
+  }
+
+  if (state.currentStep === STEP_REG_CITY) {
+    const city = /^skip$/i.test(trimmed) ? null : trimmed.slice(0, 80);
+    await setConvState(from, {
+      currentFlow: FLOW_REGISTRATION,
+      currentStep: STEP_REG_PROVINCE,
+      pendingTripData: { ...pending, clarificationOriginalMessage: city ?? "" },
+    });
+    await sendWhatsApp(from, to, [
+      `Which province?`,
+      ``,
+      `1. Gauteng`,
+      `2. Western Cape`,
+      `3. KwaZulu-Natal`,
+      `4. Eastern Cape`,
+      `5. Limpopo`,
+      `6. Mpumalanga`,
+      `7. North West`,
+      `8. Free State`,
+      `9. Northern Cape`,
+      `0. Cancel`,
+    ].join("\n"));
+    return;
+  }
+
+  if (state.currentStep === STEP_REG_PROVINCE) {
+    const PROVINCES: Record<string, string> = {
+      "1": "Gauteng", "2": "Western Cape", "3": "KwaZulu-Natal",
+      "4": "Eastern Cape", "5": "Limpopo", "6": "Mpumalanga",
+      "7": "North West", "8": "Free State", "9": "Northern Cape",
+    };
+    const province = PROVINCES[trimmed] ?? (/^skip$/i.test(trimmed) ? null : trimmed.slice(0, 60));
+
+    const firstName = pending.startLocation ?? "Unknown";
+    const lastName = pending.destination ?? "";
+    const email = pending.reason ?? null;
+    const suburb = pending.clarificationNewDestination ?? null;
+    const city = pending.clarificationOriginalMessage ?? null;
+    const displayName = [firstName, lastName].filter(Boolean).join(" ");
+
+    try {
+      await db
+        .insert(membersTable)
+        .values({
+          firstName,
+          lastName,
+          displayName,
+          whatsappNumber: from,
+          memberStatus: "active",
+          role: "member",
+          email: email || null,
+          mobile: from.replace("whatsapp:+27", "0").replace("whatsapp:+", "+"),
+          suburb: suburb || null,
+          city: city || null,
+          province: province || null,
+          country: "South Africa",
+          sourceBatch: "whatsapp_registration",
+          importStatus: "registered",
+        })
+        .onConflictDoUpdate({
+          target: membersTable.whatsappNumber,
+          set: {
+            firstName,
+            lastName,
+            displayName,
+            email: email || null,
+            suburb: suburb || null,
+            city: city || null,
+            province: province || null,
+            importStatus: "registered",
+          },
+        });
+    } catch {
+      // best-effort
+    }
+
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, [
+      `✅ Welcome to eblockwatch, ${firstName}!`,
+      ``,
+      `Your profile is registered. Andre and the team will be in touch.`,
+      ``,
+      `You are now part of a trusted safety network built on real people and real relationships.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+
+    await sendOperatorMirror(to, [
+      `🆕 NEW WHATSAPP REGISTRATION`,
+      ``,
+      `Name: ${displayName}`,
+      `WhatsApp: ${from}`,
+      email ? `Email: ${email}` : `Email: not provided`,
+      suburb ? `Suburb: ${suburb}` : null,
+      city ? `City: ${city}` : null,
+      province ? `Province: ${province}` : null,
+      `Source: WhatsApp registration flow`,
+      ``,
+      `Next action: Confirm entry in Member Directory.`,
+    ].filter((l) => l !== null).join("\n"));
+    return;
+  }
+}
+
 // ── Main menu choice handler ──────────────────────────────────────────────────
 
 async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise<boolean> {
@@ -1846,6 +2021,22 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
     await sendWhatsApp(from, to, ccMenuText(name));
     await saveMessage(from, to, body, messageSid, null);
     log.info({ from }, "Menu: CC menu shown");
+    return true;
+  }
+
+  // Register — new members who haven't been added yet
+  if (choice === "0" && !member) {
+    await saveMessage(from, to, body, messageSid, null);
+    await setConvState(from, { currentFlow: FLOW_REGISTRATION, currentStep: STEP_REG_FIRST_NAME, pendingTripData: {} });
+    await sendWhatsApp(from, to, [
+      `Welcome to eblockwatch! 👋`,
+      ``,
+      `Let's get you registered so Andre and the team know who you are.`,
+      ``,
+      `What is your first name?`,
+      ``,
+      `Reply 0 to cancel.`,
+    ].join("\n"));
     return true;
   }
 
@@ -2040,7 +2231,7 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
         `Trip: ${activeTrip.title}`,
         `Status: COMPLETED`,
         `Reason: Member sent STOP.`,
-      ].join("\n"), "arrival", "trip-complete");
+      ].join("\n"), "arrived");
     } else {
       await sendWhatsApp(from, to, `No active trip to end.\n\nReply 0 for Main Menu.`);
     }
@@ -2071,6 +2262,11 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   // 4. Conversation state routing
   const state = await getConvState(from);
   log.info({ from, currentFlow: state.currentFlow, currentStep: state.currentStep }, "Menu router: conv state");
+
+  if (state.currentFlow === FLOW_REGISTRATION) {
+    await handleRegistrationStep(ctx, state);
+    return { handled: true };
+  }
 
   if (state.currentFlow === FLOW_MEMBERSHIP) {
     await handleMembershipChoice(ctx);

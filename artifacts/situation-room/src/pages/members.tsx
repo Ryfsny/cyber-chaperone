@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useRef } from "react";
-import { Download, Search, UserCheck, UserX, Clock, HelpCircle, Map, List, MapPin } from "lucide-react";
+import { Download, Search, UserCheck, UserX, Clock, HelpCircle, Map, List, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,26 @@ interface Member {
   importStatus: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface MapMember {
+  id: number;
+  displayName: string;
+  whatsappNumber: string;
+  memberStatus: string;
+  homeLat: string | null;
+  homeLon: string | null;
+  homeAddress: string | null;
+  suburb: string | null;
+  city: string | null;
+  province: string | null;
+  email: string | null;
+  industry: string | null;
+}
+
+interface PaginatedResponse {
+  data: Member[];
+  pagination: { page: number; limit: number; total: number; pages: number };
 }
 
 function formatPhone(raw: string): string {
@@ -119,54 +139,45 @@ function groupByLocation(members: Member[]) {
   return tree;
 }
 
-function MemberMapView({ members }: { members: Member[] }) {
+function MemberMapView() {
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
 
-  const withGps = members.filter(
-    (m) => m.homeLat && m.homeLon && !isNaN(parseFloat(m.homeLat)) && !isNaN(parseFloat(m.homeLon))
-  );
+  const { data: mapMembers = [], isLoading } = useQuery<MapMember[]>({
+    queryKey: ["/api/members/map"],
+    queryFn: () => fetch("/api/members/map", { credentials: "include" }).then((r) => r.json()),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const withGps = Array.isArray(mapMembers)
+    ? mapMembers.filter((m) => m.homeLat && m.homeLon && !isNaN(parseFloat(m.homeLat)) && !isNaN(parseFloat(m.homeLon)))
+    : [];
 
   useEffect(() => {
     if (!mapDivRef.current || mapRef.current) return;
-    const map = L.map(mapDivRef.current, {
-      center: [-26.2041, 28.0473],
-      zoom: 9,
-      zoomControl: true,
-    });
+    const map = L.map(mapDivRef.current, { center: [-26.2041, 28.0473], zoom: 9, zoomControl: true });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap contributors",
-      maxZoom: 19,
+      attribution: "© OpenStreetMap contributors", maxZoom: 19,
     }).addTo(map);
     mapRef.current = map;
-    return () => {
-      map.remove();
-      mapRef.current = null;
-    };
+    return () => { map.remove(); mapRef.current = null; };
   }, []);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || withGps.length === 0) return;
-
     const markers: L.Layer[] = [];
     const bounds: [number, number][] = [];
-
     for (const m of withGps) {
       const lat = parseFloat(m.homeLat!);
       const lon = parseFloat(m.homeLon!);
       bounds.push([lat, lon]);
-
-      const color = m.memberStatus === "active" || m.memberStatus === "verified"
-        ? "#22c55e" : "#f59e0b";
-
+      const color = m.memberStatus === "active" || m.memberStatus === "verified" ? "#22c55e" : "#f59e0b";
       const icon = L.divIcon({
         className: "",
-        html: `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 5px rgba(0,0,0,0.5);"></div>`,
-        iconSize: [12, 12],
-        iconAnchor: [6, 6],
+        html: `<div style="width:10px;height:10px;border-radius:50%;background:${color};border:1.5px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>`,
+        iconSize: [10, 10], iconAnchor: [5, 5],
       });
-
       const marker = L.marker([lat, lon], { icon }).addTo(map);
       const locationLine = [m.suburb, m.city, m.province].filter(Boolean).join(", ");
       marker.bindPopup(`
@@ -180,26 +191,15 @@ function MemberMapView({ members }: { members: Member[] }) {
       `);
       markers.push(marker);
     }
-
-    if (bounds.length > 0) {
-      map.fitBounds(bounds as L.LatLngBoundsExpression, { padding: [40, 40] });
-    }
-
-    return () => {
-      markers.forEach((mk) => mk.remove());
-    };
+    if (bounds.length > 0) map.fitBounds(bounds as L.LatLngBoundsExpression, { padding: [40, 40] });
+    return () => { markers.forEach((mk) => mk.remove()); };
   }, [withGps]);
 
   return (
     <div className="flex flex-col h-full">
       <div className="px-6 py-2 border-b border-border shrink-0 flex items-center gap-2 text-xs text-muted-foreground">
         <MapPin className="w-3 h-3" />
-        {withGps.length} of {members.length} members have GPS coordinates
-        {members.length - withGps.length > 0 && (
-          <span className="text-border ml-1">
-            · {members.length - withGps.length} without GPS not shown
-          </span>
-        )}
+        {isLoading ? "Loading GPS data…" : `${withGps.length} members with GPS coordinates`}
       </div>
       <div className="flex-1 relative overflow-hidden">
         <div ref={mapDivRef} className="absolute inset-0" />
@@ -215,7 +215,7 @@ function MemberListView({ members, search }: { members: Member[]; search: string
   if (members.length === 0) {
     return (
       <div className="p-8 text-center text-muted-foreground text-sm">
-        {search ? "No members match your search." : "No members registered yet."}
+        {search ? "No members match your search." : "No members on this page."}
       </div>
     );
   }
@@ -231,13 +231,9 @@ function MemberListView({ members, search }: { members: Member[]; search: string
               {Object.values(grouped[province]).flatMap(Object.values).flat().length} members
             </div>
           </div>
-
           {Object.keys(grouped[province]).sort().map((city) => (
             <div key={city} className="ml-4 mb-4">
-              <div className="text-xs font-semibold uppercase tracking-wider text-foreground mb-2">
-                {city}
-              </div>
-
+              <div className="text-xs font-semibold uppercase tracking-wider text-foreground mb-2">{city}</div>
               {Object.keys(grouped[province][city]).sort().map((suburb) => (
                 <div key={suburb} className="ml-4 mb-3">
                   {suburb !== "—" && (
@@ -247,50 +243,34 @@ function MemberListView({ members, search }: { members: Member[]; search: string
                   )}
                   <div className="space-y-1">
                     {grouped[province][city][suburb].map((m) => (
-                      <div
-                        key={m.id}
-                        className="ml-4 bg-card border border-border/50 px-4 py-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1"
-                      >
+                      <div key={m.id} className="ml-4 bg-card border border-border/50 px-4 py-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-medium text-xs text-foreground">{m.displayName}</span>
                             <StatusBadge status={m.memberStatus} />
-                            {m.membershipTier && (
-                              <span className="text-xs text-muted-foreground border border-border px-1">{m.membershipTier}</span>
-                            )}
+                            {m.membershipTier && <span className="text-xs text-muted-foreground border border-border px-1">{m.membershipTier}</span>}
                           </div>
-
                           {m.homeAddress && (
                             <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                              <MapPin className="w-2.5 h-2.5 shrink-0" />
-                              {m.homeAddress}
+                              <MapPin className="w-2.5 h-2.5 shrink-0" />{m.homeAddress}
                             </div>
                           )}
-
                           <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
-                            <span className="text-xs text-muted-foreground font-mono">
-                              {formatPhone(m.whatsappNumber)}
-                            </span>
+                            <span className="text-xs text-muted-foreground font-mono">{formatPhone(m.whatsappNumber)}</span>
                             {m.mobile && m.mobile !== formatPhone(m.whatsappNumber).replace(/\+27/, "0") && (
                               <span className="text-xs text-muted-foreground font-mono">{m.mobile}</span>
                             )}
-                            {m.email && (
-                              <span className="text-xs text-muted-foreground">{m.email}</span>
-                            )}
+                            {m.email && <span className="text-xs text-muted-foreground">{m.email}</span>}
                           </div>
-
-                          {(m.homeLat && m.homeLon) && (
+                          {m.homeLat && m.homeLon && (
                             <div className="text-xs text-muted-foreground/50 font-mono mt-0.5">
                               {parseFloat(m.homeLat).toFixed(5)}, {parseFloat(m.homeLon).toFixed(5)}
                             </div>
                           )}
                         </div>
-
                         <div className="text-right text-xs text-muted-foreground shrink-0">
                           <div>{formatDate(m.createdAt)}</div>
-                          {m.iceContactName && (
-                            <div className="mt-1 text-amber-500/70">ICE: {m.iceContactName}</div>
-                          )}
+                          {m.iceContactName && <div className="mt-1 text-amber-500/70">ICE: {m.iceContactName}</div>}
                         </div>
                       </div>
                     ))}
@@ -305,77 +285,77 @@ function MemberListView({ members, search }: { members: Member[]; search: string
   );
 }
 
+const LIMIT = 50;
+
 export default function Members() {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [view, setView] = useState<"list" | "map">("list");
+  const [page, setPage] = useState(1);
 
-  const { data: members = [], isLoading, error } = useQuery<Member[]>({
-    queryKey: ["/api/members"],
-    queryFn: () => fetch("/api/members", { credentials: "include" }).then((r) => r.json()),
-    refetchInterval: 30000,
+  // Debounce search so we don't fire on every keystroke
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const buildUrl = (p: number, s: string) => {
+    const params = new URLSearchParams({ page: String(p), limit: String(LIMIT) });
+    if (s) params.set("search", s);
+    return `/api/members?${params.toString()}`;
+  };
+
+  const { data, isLoading, error } = useQuery<PaginatedResponse>({
+    queryKey: ["/api/members/paginated", page, debouncedSearch],
+    queryFn: () =>
+      fetch(buildUrl(page, debouncedSearch), { credentials: "include" }).then(async (r) => {
+        const json = await r.json();
+        if (!r.ok) throw new Error(json.error ?? "Failed to load");
+        return json as PaginatedResponse;
+      }),
+    placeholderData: (prev) => prev,
   });
 
-  const filtered = members.filter((m) => {
-    const q = search.toLowerCase();
-    return (
-      m.displayName.toLowerCase().includes(q) ||
-      m.whatsappNumber.includes(q) ||
-      (m.role ?? "").toLowerCase().includes(q) ||
-      (m.membershipTier ?? "").toLowerCase().includes(q) ||
-      m.memberStatus.toLowerCase().includes(q) ||
-      (m.email ?? "").toLowerCase().includes(q) ||
-      (m.mobile ?? "").includes(q) ||
-      (m.suburb ?? "").toLowerCase().includes(q) ||
-      (m.city ?? "").toLowerCase().includes(q) ||
-      (m.province ?? "").toLowerCase().includes(q) ||
-      (m.homeAddress ?? "").toLowerCase().includes(q)
-    );
-  });
-
-  const withGps = members.filter((m) => m.homeLat && m.homeLon);
+  const members = data?.data ?? [];
+  const pagination = data?.pagination;
 
   return (
     <div className="flex flex-col h-full min-h-0">
+      {/* Header */}
       <div className="h-16 border-b border-border flex items-center justify-between px-6 shrink-0">
         <div>
           <h1 className="text-sm font-bold uppercase tracking-widest">Member Directory</h1>
           <p className="text-xs text-muted-foreground">
-            {isLoading ? "Loading…" : `${members.length} members · ${withGps.length} with GPS`}
+            {isLoading ? "Loading…" : pagination ? `${pagination.total.toLocaleString()} members total` : ""}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex border border-border rounded-sm overflow-hidden">
-            <button
-              onClick={() => setView("list")}
-              className={`px-3 py-1.5 text-xs flex items-center gap-1.5 transition-colors ${view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-            >
+            <button onClick={() => setView("list")}
+              className={`px-3 py-1.5 text-xs flex items-center gap-1.5 transition-colors ${view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
               <List className="w-3 h-3" /> List
             </button>
-            <button
-              onClick={() => setView("map")}
-              className={`px-3 py-1.5 text-xs flex items-center gap-1.5 transition-colors ${view === "map" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-            >
+            <button onClick={() => setView("map")}
+              className={`px-3 py-1.5 text-xs flex items-center gap-1.5 transition-colors ${view === "map" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
               <Map className="w-3 h-3" /> Map
             </button>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-2 text-xs uppercase tracking-wider"
-            onClick={() => exportCsv(filtered)}
-            disabled={filtered.length === 0}
-          >
-            <Download className="w-3 h-3" />
-            Export
+          <Button size="sm" variant="outline" className="gap-2 text-xs uppercase tracking-wider"
+            onClick={() => exportCsv(members)} disabled={members.length === 0}>
+            <Download className="w-3 h-3" />Export page
           </Button>
         </div>
       </div>
 
+      {/* Search bar */}
       <div className="px-6 py-3 border-b border-border shrink-0">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search by name, number, email, suburb, city, province…"
+            placeholder="Search by name, number, email, suburb, city… (searches DB)"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 text-sm"
@@ -383,17 +363,43 @@ export default function Members() {
         </div>
       </div>
 
+      {/* Content */}
       <div className="flex-1 overflow-auto min-h-0">
         {error ? (
           <div className="p-8 text-center text-destructive text-sm">Failed to load members.</div>
         ) : isLoading ? (
           <div className="p-8 text-center text-muted-foreground text-sm">Loading members…</div>
         ) : view === "map" ? (
-          <MemberMapView members={filtered} />
+          <MemberMapView />
         ) : (
-          <MemberListView members={filtered} search={search} />
+          <MemberListView members={members} search={debouncedSearch} />
         )}
       </div>
+
+      {/* Pagination */}
+      {view === "list" && pagination && pagination.pages > 1 && (
+        <div className="border-t border-border px-6 py-3 flex items-center justify-between text-xs text-muted-foreground shrink-0">
+          <span>
+            Page {pagination.page} of {pagination.pages.toLocaleString()}
+            {" · "}showing {members.length} of {pagination.total.toLocaleString()}
+          </span>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setPage(1)} disabled={page === 1}
+              className="px-2 py-1 border border-border rounded-sm disabled:opacity-30 hover:text-foreground">«</button>
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+              className="px-2 py-1 border border-border rounded-sm disabled:opacity-30 hover:text-foreground flex items-center gap-1">
+              <ChevronLeft className="w-3 h-3" />Prev
+            </button>
+            <span className="px-3">{page}</span>
+            <button onClick={() => setPage((p) => Math.min(pagination.pages, p + 1))} disabled={page === pagination.pages}
+              className="px-2 py-1 border border-border rounded-sm disabled:opacity-30 hover:text-foreground flex items-center gap-1">
+              Next<ChevronRight className="w-3 h-3" />
+            </button>
+            <button onClick={() => setPage(pagination.pages)} disabled={page === pagination.pages}
+              className="px-2 py-1 border border-border rounded-sm disabled:opacity-30 hover:text-foreground">»</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
