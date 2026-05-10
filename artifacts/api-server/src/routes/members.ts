@@ -167,6 +167,40 @@ router.get("/members/:id/messages", async (req, res): Promise<void> => {
   res.json(messages);
 });
 
+// ── PATCH /api/members/:id — update member fields ────────────────────────────
+router.patch("/members/:id", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const allowed = [
+    "firstName", "lastName", "displayName", "memberStatus", "membershipTier",
+    "role", "notes", "iceContactName", "iceContactPhone",
+    "email", "mobile", "homeAddress", "suburb", "city", "province", "postalCode", "country",
+  ] as const;
+  type AllowedKey = typeof allowed[number];
+  const update: Partial<Record<AllowedKey, string | null>> = {};
+
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+      const val = req.body[key];
+      update[key] = typeof val === "string" ? val.trim() || null : null;
+    }
+  }
+
+  if (Object.keys(update).length === 0) {
+    res.status(400).json({ error: "No valid fields provided." }); return;
+  }
+
+  const [updated] = await db
+    .update(membersTable)
+    .set({ ...update, updatedAt: new Date() })
+    .where(eq(membersTable.id, id))
+    .returning();
+
+  if (!updated) { res.status(404).json({ error: "Member not found." }); return; }
+  res.json(updated);
+});
+
 // ── POST /api/members — create / upsert member ───────────────────────────────
 router.post("/members", async (req, res): Promise<void> => {
   const parsed = insertMemberSchema.safeParse(req.body);

@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { Download, Search, UserCheck, UserX, Clock, HelpCircle, Map, List, MapPin, ChevronLeft, ChevronRight, Tag, Copy, AlertTriangle, ExternalLink } from "lucide-react";
+import { Download, Search, UserCheck, UserX, Clock, HelpCircle, Map, List, MapPin, ChevronLeft, ChevronRight, Tag, Copy, AlertTriangle, ExternalLink, Pencil, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -336,10 +336,66 @@ function MemberMapView() {
   );
 }
 
+type EditForm = {
+  firstName: string; lastName: string; displayName: string;
+  memberStatus: string; email: string; mobile: string;
+  iceContactName: string; iceContactPhone: string; notes: string;
+};
+
 function MemberListView({ members, search }: { members: Member[]; search: string }) {
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<EditForm>({ firstName: "", lastName: "", displayName: "", memberStatus: "active", email: "", mobile: "", iceContactName: "", iceContactPhone: "", notes: "" });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
   const grouped = groupByLocation(members);
   const provinces = Object.keys(grouped).sort();
+
+  function startEdit(e: React.MouseEvent, m: Member) {
+    e.stopPropagation();
+    setEditingId(m.id);
+    setEditForm({
+      firstName: m.firstName, lastName: m.lastName, displayName: m.displayName,
+      memberStatus: m.memberStatus, email: m.email ?? "", mobile: m.mobile ?? "",
+      iceContactName: m.iceContactName ?? "", iceContactPhone: m.iceContactPhone ?? "",
+      notes: m.notes ?? "",
+    });
+    setSaveError("");
+  }
+
+  function cancelEdit(e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingId(null);
+    setSaveError("");
+  }
+
+  async function saveEdit(e: React.MouseEvent, id: number) {
+    e.stopPropagation();
+    setSaving(true);
+    setSaveError("");
+    try {
+      const res = await fetch(`/api/members/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(editForm),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Save failed.");
+      await queryClient.invalidateQueries({ queryKey: ["/api/members/paginated"] });
+      setEditingId(null);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Save failed.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function f(key: keyof EditForm, val: string) {
+    setEditForm((prev) => ({ ...prev, [key]: val }));
+  }
 
   if (members.length === 0) {
     return (
@@ -348,6 +404,9 @@ function MemberListView({ members, search }: { members: Member[]; search: string
       </div>
     );
   }
+
+  const inputCls = "w-full border border-border bg-background text-foreground text-xs px-2 py-1.5 focus:outline-none focus:border-primary transition-colors";
+  const labelCls = "block text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5 font-bold";
 
   return (
     <div className="p-4 space-y-6">
@@ -372,45 +431,145 @@ function MemberListView({ members, search }: { members: Member[]; search: string
                   )}
                   <div className="space-y-1">
                     {grouped[province][city][suburb].map((m) => (
-                      <div
-                        key={m.id}
-                        onClick={() => navigate(`/members/${m.id}`)}
-                        className="ml-4 bg-card border border-border/50 px-4 py-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 cursor-pointer hover:bg-secondary hover:border-border transition-colors group"
-                      >
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-xs text-foreground group-hover:text-primary transition-colors">{m.displayName}</span>
-                            <StatusBadge status={m.memberStatus} />
-                            {m.membershipTier && <span className="text-xs text-muted-foreground border border-border px-1">{m.membershipTier}</span>}
-                            <SourceBadge source={m.sourceBatch} />
-                          </div>
-                          {m.homeAddress && (
-                            <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                              <MapPin className="w-2.5 h-2.5 shrink-0" />{m.homeAddress}
+                      <div key={m.id} className="ml-4">
+                        {/* ── View row ── */}
+                        {editingId !== m.id && (
+                          <div
+                            onClick={() => navigate(`/members/${m.id}`)}
+                            className="bg-card border border-border/50 px-4 py-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 cursor-pointer hover:bg-secondary hover:border-border transition-colors group"
+                          >
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-xs text-foreground group-hover:text-primary transition-colors">{m.displayName}</span>
+                                <StatusBadge status={m.memberStatus} />
+                                {m.membershipTier && <span className="text-xs text-muted-foreground border border-border px-1">{m.membershipTier}</span>}
+                                <SourceBadge source={m.sourceBatch} />
+                              </div>
+                              {m.homeAddress && (
+                                <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                                  <MapPin className="w-2.5 h-2.5 shrink-0" />{m.homeAddress}
+                                </div>
+                              )}
+                              <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
+                                <span className="text-xs text-muted-foreground font-mono">{formatPhone(m.whatsappNumber)}</span>
+                                {m.mobile && <span className="text-xs text-muted-foreground font-mono">{m.mobile}</span>}
+                                {m.email && <span className="text-xs text-muted-foreground">{m.email}</span>}
+                                {m.industry && <span className="text-xs text-muted-foreground/60 italic">{m.industry}</span>}
+                              </div>
                             </div>
-                          )}
-                          <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
-                            <span className="text-xs text-muted-foreground font-mono">{formatPhone(m.whatsappNumber)}</span>
-                            {m.mobile && m.mobile !== formatPhone(m.whatsappNumber).replace(/\+27/, "0") && (
-                              <span className="text-xs text-muted-foreground font-mono">{m.mobile}</span>
+                            <div className="text-right text-xs text-muted-foreground shrink-0 flex flex-col items-end gap-1">
+                              <div>{formatDate(m.createdAt)}</div>
+                              {m.iceContactName && <div className="text-amber-600/80">ICE: {m.iceContactName}</div>}
+                              <div className="flex items-center gap-2 mt-1">
+                                <button
+                                  onClick={(e) => startEdit(e, m)}
+                                  className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary border border-border hover:border-primary px-2 py-0.5 transition-colors"
+                                  title="Edit member"
+                                >
+                                  <Pencil className="w-2.5 h-2.5" /> Edit
+                                </button>
+                                <div className="flex items-center gap-1 text-primary/60 group-hover:text-primary transition-colors">
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                  <span className="text-[10px]">View profile</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── Edit panel ── */}
+                        {editingId === m.id && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-secondary border border-primary/40 px-4 py-4 space-y-3"
+                          >
+                            {/* Name row */}
+                            <div className="grid grid-cols-3 gap-3">
+                              <div>
+                                <label className={labelCls}>First Name</label>
+                                <input className={inputCls} value={editForm.firstName} onChange={(e) => f("firstName", e.target.value)} />
+                              </div>
+                              <div>
+                                <label className={labelCls}>Last Name</label>
+                                <input className={inputCls} value={editForm.lastName} onChange={(e) => f("lastName", e.target.value)} />
+                              </div>
+                              <div>
+                                <label className={labelCls}>Display Name</label>
+                                <input className={inputCls} value={editForm.displayName} onChange={(e) => f("displayName", e.target.value)} />
+                              </div>
+                            </div>
+
+                            {/* Status + Contact row */}
+                            <div className="grid grid-cols-3 gap-3">
+                              <div>
+                                <label className={labelCls}>Status</label>
+                                <select className={inputCls} value={editForm.memberStatus} onChange={(e) => f("memberStatus", e.target.value)}>
+                                  {["active", "verified", "pending", "inactive", "unknown"].map((s) => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label className={labelCls}>Email</label>
+                                <input className={inputCls} value={editForm.email} onChange={(e) => f("email", e.target.value)} placeholder="email@example.com" />
+                              </div>
+                              <div>
+                                <label className={labelCls}>Mobile</label>
+                                <input className={inputCls} value={editForm.mobile} onChange={(e) => f("mobile", e.target.value)} placeholder="+27 82 000 0000" />
+                              </div>
+                            </div>
+
+                            {/* ICE row */}
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className={labelCls}>ICE Contact Name</label>
+                                <input className={inputCls} value={editForm.iceContactName} onChange={(e) => f("iceContactName", e.target.value)} placeholder="e.g. Johan Smit" />
+                              </div>
+                              <div>
+                                <label className={labelCls}>ICE WhatsApp Number</label>
+                                <input className={inputCls} value={editForm.iceContactPhone} onChange={(e) => f("iceContactPhone", e.target.value)} placeholder="+27 82 000 0000" />
+                              </div>
+                            </div>
+
+                            {/* Notes */}
+                            <div>
+                              <label className={labelCls}>Notes</label>
+                              <textarea
+                                className={`${inputCls} resize-none`}
+                                rows={2}
+                                value={editForm.notes}
+                                onChange={(e) => f("notes", e.target.value)}
+                                placeholder="Operator notes…"
+                              />
+                            </div>
+
+                            {/* Error */}
+                            {saveError && (
+                              <div className="text-xs text-destructive border border-destructive/30 bg-destructive/10 px-3 py-1.5">{saveError}</div>
                             )}
-                            {m.email && <span className="text-xs text-muted-foreground">{m.email}</span>}
-                            {m.industry && <span className="text-xs text-muted-foreground/60 italic">{m.industry}</span>}
-                          </div>
-                          {m.homeLat && m.homeLon && (
-                            <div className="text-xs text-muted-foreground/50 font-mono mt-0.5">
-                              {parseFloat(m.homeLat).toFixed(5)}, {parseFloat(m.homeLon).toFixed(5)}
+
+                            {/* Buttons */}
+                            <div className="flex items-center gap-2 pt-1">
+                              <button
+                                onClick={(e) => void saveEdit(e, m.id)}
+                                disabled={saving}
+                                className="flex items-center gap-1.5 px-4 py-1.5 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors disabled:opacity-50"
+                              >
+                                <Check className="w-3 h-3" />
+                                {saving ? "Saving…" : "Save"}
+                              </button>
+                              <button
+                                onClick={cancelEdit}
+                                disabled={saving}
+                                className="flex items-center gap-1.5 px-4 py-1.5 border border-border text-muted-foreground text-xs uppercase tracking-wider hover:text-foreground hover:border-foreground/30 transition-colors disabled:opacity-50"
+                              >
+                                <X className="w-3 h-3" />
+                                Cancel
+                              </button>
+                              <span className="text-[10px] text-muted-foreground ml-2">{m.displayName} · #{m.id}</span>
                             </div>
-                          )}
-                        </div>
-                        <div className="text-right text-xs text-muted-foreground shrink-0 flex flex-col items-end gap-1">
-                          <div>{formatDate(m.createdAt)}</div>
-                          {m.iceContactName && <div className="text-amber-500/70">ICE: {m.iceContactName}</div>}
-                          <div className="flex items-center gap-1 text-primary/60 group-hover:text-primary transition-colors mt-1">
-                            <ExternalLink className="w-2.5 h-2.5" />
-                            <span className="text-[10px]">View profile</span>
                           </div>
-                        </div>
+                        )}
                       </div>
                     ))}
                   </div>
