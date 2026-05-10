@@ -2,8 +2,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef } from "react";
 import {
   Send, MessageSquare, Loader2, CheckCircle2, XCircle,
-  Users, Megaphone, FileText, Pencil, Tag, Radio,
+  Users, Megaphone, FileText, Pencil, Tag, Radio, ArrowLeft,
 } from "lucide-react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -289,9 +290,13 @@ export default function Broadcast() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="shrink-0 px-6 py-4 border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Megaphone className="w-5 h-5 text-primary" />
+      <div className="shrink-0 px-6 py-3 border-b border-border flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link href="/" className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors text-xs uppercase tracking-widest shrink-0">
+            <ArrowLeft className="w-3.5 h-3.5" /> Home
+          </Link>
+          <div className="h-4 w-px bg-border shrink-0" />
+          <Megaphone className="w-4 h-4 text-primary shrink-0" />
           <div>
             <h1 className="text-sm font-bold uppercase tracking-widest text-foreground">Broadcast</h1>
             <p className="text-xs text-muted-foreground mt-0.5">

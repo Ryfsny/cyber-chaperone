@@ -1,6 +1,7 @@
 import { useListMessages, useListTrips, useUpdateMessage, getListMessagesQueryKey, getGetTripMessagesQueryKey, getListTripsQueryKey } from "@workspace/api-client-react";
 import { format } from "date-fns";
-import { MessageSquare, Link as LinkIcon, User } from "lucide-react";
+import { MessageSquare, Link as LinkIcon, User, ArrowLeft } from "lucide-react";
+import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -31,8 +32,12 @@ export default function Messages() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
-      <header className="h-16 px-8 flex items-center border-b border-border bg-card shrink-0">
-        <h1 className="text-lg uppercase tracking-widest font-bold text-foreground">Global Inbox</h1>
+      <header className="h-14 px-6 flex items-center gap-4 border-b border-border bg-card shrink-0">
+        <Link href="/" className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors text-xs uppercase tracking-widest">
+          <ArrowLeft className="w-3.5 h-3.5" /> Home
+        </Link>
+        <div className="h-4 w-px bg-border" />
+        <h1 className="text-sm uppercase tracking-widest font-bold text-foreground">Global Inbox</h1>
       </header>
 
       <div className="flex-1 overflow-auto p-8">

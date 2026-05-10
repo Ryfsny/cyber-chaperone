@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { MessageSquare, Plus, Shield, Bot, Radio, Users, BookUser, LogOut, Megaphone, MessagesSquare } from "lucide-react";
+import { MessageSquare, Plus, Shield, Bot, Radio, Users, BookUser, LogOut, Megaphone, MessagesSquare, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { AiAssistant } from "@/components/ai/AiAssistant";
@@ -11,7 +11,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { logout } = useAuth();
 
   const navItems = [
-    { href: "/", label: "Situation Room", icon: Shield },
+    { href: "/", label: "Home", icon: Home },
     { href: "/radar", label: "Live Radar", icon: Radio },
     { href: "/messages", label: "Inbox", icon: MessageSquare },
     { href: "/responders", label: "Responders", icon: Users },
@@ -23,13 +23,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-background text-foreground selection:bg-primary selection:text-primary-foreground font-mono">
       <aside className="w-64 border-r border-border bg-card flex flex-col shrink-0">
-        <div className="h-16 flex items-center px-5 border-b border-border">
+        <a
+          href="/website/"
+          className="h-16 flex items-center px-5 border-b border-border hover:bg-secondary/50 transition-colors group"
+          title="Go to eblockwatch website"
+        >
           <img
             src="/eblockwatch-logo.png"
             alt="eblockwatch"
             className="h-8 w-auto object-contain"
           />
-        </div>
+        </a>
         <nav className="flex-1 p-4 space-y-2">
           {navItems.map((item) => {
             const Icon = item.icon;

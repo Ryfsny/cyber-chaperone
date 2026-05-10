@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import {
   AlertCircle, CheckCircle2, AlertTriangle, MessageSquare, Clock,
-  MapPin, X, Users,
+  MapPin, X, Users, ChevronDown,
 } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
@@ -76,6 +76,52 @@ function makeTripIcon(color: string, pulse: boolean) {
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
+}
+
+// ── KanbanColumn ─────────────────────────────────────────────────
+const COLUMN_CFG = {
+  red: {
+    label: "Critical", dotCls: "bg-red-500 animate-pulse",
+    hdrCls: "bg-red-950/50 border-red-900/60", textCls: "text-red-400",
+    borderCls: "border-red-900/40", emptyText: "No critical incidents",
+  },
+  amber: {
+    label: "Caution", dotCls: "bg-amber-500",
+    hdrCls: "bg-amber-950/40 border-amber-900/60", textCls: "text-amber-400",
+    borderCls: "border-amber-900/40", emptyText: "No caution alerts",
+  },
+  green: {
+    label: "All Clear", dotCls: "bg-green-500",
+    hdrCls: "bg-green-950/30 border-green-900/50", textCls: "text-green-400",
+    borderCls: "border-green-900/30", emptyText: "No active trips",
+  },
+} as const;
+
+function KanbanColumn({ status, trips, isLoading }: { status: "red" | "amber" | "green"; trips: Trip[]; isLoading: boolean }) {
+  const cfg = COLUMN_CFG[status];
+  return (
+    <div className={`flex-1 flex flex-col overflow-hidden border-r last:border-r-0 ${cfg.borderCls}`}>
+      <div className={`shrink-0 px-4 py-2.5 border-b ${cfg.hdrCls} flex items-center justify-between`}>
+        <div className="flex items-center gap-2">
+          <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${cfg.dotCls}`} />
+          <span className={`text-xs font-bold uppercase tracking-widest ${cfg.textCls}`}>{cfg.label}</span>
+        </div>
+        <span className={`text-base font-mono font-bold leading-none ${cfg.textCls}`}>{trips.length}</span>
+      </div>
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {isLoading
+          ? [1, 2].map((i) => <div key={i} className="h-24 border border-border bg-card animate-pulse" />)
+          : trips.length === 0
+            ? (
+              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground/40">
+                <CheckCircle2 className="w-5 h-5 mb-1.5" />
+                <p className="text-[10px] uppercase tracking-widest">{cfg.emptyText}</p>
+              </div>
+            )
+            : trips.map((t) => <TripCard key={t.id} trip={t} />)}
+      </div>
+    </div>
+  );
 }
 
 // ── TripCard ─────────────────────────────────────────────────────
@@ -162,6 +208,7 @@ export default function Dashboard() {
   const [radiusKm, setRadiusKm] = useState(2);
   const [radiusCenter, setRadiusCenter] = useState<{ lat: number; lon: number } | null>(null);
   const [membersInRadius, setMembersInRadius] = useState<MapMember[]>([]);
+  const [showCompleted, setShowCompleted] = useState(false);
 
   // Data fetching
   const { data: trips = [], isLoading: tripsLoading } = useListTrips();
@@ -408,6 +455,9 @@ export default function Dashboard() {
         .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     [trips]
   );
+  const redTrips = useMemo(() => activeTrips.filter((t) => t.status === "red"), [activeTrips]);
+  const amberTrips = useMemo(() => activeTrips.filter((t) => t.status === "amber"), [activeTrips]);
+  const greenTrips = useMemo(() => activeTrips.filter((t) => t.status === "green"), [activeTrips]);
 
   function clearFilters() {
     setProvince(""); setCity(""); setSuburb(""); setRadiusMode(false);
@@ -531,46 +581,34 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* ── Trip cards (scrollable) ─────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6 space-y-8">
+      {/* ── Status board (kanban) ───────────────────────────────── */}
+      <div className="flex-1 flex flex-col overflow-hidden">
 
-          {/* Active trips */}
-          <section>
-            <h2 className="text-xs uppercase tracking-widest text-muted-foreground mb-4 pb-2 border-b border-border">
-              Active Trips
-              <span className="text-foreground font-bold ml-2">{activeTrips.length}</span>
-            </h2>
-            {tripsLoading ? (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                {[1, 2].map((i) => <div key={i} className="h-32 border border-border bg-card animate-pulse" />)}
-              </div>
-            ) : activeTrips.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-                <CheckCircle2 className="w-7 h-7 opacity-30 mb-2" />
-                <p className="uppercase tracking-widest text-xs">No active trips — all clear</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-5">
-                {activeTrips.map((trip) => <TripCard key={trip.id} trip={trip} />)}
-              </div>
-            )}
-          </section>
+        {/* 3-column kanban */}
+        <div className="flex-1 flex overflow-hidden">
+          <KanbanColumn status="red"   trips={redTrips}   isLoading={tripsLoading} />
+          <KanbanColumn status="amber" trips={amberTrips} isLoading={tripsLoading} />
+          <KanbanColumn status="green" trips={greenTrips} isLoading={tripsLoading} />
+        </div>
 
-          {/* Completed trips */}
-          {completedTrips.length > 0 && (
-            <section>
-              <h2 className="text-xs uppercase tracking-widest text-muted-foreground mb-4 pb-2 border-b border-border">
-                Completed
-                <span className="text-foreground font-bold ml-2">{completedTrips.length}</span>
-              </h2>
-              <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-5">
+        {/* Completed strip */}
+        {completedTrips.length > 0 && (
+          <div className="shrink-0 border-t border-border">
+            <button
+              onClick={() => setShowCompleted((v) => !v)}
+              className="w-full px-6 py-2 text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-secondary flex items-center justify-between transition-colors"
+            >
+              <span>Completed — {completedTrips.length}</span>
+              <ChevronDown className={`w-3 h-3 transition-transform ${showCompleted ? "rotate-180" : ""}`} />
+            </button>
+            {showCompleted && (
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 p-3 max-h-72 overflow-y-auto border-t border-border">
                 {completedTrips.map((trip) => <TripCard key={trip.id} trip={trip} />)}
               </div>
-            </section>
-          )}
+            )}
+          </div>
+        )}
 
-        </div>
       </div>
     </div>
   );

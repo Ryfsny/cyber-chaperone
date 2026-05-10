@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef, useMemo } from "react";
-import { MessageSquare, Send, Loader2, CheckCircle2, Search, ChevronRight } from "lucide-react";
+import { MessageSquare, Send, Loader2, CheckCircle2, Search, ChevronRight, ArrowLeft } from "lucide-react";
+import { Link } from "wouter";
 import { format, isToday, isYesterday } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -134,6 +135,10 @@ export default function Conversations() {
       {/* ── Left: conversation list ─────────────────────────── */}
       <div className="w-72 shrink-0 border-r border-border flex flex-col bg-card">
         <div className="h-14 flex items-center gap-2 px-4 border-b border-border shrink-0">
+          <Link href="/" className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors text-[10px] uppercase tracking-widest shrink-0">
+            <ArrowLeft className="w-3 h-3" /> Home
+          </Link>
+          <div className="h-3 w-px bg-border shrink-0 mx-1" />
           <MessageSquare className="w-4 h-4 text-primary shrink-0" />
           <h1 className="text-xs font-bold uppercase tracking-widest text-foreground">Conversations</h1>
         </div>

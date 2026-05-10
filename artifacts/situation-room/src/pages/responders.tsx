@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Link } from "wouter";
+import { ArrowLeft } from "lucide-react";
 import {
   useListResponders,
   useCreateResponder,
@@ -393,14 +395,20 @@ export default function Responders() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
-        <div>
-          <h1 className="text-sm font-bold uppercase tracking-widest text-foreground">
-            Local Conduit Network
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {activeCount} active · {responders.length} total — eblockwatch Situation Room conduits
-          </p>
+      <div className="px-6 py-3 border-b border-border flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-4">
+          <Link href="/" className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors text-xs uppercase tracking-widest shrink-0">
+            <ArrowLeft className="w-3.5 h-3.5" /> Home
+          </Link>
+          <div className="h-4 w-px bg-border shrink-0" />
+          <div>
+            <h1 className="text-sm font-bold uppercase tracking-widest text-foreground">
+              Local Conduit Network
+            </h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {activeCount} active · {responders.length} total — eblockwatch Situation Room conduits
+            </p>
+          </div>
         </div>
         {!showForm && !editingResponder && (
           <button
