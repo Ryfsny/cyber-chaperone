@@ -35,7 +35,12 @@ router.post("/broadcast", async (req: Request, res: Response): Promise<void> => 
   }
 
   const members = await db
-    .select({ id: membersTable.id, displayName: membersTable.displayName, whatsappNumber: membersTable.whatsappNumber })
+    .select({
+      id: membersTable.id,
+      firstName: membersTable.firstName,
+      displayName: membersTable.displayName,
+      whatsappNumber: membersTable.whatsappNumber,
+    })
     .from(membersTable)
     .where(inArray(membersTable.id, memberIds));
 
@@ -48,7 +53,8 @@ router.post("/broadcast", async (req: Request, res: Response): Promise<void> => 
       continue;
     }
     try {
-      await client.messages.create({ from, to: member.whatsappNumber, body: message.trim() });
+      const personalised = message.trim().replace(/\{name\}/gi, member.firstName ?? member.displayName);
+      await client.messages.create({ from, to: member.whatsappNumber, body: personalised });
       results.push({ id: member.id, name: member.displayName, status: "sent" });
     } catch (err) {
       results.push({ id: member.id, name: member.displayName, status: "failed", error: String(err) });
