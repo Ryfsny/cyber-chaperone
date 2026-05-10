@@ -1,0 +1,159 @@
+Here is the clean version to send to the website developer:
+
+Hi,
+
+Please make the following updates to **[www.eblockwatch.co.za](http://www.eblockwatch.co.za)**.
+
+## CHANGE 1 — Registration form sync
+
+Please connect the website registration form to our backend registration system.
+
+Field mapping:
+
+| Website field        | Backend field   |
+| -------------------- | --------------- |
+| Name                 | full_name       |
+| WhatsApp / Mobile    | whatsapp_number |
+| Email                | email           |
+| City / Suburb        | suburb          |
+| Province             | province        |
+| Membership Type      | membership_tier |
+| Select your Industry | industry        |
+
+This can be done either via:
+
+1. Webflow native form webhook, or
+2. JavaScript fetch on form submit.
+
+Please confirm which method you prefer.
+
+On successful submission, the existing Thank You message and Paystack payment links must still display as they do now.
+
+## CHANGE 2 — Membership plan names
+
+Please update the registration dropdown options:
+
+| Current name            | New name                       |
+| ----------------------- | ------------------------------ |
+| Free Plan               | Entry Level — Free             |
+| Individual Premium Plan | Single Membership — R150/month |
+| Family Premium Plan     | Family Membership — R250/month |
+
+## CHANGE 3 — Copy changes
+
+### Hero section
+
+Replace:
+
+“Cyber Chaperone provides real-time crisis management and monitoring.”
+
+With:
+
+“Cyber Chaperone gives you real-time safety monitoring and a trusted network — so someone always knows you're okay.”
+
+### Red callout box
+
+Replace:
+
+“Who you gonna call…Call us! Because when you're in trouble, the right people need to know fast.”
+
+With:
+
+“Who's watching over you? We are. The right people, always in the loop — before trouble finds you.”
+
+Keep the current red/orange background and bold styling.
+
+### “Your Personal Travel Safety Companion” section
+
+Replace:
+
+“Traveling entails risks like kidnapping, delays, breakdowns, and accidents, while many current solutions are unreliable, invasive, or overly complex. Cyber Chaperone has solved this problem.”
+
+With:
+
+“Whether it's an unexpected detour, a breakdown, or simply running late — someone who cares should always know where you are. Cyber Chaperone is that someone. Simple, private, and always on your side.”
+
+Please also replace any remaining use of:
+
+“crisis management”
+
+with:
+
+“safety monitoring”
+
+Please replace any fear-first wording such as:
+
+“when you're in trouble”
+
+with empowerment wording such as:
+
+“stay connected”, “travel with confidence”, or “someone always knows you're safe”.
+
+## CHANGE 4 — Add WhatsApp CTA button
+
+Please add a WhatsApp button in the hero section below the current “Register for Free” button.
+
+Button text:
+
+Chat to AI Arnie on WhatsApp
+
+Button link:
+
+[https://wa.me/27825611065](https://wa.me/27825611065)
+
+Button style:
+
+Match the green “Register for Free” button styling.
+
+## CHANGE 5 — Footer contact email
+
+Current:
+
+[ryfsny@yebo.co.za](mailto:ryfsny@yebo.co.za)
+
+Replace with:
+
+[info@eblockwatch.co.za](mailto:info@eblockwatch.co.za)
+
+Please hold this change until I confirm the mailbox is live.
+
+## CHANGE 6 — Meta / SEO description
+
+Replace the current SEO description:
+
+“Cyber Chaperone provides real-time crisis management and monitoring for free to all eblockwatch members.”
+
+With:
+
+“eblockwatch Cyber Chaperone gives you real-time travel safety monitoring and a trusted community network. Free for all members. South Africa's safety companion since 2001.”
+
+Please update this in:
+
+* Page Settings SEO title/description
+* Open Graph title/description
+
+## DO NOT CHANGE
+
+Please do not change:
+
+* Logo
+* Colours
+* Overall layout
+* Paystack payment links
+* ElevenLabs AI chat widget
+* Facebook social link
+* “Advocate for Community Safety Since 2001” badge
+* Terms and Conditions link
+
+## Please reply with
+
+1. Estimated completion date
+2. Which form connection method you will use: Webflow webhook or JavaScript fetch
+3. Any other site sections you think need tone correction
+
+Regards,
+Andre Snyman
+082 561 1065
+[info@eblockwatch.co.za](mailto:info@eblockwatch.co.za)
+
+This is ready to send.
