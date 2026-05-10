@@ -6,3 +6,9 @@ id = "GZcowUx324_zRD73VmXNW"
 uri = "file://docs/ruka-vs-current-alignment-report.md"
 type = "text"
 title = "Ruka vs Current — Alignment Report"
+
+[[outputs]]
+id = "In_i1tk9sJYdT2gcqH4ks"
+uri = "file://EBLOCKWATCH_WEBSITE_DEVELOPER_BRIEF.md"
+type = "text"
+title = "eblockwatch.co.za — Developer Brief"
