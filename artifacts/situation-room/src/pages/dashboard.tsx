@@ -81,19 +81,19 @@ function makeTripIcon(color: string, pulse: boolean) {
 // ── KanbanColumn ─────────────────────────────────────────────────
 const COLUMN_CFG = {
   red: {
-    label: "Critical", dotCls: "bg-red-500 animate-pulse",
-    hdrCls: "bg-red-950/50 border-red-900/60", textCls: "text-red-400",
-    borderCls: "border-red-900/40", emptyText: "No critical incidents",
+    label: "Critical", dotCls: "bg-red-600 animate-pulse",
+    hdrCls: "bg-red-50 border-red-200", textCls: "text-red-700 font-extrabold",
+    borderCls: "border-red-200", emptyText: "No critical incidents",
   },
   amber: {
     label: "Caution", dotCls: "bg-amber-500",
-    hdrCls: "bg-amber-950/40 border-amber-900/60", textCls: "text-amber-400",
-    borderCls: "border-amber-900/40", emptyText: "No caution alerts",
+    hdrCls: "bg-amber-50 border-amber-200", textCls: "text-amber-700 font-extrabold",
+    borderCls: "border-amber-200", emptyText: "No caution alerts",
   },
   green: {
-    label: "All Clear", dotCls: "bg-green-500",
-    hdrCls: "bg-green-950/30 border-green-900/50", textCls: "text-green-400",
-    borderCls: "border-green-900/30", emptyText: "No active trips",
+    label: "All Clear", dotCls: "bg-green-600",
+    hdrCls: "bg-green-50 border-green-200", textCls: "text-green-700 font-extrabold",
+    borderCls: "border-green-200", emptyText: "No active trips",
   },
 } as const;
 

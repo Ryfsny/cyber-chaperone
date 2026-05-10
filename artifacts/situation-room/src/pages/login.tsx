@@ -43,7 +43,7 @@ export default function LoginPage() {
             alt="eblockwatch"
             className="h-10 w-auto object-contain"
           />
-          <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-widest">
+          <div className="flex items-center gap-2 text-foreground text-sm font-extrabold uppercase tracking-widest">
             <Shield className="w-4 h-4" />
             Situation Room
           </div>
@@ -54,7 +54,7 @@ export default function LoginPage() {
           className="bg-card border border-border p-6 space-y-4"
         >
           <div>
-            <label className="block text-xs uppercase tracking-widest text-muted-foreground mb-2">
+            <label className="block text-xs uppercase tracking-widest text-foreground font-bold mb-2">
               Operator Password
             </label>
             <div className="relative">
