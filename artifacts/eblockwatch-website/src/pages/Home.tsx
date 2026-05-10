@@ -1,4 +1,5 @@
 import { useState } from "react";
+import AiArnieChat from "../components/AiArnieChat";
 
 const LOGO = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif";
 const HERO_IMG = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/674fef222ea8a7e01faa8d21_E-Block%20Watch%20hero.avif";
@@ -593,9 +594,8 @@ export default function HomePage() {
         </div>
       </footer>
 
-      {/* ── ELEVENLABS AI ARNIE WIDGET ──────────────────────────────────── */}
-      {/* @ts-expect-error custom element */}
-      <elevenlabs-convai agent-id="agent_3601k3tpgg6vfr98bwftkga19xyj" action-text="Chat with AI Arnie" />
+      {/* ── AI ARNIE CHAT WIDGET ─────────────────────────────────────────── */}
+      <AiArnieChat />
     </div>
   );
 }
