@@ -1,0 +1,39 @@
+GOOD. Now import ONLY these missing 10 members.
+
+Rules:
+- Import into members table only.
+- Use whatsapp_number as unique field.
+- Reject duplicates.
+- source_batch = launch_test_30_members
+- import_status starts as pending_import.
+- After successful insert, update successful rows to imported.
+- Do not create trips.
+- Do not touch Live Trip Board.
+- Do not touch Twilio.
+- Do not touch /api/webhook/twilio.
+- Do not touch Cyber Chaperone trip logic.
+- Do not infer missing fields.
+
+CSV DATA — MISSING FIRST 10 MEMBERS:
+
+First Name,Last Name,Mobile,Email,Signup Type,Security Provider,Fire Reaction Service,Car Tracker Provider,Source,TimeStamp Opt In,Address,Industry,Comments
+Nicole,Glickman,27823770741,niknak36@gmail.com,Family,Not Installed,Not Installed,Not Installed,Funnel Page Form,"Thursday, 12 December 2024 at 01:08:00","Not Installed at this point",,
+Dale,Toy,27828284007,dale@sportscap.co.za,Personal,Not Installed,Not Installed,Not Installed,Funnel Page Form,"Thursday, 12 December 2024 at 02:22:14","Not Installed at this point",,
+Cameron,Solarsh,27825626825,camisolarsh@gmail.com,Personal,Not Installed,Not Installed,Not Installed,Funnel Page Form,"Thursday, 12 December 2024 at 02:40:32","Not Installed at this point",,
+Amanda,Blankfield-Koseff,27790808474,ablankfield@gmail.com,Family,Not Installed,Not Installed,Not Installed,Funnel Page Form,"Thursday, 12 December 2024 at 02:57:44","Not Installed at this point",,
+Michael,Roos,27747595024,mikeroos@gmail.com,Family,Not Installed,Not Installed,Not Installed,Funnel Page Form,"Thursday, 12 December 2024 at 03:41:30","Not Installed at this point",,
+Petru,Radyn,27632521725,petruradyn@gmail.com,Personal,Not Installed,Not Installed,Not Installed,Funnel Page Form,"Thursday, 12 December 2024 at 04:45:59","Not Installed at this point",,
+Delia,Agliotti,27815170768,deliaagliotti@gmail.com,Personal,Not Installed,Not Installed,Not Installed,Funnel Page Form,"Thursday, 12 December 2024 at 04:55:47","Not Installed at this point",,
+Denise,Oberholzer,27835559824,dpretorius2@gmail.com,Personal,Not Installed,Not Installed,Not Installed,Funnel Page Form,"Thursday, 12 December 2024 at 07:04:05","Not Installed at this point",,
+Julia,Burleigh,27713039377,juliaburleigh@gmail.com,Personal,Not Installed,Not Installed,Not Installed,Funnel Page Form,"Thursday, 12 December 2024 at 10:44:05","Not Installed at this point",,
+Rouxna,Hough,27826833253,rhough@khulisa.com,Personal,Not Installed,Not Installed,Not Installed,Funnel Page Form,"Thursday, 12 December 2024 at 23:10:16","Not Installed at this point",,
+
+AFTER IMPORT, REPORT:
+1. Imported count
+2. Duplicate count
+3. Rejected count
+4. Final member count
+5. Confirm total source_batch = launch_test_30_members is now 30 or explain why not
+6. Confirm Live Trip Board unchanged
+7. Confirm Twilio untouched
+8. Confirm Cyber Chaperone trip logic untouched
