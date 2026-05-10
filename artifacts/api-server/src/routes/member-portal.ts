@@ -158,7 +158,11 @@ router.get("/member-portal/me", requireMemberAuth, async (req, res): Promise<voi
 
 // ── PATCH /api/member-portal/me ───────────────────────────────────────────────
 router.patch("/member-portal/me", requireMemberAuth, async (req, res): Promise<void> => {
-  const allowed = ["firstName", "lastName", "displayName", "notes", "iceContactName", "iceContactPhone"] as const;
+  const allowed = [
+    "firstName", "lastName", "displayName", "notes",
+    "iceContactName", "iceContactPhone",
+    "email", "mobile", "homeAddress", "suburb", "city", "province", "postalCode", "country",
+  ] as const;
   type AllowedKey = typeof allowed[number];
   const update: Partial<Record<AllowedKey, string>> = {};
 

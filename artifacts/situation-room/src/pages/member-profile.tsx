@@ -198,7 +198,7 @@ function TripCard({ trip }: { trip: MemberTrip }) {
 export default function MemberProfile() {
   const { id } = useParams<{ id: string }>();
   const memberId = parseInt(id ?? "0", 10);
-  const [tab, setTab] = useState<"overview" | "messages" | "trips">("overview");
+  const [tab, setTab] = useState<"overview" | "messages" | "trips" | "activity">("overview");
 
   const { data: member, isLoading } = useQuery<MemberFull>({
     queryKey: ["/api/members", memberId],
@@ -299,10 +299,11 @@ export default function MemberProfile() {
 
       {/* ── Tabs ────────────────────────────────────────────────── */}
       <div className="shrink-0 border-b border-border bg-card flex">
-        {(["overview", "messages", "trips"] as const).map((t) => {
+        {(["overview", "messages", "trips", "activity"] as const).map((t) => {
           const counts: Record<string, number> = {
             messages: messages.length,
             trips: trips.length,
+            activity: messages.length + trips.length,
           };
           return (
             <button
@@ -500,6 +501,120 @@ export default function MemberProfile() {
             </section>
           </div>
         )}
+
+        {/* ── ACTIVITY LOG ──────────────────────────────────── */}
+        {tab === "activity" && (() => {
+          type EvTrip    = { kind: "trip_start" | "trip_end"; trip: MemberTrip; at: Date };
+          type EvMessage = { kind: "message"; msg: MemberMessage; at: Date };
+          type Ev = EvTrip | EvMessage;
+
+          const events: Ev[] = [
+            ...trips.map((t): EvTrip => ({ kind: "trip_start", trip: t, at: new Date(t.createdAt) })),
+            ...trips.filter((t) => t.status === "completed").map((t): EvTrip => ({ kind: "trip_end", trip: t, at: new Date(t.updatedAt) })),
+            ...messages.map((m): EvMessage => ({ kind: "message", msg: m, at: new Date(m.receivedAt) })),
+          ].sort((a, b) => a.at.getTime() - b.at.getTime());
+
+          if (events.length === 0) {
+            return (
+              <div className="flex-1 flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
+                <Clock className="w-7 h-7 opacity-30" />
+                <p className="text-xs uppercase tracking-widest">No activity yet</p>
+              </div>
+            );
+          }
+
+          const byDay: { day: string; evts: Ev[] }[] = [];
+          for (const ev of events) {
+            const day = format(ev.at, "d MMM yyyy");
+            const last = byDay[byDay.length - 1];
+            if (last && last.day === day) last.evts.push(ev);
+            else byDay.push({ day, evts: [ev] });
+          }
+
+          return (
+            <div className="p-4 max-w-2xl mx-auto space-y-6">
+              {byDay.map(({ day, evts }) => (
+                <div key={day}>
+                  {/* Day separator */}
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{day}</span>
+                    <div className="flex-1 h-px bg-border" />
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {evts.map((ev, i) => {
+                      if (ev.kind === "trip_start") {
+                        const StatusIcon = TRIP_STATUS_ICON[ev.trip.status] ?? CheckCircle2;
+                        const statusCol = TRIP_STATUS_TEXT[ev.trip.status] ?? "text-muted-foreground";
+                        return (
+                          <div key={`ts-${ev.trip.id}-${i}`} className="flex items-start gap-3">
+                            <div className="w-7 h-7 rounded-full bg-green-900/30 border border-green-700/40 flex items-center justify-center shrink-0 mt-0.5">
+                              <Navigation className="w-3.5 h-3.5 text-green-400" />
+                            </div>
+                            <div className="flex-1 min-w-0 border border-green-900/40 bg-card px-3 py-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-bold text-green-400 uppercase tracking-wider">Trip started</span>
+                                <Link href={`/trips/${ev.trip.id}`} className="text-[10px] text-primary hover:underline">#{ev.trip.id}</Link>
+                                <StatusIcon className={cn("w-3 h-3", statusCol)} />
+                                <span className={cn("text-[10px] uppercase tracking-widest", statusCol)}>{ev.trip.status}</span>
+                                <span className="text-[10px] text-muted-foreground ml-auto">{format(ev.at, "HH:mm")}</span>
+                              </div>
+                              <p className="text-sm text-foreground mt-0.5">{ev.trip.title}</p>
+                            </div>
+                          </div>
+                        );
+                      }
+                      if (ev.kind === "trip_end") {
+                        return (
+                          <div key={`te-${ev.trip.id}-${i}`} className="flex items-start gap-3">
+                            <div className="w-7 h-7 rounded-full bg-muted/30 border border-border flex items-center justify-center shrink-0 mt-0.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground" />
+                            </div>
+                            <div className="flex-1 min-w-0 border border-border bg-card px-3 py-2 opacity-70">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Trip completed</span>
+                                <Link href={`/trips/${ev.trip.id}`} className="text-[10px] text-primary hover:underline">#{ev.trip.id}</Link>
+                                <span className="text-[10px] text-muted-foreground ml-auto">{format(ev.at, "HH:mm")}</span>
+                              </div>
+                              <p className="text-sm text-muted-foreground mt-0.5">{ev.trip.title}</p>
+                            </div>
+                          </div>
+                        );
+                      }
+                      /* message — ev.kind === "message" is implied after the two early returns above */
+                      if (ev.kind !== "message") return null;
+                      const isInbound = ev.msg.direction === "inbound" || ev.msg.fromNumber === member.whatsappNumber;
+                      return (
+                        <div key={`m-${ev.msg.id}-${i}`} className="flex items-start gap-3">
+                          <div className={cn(
+                            "w-7 h-7 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
+                            isInbound ? "bg-blue-900/30 border-blue-700/40" : "bg-zinc-800/60 border-zinc-700/40"
+                          )}>
+                            <MessageSquare className={cn("w-3.5 h-3.5", isInbound ? "text-blue-400" : "text-zinc-400")} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={cn("text-[10px] font-bold uppercase tracking-wider", isInbound ? "text-blue-400" : "text-zinc-400")}>
+                                {isInbound ? "Member" : "System"}
+                              </span>
+                              {ev.msg.tripId && (
+                                <Link href={`/trips/${ev.msg.tripId}`} className="text-[10px] text-primary hover:underline">Trip #{ev.msg.tripId}</Link>
+                              )}
+                              <span className="text-[10px] text-muted-foreground ml-auto">{format(ev.at, "HH:mm")}</span>
+                            </div>
+                            <p className="text-sm text-foreground whitespace-pre-wrap line-clamp-4 mt-0.5">{ev.msg.body}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              <div className="h-4" />
+            </div>
+          );
+        })()}
 
       </div>
     </div>

@@ -17,6 +17,14 @@ interface Member {
   iceContactName: string | null;
   iceContactPhone: string | null;
   familyGroupId: number | null;
+  email: string | null;
+  mobile: string | null;
+  homeAddress: string | null;
+  suburb: string | null;
+  city: string | null;
+  province: string | null;
+  postalCode: string | null;
+  country: string | null;
   createdAt: string;
 }
 
@@ -57,7 +65,11 @@ export default function MemberDashboard() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
-  const [form, setForm] = useState({ firstName: "", lastName: "", displayName: "", notes: "", iceContactName: "", iceContactPhone: "" });
+  const [form, setForm] = useState({
+    firstName: "", lastName: "", displayName: "", notes: "",
+    iceContactName: "", iceContactPhone: "",
+    email: "", mobile: "", homeAddress: "", suburb: "", city: "", province: "", postalCode: "", country: "South Africa",
+  });
 
   useEffect(() => { void fetchMe(); }, []);
 
@@ -75,6 +87,14 @@ export default function MemberDashboard() {
         notes: data.member.notes ?? "",
         iceContactName: data.member.iceContactName ?? "",
         iceContactPhone: data.member.iceContactPhone ?? "",
+        email: data.member.email ?? "",
+        mobile: data.member.mobile ?? "",
+        homeAddress: data.member.homeAddress ?? "",
+        suburb: data.member.suburb ?? "",
+        city: data.member.city ?? "",
+        province: data.member.province ?? "",
+        postalCode: data.member.postalCode ?? "",
+        country: data.member.country ?? "South Africa",
       });
     } catch { navigate("/login"); }
     finally { setLoading(false); }
@@ -232,6 +252,30 @@ export default function MemberDashboard() {
                   <Field label="Display Name" value={form.displayName} onChange={(v) => setForm(f => ({ ...f, displayName: v }))} />
                 </div>
 
+                {/* Contact info */}
+                <hr style={{ border: "none", borderTop: "1px solid #f3f4f6", margin: "20px 0" }} />
+                <div style={{ fontWeight: 700, fontSize: "13px", color: "#374151", marginBottom: "12px" }}>📬 Contact Information</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+                  <Field label="Email Address" value={form.email} onChange={(v) => setForm(f => ({ ...f, email: v }))} placeholder="you@example.com" />
+                  <Field label="Mobile Number" value={form.mobile} onChange={(v) => setForm(f => ({ ...f, mobile: v }))} placeholder="+27 82 000 0000" />
+                </div>
+
+                {/* Address */}
+                <hr style={{ border: "none", borderTop: "1px solid #f3f4f6", margin: "20px 0" }} />
+                <div style={{ fontWeight: 700, fontSize: "13px", color: "#374151", marginBottom: "12px" }}>🏠 Home Address</div>
+                <div style={{ marginBottom: "14px" }}>
+                  <Field label="Street Address" value={form.homeAddress} onChange={(v) => setForm(f => ({ ...f, homeAddress: v }))} placeholder="12 Oak Avenue" />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "14px" }}>
+                  <Field label="Suburb" value={form.suburb} onChange={(v) => setForm(f => ({ ...f, suburb: v }))} placeholder="Sandton" />
+                  <Field label="City" value={form.city} onChange={(v) => setForm(f => ({ ...f, city: v }))} placeholder="Johannesburg" />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+                  <Field label="Province" value={form.province} onChange={(v) => setForm(f => ({ ...f, province: v }))} placeholder="Gauteng" />
+                  <Field label="Postal Code" value={form.postalCode} onChange={(v) => setForm(f => ({ ...f, postalCode: v }))} placeholder="2196" />
+                  <Field label="Country" value={form.country} onChange={(v) => setForm(f => ({ ...f, country: v }))} placeholder="South Africa" />
+                </div>
+
                 {/* ICE contact — shown for individual plans (family members are each other's ICE) */}
                 {!isFamilyPlan && (
                   <>
@@ -280,6 +324,8 @@ export default function MemberDashboard() {
                 <InfoRow label="Full Name" value={`${member.firstName} ${member.lastName}`} />
                 <InfoRow label="Display Name" value={member.displayName} />
                 <InfoRow label="WhatsApp" value={displayPhone} />
+                {member.email && <InfoRow label="Email" value={member.email} />}
+                {member.mobile && <InfoRow label="Mobile" value={member.mobile} />}
                 <InfoRow label="Plan" value={`${tierIcon} ${tierLabelStr}`} />
                 {isFamilyPlan && member.familyGroupId && (
                   <InfoRow label="Family Group" value={`Group #${member.familyGroupId} — family members are each other's ICE contacts`} />
@@ -291,7 +337,22 @@ export default function MemberDashboard() {
                     <InfoRow label="ICE WhatsApp" value={member.iceContactPhone ? member.iceContactPhone.replace("whatsapp:", "") : "—"} />
                   </>
                 )}
-                {member.notes && <InfoRow label="Notes" value={member.notes} />}
+                {(member.homeAddress || member.suburb || member.city) && (
+                  <>
+                    <hr style={{ border: "none", borderTop: "1px solid #f3f4f6" }} />
+                    {member.homeAddress && <InfoRow label="Address" value={member.homeAddress} />}
+                    {(member.suburb || member.city) && (
+                      <InfoRow label="Area" value={[member.suburb, member.city, member.province, member.postalCode].filter(Boolean).join(", ")} />
+                    )}
+                    {member.country && <InfoRow label="Country" value={member.country} />}
+                  </>
+                )}
+                {member.notes && (
+                  <>
+                    <hr style={{ border: "none", borderTop: "1px solid #f3f4f6" }} />
+                    <InfoRow label="Notes" value={member.notes} />
+                  </>
+                )}
               </div>
             )}
           </div>
