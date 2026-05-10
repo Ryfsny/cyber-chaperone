@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>eblockwatch — Information Flow Diagram</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1923; color: #e8edf2; font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; }
+  h1 { text-align: center; padding: 28px 20px 6px; font-size: 22px; color: #fff; letter-spacing: 1px; }
+  .subtitle { text-align: center; color: #7a99b8; margin-bottom: 30px; font-size: 13px; }
+
+  .diagram { max-width: 1300px; margin: 0 auto; padding: 0 20px 60px; }
+
+  /* ── SECTION HEADERS ── */
+  .section-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+    color: #4a7fa5; border-bottom: 1px solid #1e3045; padding-bottom: 6px; margin: 36px 0 18px;
+  }
+
+  /* ── ENTRY POINTS ROW ── */
+  .entry-row { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
+  .entry-box {
+    background: #1a2c3e; border: 2px solid #2e4d6a; border-radius: 14px;
+    padding: 20px 24px; width: 300px; text-align: center;
+  }
+  .entry-box .icon { font-size: 32px; margin-bottom: 10px; }
+  .entry-box h3 { font-size: 15px; color: #fff; margin-bottom: 8px; }
+  .entry-box p { color: #7a99b8; font-size: 12px; line-height: 1.5; }
+
+  /* ── ARROW ── */
+  .arrow-down { text-align: center; font-size: 22px; color: #2e8b57; margin: 8px 0; line-height: 1; }
+  .arrow-label { text-align: center; font-size: 11px; color: #4a7fa5; margin-top: -4px; margin-bottom: 4px; }
+
+  /* ── CENTRAL ENGINE ── */
+  .engine {
+    background: linear-gradient(135deg, #1a3350 0%, #0f2035 100%);
+    border: 2px solid #2e8b57; border-radius: 14px; padding: 20px 28px;
+    text-align: center; max-width: 520px; margin: 0 auto;
+  }
+  .engine h3 { font-size: 16px; color: #2e8b57; margin-bottom: 6px; }
+  .engine p { color: #7a99b8; font-size: 12px; }
+
+  /* ── FLOW COLUMNS ── */
+  .flow-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 10px;
+  }
+  @media (max-width: 800px) { .flow-grid { grid-template-columns: 1fr; } }
+
+  .flow-col { display: flex; flex-direction: column; gap: 10px; }
+  .flow-col-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+    color: #4a7fa5; margin-bottom: 4px; text-align: center;
+  }
+
+  /* ── STEP BOX ── */
+  .step {
+    background: #192635; border-radius: 10px; border-left: 4px solid #2e4d6a;
+    padding: 12px 14px;
+  }
+  .step.green  { border-left-color: #2e8b57; }
+  .step.amber  { border-left-color: #d4900a; }
+  .step.red    { border-left-color: #c0392b; }
+  .step.blue   { border-left-color: #2e6da4; }
+  .step.purple { border-left-color: #7c4dbe; }
+  .step.white  { border-left-color: #e8edf2; }
+
+  .step-title { font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 5px; }
+  .step-body  { font-size: 11px; color: #7a99b8; line-height: 1.6; }
+  .step-body strong { color: #c8ddf0; }
+
+  /* ── MESSAGE BUBBLE ── */
+  .msg-bubble {
+    background: #1e3045; border-radius: 10px; padding: 10px 14px;
+    border: 1px solid #2e4d6a; font-size: 11px; line-height: 1.6;
+    color: #c8ddf0; position: relative;
+  }
+  .msg-bubble.outgoing { background: #1a3a25; border-color: #2e5c38; }
+  .msg-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  .msg-label.in  { color: #4a7fa5; }
+  .msg-label.out { color: #2e8b57; }
+  .msg-label.sys { color: #d4900a; }
+
+  /* ── MESSAGE TABLE ── */
+  .msg-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  .msg-table th {
+    background: #1a2c3e; color: #4a7fa5; font-size: 10px; letter-spacing: 1px;
+    text-transform: uppercase; padding: 7px 10px; text-align: left; border-bottom: 1px solid #2e4d6a;
+  }
+  .msg-table td {
+    padding: 8px 10px; border-bottom: 1px solid #17263a; vertical-align: top;
+    font-size: 11px; line-height: 1.5;
+  }
+  .msg-table tr:last-child td { border-bottom: none; }
+  .msg-table td:first-child { color: #7a99b8; width: 28%; }
+  .msg-table td:nth-child(2) { color: #c8ddf0; width: 32%; }
+  .msg-table td:last-child { color: #2e8b57; width: 40%; }
+
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px;
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .badge-green  { background: #1a3a25; color: #2e8b57; border: 1px solid #2e5c38; }
+  .badge-amber  { background: #3a2a10; color: #d4900a; border: 1px solid #5c4216; }
+  .badge-red    { background: #3a1515; color: #c0392b; border: 1px solid #5c2525; }
+  .badge-blue   { background: #1a2c40; color: #2e6da4; border: 1px solid #2e4d6a; }
+  .badge-grey   { background: #1e2c3a; color: #7a99b8; border: 1px solid #2e4d6a; }
+
+  /* ── CONNECTOR LINE ── */
+  .connector { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 4px 0; color: #2e4d6a; font-size: 18px; }
+  .connector-label { font-size: 10px; color: #4a7fa5; }
+
+  /* ── SYNC BOX ── */
+  .sync-box {
+    background: #1a3350; border: 2px dashed #2e6da4; border-radius: 14px;
+    padding: 18px 22px; text-align: center; margin-top: 10px;
+  }
+  .sync-box h4 { color: #2e6da4; font-size: 14px; margin-bottom: 8px; }
+  .sync-box p  { color: #7a99b8; font-size: 11px; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<h1>eblockwatch Cyber Chaperone — Information Flow</h1>
+<p class="subtitle">How every message moves. What every person receives. How website and WhatsApp stay in sync.</p>
+
+<div class="diagram">
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- ENTRY POINTS -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div class="section-label">Entry Points — How People Join & Interact</div>
+
+  <div class="entry-row">
+
+    <div class="entry-box">
+      <div class="icon">🌐</div>
+      <h3>Website Registration</h3>
+      <p>Person fills in form at<br><strong>www.eblockwatch.co.za</strong><br><br>Fields: Name · Mobile · Email · Plan type · Security providers · Province · Industry</p>
+    </div>
+
+    <div class="entry-box" style="border-color:#2e8b57;">
+      <div class="icon">💬</div>
+      <h3>WhatsApp Message</h3>
+      <p>Person sends any message to<br><strong>+27 82 561 1065</strong><br><br>Can be: "Hi" · "Menu" · "Start" · trip message · check-in · distress</p>
+    </div>
+
+    <div class="entry-box" style="border-color:#d4900a;">
+      <div class="icon">👤</div>
+      <h3>ICE Contact Reply</h3>
+      <p>Emergency contact responds to an escalation message sent by the system when a member is overdue</p>
+    </div>
+
+  </div>
+
+  <div class="arrow-down">↓ &nbsp; ↓ &nbsp; ↓</div>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- CENTRAL ENGINE -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div class="engine">
+    <h3>⚙️ Cyber Chaperone Situation Room API</h3>
+    <p>Express server · PostgreSQL database · Twilio WhatsApp · Menu Router · ETA Engine · ICE Escalation</p>
+  </div>
+
+  <div class="arrow-down">↓</div>
+  <div class="arrow-label">Routes to the correct handler</div>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- TWO FLOWS SIDE BY SIDE -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div class="section-label">Processing Flows</div>
+
+  <div class="flow-grid">
+
+    <!-- LEFT: WEBSITE FLOW -->
+    <div class="flow-col">
+      <div class="flow-col-title">🌐 Website Registration Flow</div>
+
+      <div class="step blue">
+        <div class="step-title">1 — Form submitted</div>
+        <div class="step-body">Webflow sends form data to<br><strong>POST /api/register</strong><br>with header <strong>X-Register-Key</strong></div>
+      </div>
+
+      <div class="arrow-down">↓</div>
+
+      <div class="step blue">
+        <div class="step-title">2 — Validation</div>
+        <div class="step-body">System checks: First name, mobile number, email present?<br>Mobile normalised to <strong>+27 format</strong></div>
+      </div>
+
+      <div class="arrow-down">↓</div>
+
+      <div class="step blue">
+        <div class="step-title">3 — Duplicate check</div>
+        <div class="step-body">Is this <strong>whatsapp_number</strong> already in the 91,955-member database?<br>If yes → skipped, no duplicate created</div>
+      </div>
+
+      <div class="arrow-down">↓</div>
+
+      <div class="step green">
+        <div class="step-title">4 — Member created</div>
+        <div class="step-body">New member added to <strong>members</strong> table<br>Status: <span class="badge badge-blue">active</span><br>Source: <strong>website_registration</strong><br>Dormant until they message on WhatsApp</div>
+      </div>
+
+      <div class="arrow-down">↓</div>
+
+      <div class="step green">
+        <div class="step-title">5 — Website shows "THANK YOU"</div>
+        <div class="step-body">Existing Webflow success message displays.<br>Paystack payment links shown for premium plans.</div>
+      </div>
+
+      <div class="msg-bubble outgoing" style="margin-top:8px;">
+        <div class="msg-label out">🔔 Future — Auto WhatsApp welcome (not yet live)</div>
+        "Hi [Name], welcome to eblockwatch Cyber Chaperone. You're now registered. Reply Hi to activate your safety profile or chat to AI Arnie any time. — Andre"
+      </div>
+    </div>
+
+    <!-- RIGHT: WHATSAPP FLOW -->
+    <div class="flow-col">
+      <div class="flow-col-title">💬 WhatsApp Message Flow</div>
+
+      <div class="step green">
+        <div class="step-title">1 — Inbound message arrives</div>
+        <div class="step-body"><strong>POST /api/webhook/twilio</strong><br>System checks: Is this an ICE contact? Known member? Active trip?</div>
+      </div>
+
+      <div class="arrow-down">↓</div>
+
+      <div class="step white">
+        <div class="step-title">2 — Priority handler checks (in order)</div>
+        <div class="step-body">
+          <strong>0.</strong> ICE contact detection<br>
+          <strong>1.</strong> Distress keywords (help / sos / danger)<br>
+          <strong>2.</strong> Arrival keywords (arrived / I have arrived)<br>
+          <strong>3.</strong> Menu reset (Hi / Hello / 0 / Menu)<br>
+          <strong>4.</strong> Conversation state (TRIP_FLOW / CHECKIN / etc)<br>
+          <strong>5.</strong> START format trip parser<br>
+          <strong>6.</strong> ETA drift monitor<br>
+          <strong>7.</strong> Ambiguous destination guard<br>
+          <strong>8.</strong> Freeform trip-start parser
+        </div>
+      </div>
+
+      <div class="arrow-down">↓</div>
+
+      <div class="step green">
+        <div class="step-title">3 — System replies via Twilio</div>
+        <div class="step-body">Reply sent back to member's WhatsApp number within seconds.<br>Andre also receives an <strong>operator mirror</strong> for all alerts.</div>
+      </div>
+
+      <div class="arrow-down">↓</div>
+
+      <div class="step white">
+        <div class="step-title">4 — Situation Room updates</div>
+        <div class="step-body">Trip record updated · Status colour changes · Evidence notes written · Dashboard reflects change live</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- MESSAGE TABLE — WHAT EACH PERSON RECEIVES -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div class="section-label" style="margin-top:40px;">Every WhatsApp Message — What the Member Sends & What They Receive Back</div>
+
+  <table class="msg-table">
+    <thead>
+      <tr>
+        <th>Member sends</th>
+        <th>System action</th>
+        <th>Reply sent to member</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>"Hi" / "Hello" / "Menu" / "0" / "Start"</td>
+        <td>Creates/resets conversation state → MAIN_MENU</td>
+        <td>"Welcome to eblockwatch. Please choose:
+1. Community Update
+2. Safety Tip of the Day
+...
+5. Cyber Chaperone Travel Safety
+...
+0. Main Menu"</td>
+      </tr>
+      <tr>
+        <td>"5" (from main menu)</td>
+        <td>State → CYBER_CHAPERONE sub-menu</td>
+        <td>"Cyber Chaperone — Travel Safety:
+1. Start a new trip
+2. Check active trip
+3. Report I have arrived
+4. Send SOS / need help
+5. ETA update
+6. Contact Andre
+7. Back to main menu"</td>
+      </tr>
+      <tr>
+        <td>"1" (start new trip from CC menu)</td>
+        <td>State → TRIP_FLOW / WAITING_FOR_START_LOCATION</td>
+        <td>"Where are you leaving from? (Send your location pin or type your starting point)"</td>
+      </tr>
+      <tr>
+        <td>[Sends starting location]</td>
+        <td>State → WAITING_FOR_DESTINATION</td>
+        <td>"Got it. Where are you heading to?"</td>
+      </tr>
+      <tr>
+        <td>[Sends destination]</td>
+        <td>State → WAITING_FOR_ETA</td>
+        <td>"What time do you expect to arrive? (e.g. 18:30)"</td>
+      </tr>
+      <tr>
+        <td>[Sends ETA time]</td>
+        <td>Creates GREEN trip · Route calculated · Checkpoints set · Operator mirror sent</td>
+        <td>"✅ Trip registered. Andre is watching. Safe travels. Reply 'arrived' when you get there or 'help' if you need us."</td>
+      </tr>
+      <tr>
+        <td>"START Fourways to Rosebank ETA 19:40"</td>
+        <td>Structured parser creates GREEN trip immediately</td>
+        <td>"✅ Trip registered — Fourways → Rosebank, ETA 19:40. Andre is watching. Safe travels."</td>
+      </tr>
+      <tr>
+        <td>"Leaving [X] heading to [Y] ETA [Z]"</td>
+        <td>Freeform parser creates GREEN trip</td>
+        <td>"✅ Trip registered. Andre is watching. Safe travels."</td>
+      </tr>
+      <tr>
+        <td>ETA passes — no check-in (drift ≥15 min)</td>
+        <td>System → CHECKIN flow · AMBER status · Operator mirror</td>
+        <td>"⏰ You're 15 min past your ETA. Are you okay?
+1. Yes, all good
+2. Delayed
+3. New ETA
+4. I've stopped
+5. I need help
+6. Send my location pin"</td>
+      </tr>
+      <tr>
+        <td>"1" (from CHECKIN — I'm okay)</td>
+        <td>Trip → GREEN · Last check-in time updated</td>
+        <td>"✅ Thanks, noted. Andre can see you're okay. Stay safe."</td>
+      </tr>
+      <tr>
+        <td>"2" or "3" (delayed / new ETA)</td>
+        <td>Trip → AMBER · New ETA collected</td>
+        <td>"Understood. What is your new expected arrival time?"</td>
+      </tr>
+      <tr>
+        <td>Drift ≥45 min — no response</td>
+        <td>Auto ICE escalation · Trip → AMBER · Message sent to ICE contact · Operator mirror</td>
+        <td>(To ICE contact): "This is eblockwatch Cyber Chaperone. [Member name] set off at [time] and has not checked in. Please reply:
+1. They're okay
+2. They need help
+3. I can't reach them
+4. Please call me"</td>
+      </tr>
+      <tr>
+        <td>"Help" / "SOS" / "I need help" / "emergency" / "danger"</td>
+        <td>Trip → RED · If ICE not yet contacted → auto ICE escalation · Operator mirror sent to Andre</td>
+        <td>"🚨 SOS received. Andre has been alerted. ICE contact notified. Help is on the way. Stay on the line."</td>
+      </tr>
+      <tr>
+        <td>"Arrived" / "I have arrived" / "I'm home"</td>
+        <td>Trip → COMPLETED · Trip closed · Operator mirror sent</td>
+        <td>"✅ Safe arrival confirmed. Trip closed. Thank you for travelling with Cyber Chaperone."</td>
+      </tr>
+      <tr>
+        <td>Unknown member messages</td>
+        <td>Message stored · Operator mirror to Andre · No auto-reply</td>
+        <td>(No auto-reply — Andre sees it on the Situation Room dashboard)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- OPERATOR MIRRORS -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div class="section-label" style="margin-top:40px;">Andre's Operator Mirrors — What Andre Receives for Every Alert</div>
+
+  <div class="flow-grid">
+    <div>
+      <div class="step amber">
+        <div class="step-title">📲 WhatsApp operator mirror (to +27825611065)</div>
+        <div class="step-body">
+          Sent on: New trip · AMBER · RED · ICE escalation · Arrival · Unknown member<br><br>
+          <strong>Example — RED alert:</strong><br>
+          "🔴 RED ALERT — Kieren Snyman<br>
+          ETA was 19:40. Now 20:35. Overdue 55 min.<br>
+          ICE contact notified: Andre Snyman +27825611065<br>
+          Last message: 'I need help'<br>
+          Trip ID: 47"
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="step amber">
+        <div class="step-title">📧 Email operator mirror (to Gmail)</div>
+        <div class="step-body">
+          Same events trigger an email to Andre's Gmail.<br><br>
+          Subject line format:<br>
+          🟢 NEW TRIP — [Member name]<br>
+          🟡 AMBER ALERT — [Member name]<br>
+          🔴 RED ALERT — [Member name]<br>
+          🚨 ICE ESCALATION — [Member name]<br>
+          ✅ ARRIVED — [Member name]
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- SYNC DIAGRAM -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div class="section-label" style="margin-top:40px;">Website ↔ WhatsApp ↔ Situation Room — How the Sync Works</div>
+
+  <div style="background:#192635; border-radius:14px; padding:24px; overflow-x:auto;">
+    <div style="display:flex; align-items:stretch; gap:0; justify-content:center; flex-wrap:wrap;">
+
+      <div style="background:#1a2c3e; border:2px solid #2e4d6a; border-radius:10px; padding:16px 18px; width:190px; text-align:center;">
+        <div style="font-size:26px;">🌐</div>
+        <div style="font-weight:700; color:#fff; margin:6px 0 4px; font-size:13px;">Website Form</div>
+        <div style="font-size:11px; color:#7a99b8;">Person registers at eblockwatch.co.za</div>
+      </div>
+
+      <div style="display:flex; align-items:center; padding:0 8px; color:#2e8b57; font-size:20px; font-weight:700;">→</div>
+
+      <div style="background:#1a3a25; border:2px solid #2e5c38; border-radius:10px; padding:16px 18px; width:190px; text-align:center;">
+        <div style="font-size:26px;">⚙️</div>
+        <div style="font-weight:700; color:#2e8b57; margin:6px 0 4px; font-size:13px;">POST /api/register</div>
+        <div style="font-size:11px; color:#7a99b8;">Validated · Deduped · Stored</div>
+      </div>
+
+      <div style="display:flex; align-items:center; padding:0 8px; color:#2e8b57; font-size:20px; font-weight:700;">→</div>
+
+      <div style="background:#1a2c3e; border:2px solid #2e4d6a; border-radius:10px; padding:16px 18px; width:190px; text-align:center;">
+        <div style="font-size:26px;">🗃️</div>
+        <div style="font-weight:700; color:#fff; margin:6px 0 4px; font-size:13px;">Members Table</div>
+        <div style="font-size:11px; color:#7a99b8;">91,955+ members · isKnown = active</div>
+      </div>
+
+      <div style="display:flex; align-items:center; padding:0 8px; color:#2e8b57; font-size:20px; font-weight:700;">↔</div>
+
+      <div style="background:#1a3a25; border:2px solid #2e5c38; border-radius:10px; padding:16px 18px; width:190px; text-align:center;">
+        <div style="font-size:26px;">💬</div>
+        <div style="font-weight:700; color:#2e8b57; margin:6px 0 4px; font-size:13px;">WhatsApp</div>
+        <div style="font-size:11px; color:#7a99b8;">Member messages → recognised as known member immediately</div>
+      </div>
+
+      <div style="display:flex; align-items:center; padding:0 8px; color:#2e8b57; font-size:20px; font-weight:700;">→</div>
+
+      <div style="background:#1a2c3e; border:2px solid #2e4d6a; border-radius:10px; padding:16px 18px; width:190px; text-align:center;">
+        <div style="font-size:26px;">🖥️</div>
+        <div style="font-weight:700; color:#fff; margin:6px 0 4px; font-size:13px;">Situation Room</div>
+        <div style="font-size:11px; color:#7a99b8;">Live dashboard · Andre sees everything in real time</div>
+      </div>
+
+    </div>
+
+    <div style="margin-top:20px; padding:14px 18px; background:#1a2c3e; border-radius:10px; font-size:11px; color:#7a99b8; line-height:1.8; text-align:center;">
+      <strong style="color:#c8ddf0;">The key connection:</strong> Once a person registers on the website, their mobile number is in the database as a <span class="badge badge-blue">known member</span>.<br>
+      When they then send their first WhatsApp message, the system instantly recognises them — no separate sign-up needed on WhatsApp.<br>
+      The two channels are already one system sharing the same database.
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- WHAT IS STILL TO DO -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div class="section-label" style="margin-top:40px;">Status — What Is Live vs What Is Pending</div>
+
+  <div style="display:flex; gap:16px; flex-wrap:wrap;">
+
+    <div style="flex:1; min-width:280px;">
+      <div style="font-size:11px; font-weight:700; color:#2e8b57; margin-bottom:10px; letter-spacing:1px;">✅ LIVE NOW</div>
+      <div class="step green" style="margin-bottom:8px;"><div class="step-body">WhatsApp menu router fully operational</div></div>
+      <div class="step green" style="margin-bottom:8px;"><div class="step-body">Trip creation (step-by-step + START format + freeform parser)</div></div>
+      <div class="step green" style="margin-bottom:8px;"><div class="step-body">ETA drift monitoring + CHECKIN flow</div></div>
+      <div class="step green" style="margin-bottom:8px;"><div class="step-body">ICE escalation (auto at 45 min + RED)</div></div>
+      <div class="step green" style="margin-bottom:8px;"><div class="step-body">Operator mirrors (WhatsApp + Email)</div></div>
+      <div class="step green" style="margin-bottom:8px;"><div class="step-body">91,955 members in database</div></div>
+      <div class="step green" style="margin-bottom:8px;"><div class="step-body">Situation Room dashboard live</div></div>
+      <div class="step green" style="margin-bottom:8px;"><div class="step-body">POST /api/register endpoint built and ready</div></div>
+      <div class="step green" style="margin-bottom:8px;"><div class="step-body">Weekly Sunday digest email (08:00 SAST)</div></div>
+    </div>
+
+    <div style="flex:1; min-width:280px;">
+      <div style="font-size:11px; font-weight:700; color:#d4900a; margin-bottom:10px; letter-spacing:1px;">⏳ PENDING — Waiting on Website Developer</div>
+      <div class="step amber" style="margin-bottom:8px;"><div class="step-body">Website form → Situation Room webhook (Change 9)</div></div>
+      <div class="step amber" style="margin-bottom:8px;"><div class="step-body">AI Arnie rename on website (Change 1)</div></div>
+      <div class="step amber" style="margin-bottom:8px;"><div class="step-body">Copy updates on site (Changes 2–4, 7, 8)</div></div>
+      <div class="step amber" style="margin-bottom:8px;"><div class="step-body">Plan names updated in form dropdown (Change 5)</div></div>
+      <div class="step amber" style="margin-bottom:8px;"><div class="step-body">WhatsApp CTA button added to hero (Change 6)</div></div>
+      <div class="step amber" style="margin-bottom:8px;"><div class="step-body">Footer email updated to info@eblockwatch.co.za</div></div>
+      <div style="font-size:11px; font-weight:700; color:#7a99b8; margin:14px 0 10px; letter-spacing:1px;">💡 FUTURE ENHANCEMENTS</div>
+      <div class="step" style="margin-bottom:8px;"><div class="step-body">Auto WhatsApp welcome message on new website registration</div></div>
+      <div class="step" style="margin-bottom:8px;"><div class="step-body">AI Arnie on WhatsApp (ElevenLabs → WhatsApp bridge)</div></div>
+      <div class="step" style="margin-bottom:8px;"><div class="step-body">AI Arnie trained on eblockwatch knowledge base</div></div>
+    </div>
+
+  </div>
+
+  <div style="text-align:center; margin-top:40px; color:#4a7fa5; font-size:11px;">
+    eblockwatch Cyber Chaperone Situation Room · Generated 2026-05-10 · Andre Snyman · 082 561 1065
+  </div>
+
+</div>
+</body>
+</html>
