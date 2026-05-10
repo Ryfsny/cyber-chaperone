@@ -1,62 +1,66 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
 import {
-  Send, CheckSquare, Square, MessageSquare, Loader2,
-  CheckCircle2, XCircle, Users, Megaphone, FileText, Pencil,
+  Send, MessageSquare, Loader2, CheckCircle2, XCircle,
+  Users, Megaphone, FileText, Pencil, Tag, Radio,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-interface Member {
-  id: number;
-  displayName: string;
-  whatsappNumber: string;
-  memberStatus: string;
-  membershipTier: string | null;
-  mobile: string | null;
+interface Counts {
+  total: number;
+  active: number;
+  verified: number;
+  known: number;
+  bySource: Array<{ source: string | null; count: number }>;
 }
 
-interface PaginatedResponse {
-  data: Member[];
-  pagination: { page: number; limit: number; total: number; pages: number };
+interface BroadcastJob {
+  id: string;
+  total: number;
+  sent: number;
+  failed: number;
+  done: boolean;
+  startedAt: string;
+  errors: Array<{ name: string; error: string }>;
 }
 
-interface BroadcastResult {
-  id: number;
-  name: string;
-  status: "sent" | "failed";
-  error?: string;
-}
-
-interface BroadcastResponse {
+interface SyncResult {
   ok: boolean;
+  queued: false;
   sent: number;
   failed: number;
   total: number;
-  results: BroadcastResult[];
+  results: Array<{ id: number; name: string; status: "sent" | "failed"; error?: string }>;
 }
 
-interface Template {
-  id: string;
+interface AsyncResult {
+  ok: boolean;
+  queued: true;
+  total: number;
+  jobId: string;
+}
+
+type SendResult = SyncResult | AsyncResult;
+
+interface Audience {
   label: string;
-  description: string;
-  body: string;
+  count: number;
+  filter: { status?: string; sourceBatch?: string };
 }
 
-const TEMPLATES: Template[] = [
+const TEMPLATES = [
   {
     id: "test_invite",
     label: "Test Invite",
-    description: "Invite someone to test the live member portal",
+    description: "Invite to test the member portal",
     body: `Hi {name}! 👋
 
 You're invited to test the new eblockwatch Cyber Chaperone member portal.
 
-👉 https://eblockwatch.replit.app/website/
+👉 https://cyber-chaperone-r--ryfsny.replit.app/website/
 
 Log in or register with your WhatsApp number — takes 2 minutes.
 
@@ -67,7 +71,7 @@ Your feedback matters. Reply to this message and let me know what you think!
   {
     id: "welcome",
     label: "Welcome",
-    description: "Warm welcome message for new members",
+    description: "Warm welcome for new members",
     body: `Hi {name}! 🛡️
 
 Welcome to eblockwatch — you're now part of a trusted safety network that's been protecting South Africans since 2001.
@@ -75,7 +79,7 @@ Welcome to eblockwatch — you're now part of a trusted safety network that's be
 A few things to know:
 • Reply *Hi* to this number anytime to open your safety menu
 • Use *Cyber Chaperone* before a trip and someone always knows you're safe
-• Your Member Portal: https://eblockwatch.replit.app/website/
+• Your Member Portal: https://cyber-chaperone-r--ryfsny.replit.app/website/
 
 We're glad to have you with us.
 
@@ -84,7 +88,7 @@ We're glad to have you with us.
   {
     id: "cyber_chaperone",
     label: "Cyber Chaperone",
-    description: "Explain the travel safety feature to members",
+    description: "Explain the travel safety feature",
     body: `Hi {name} 👋
 
 Did you know you have a personal travel safety feature?
@@ -109,7 +113,7 @@ Quick safety reminder from eblockwatch:
 
 🚗 *Travel tip:* Always share your route before a long trip. Even a quick "leaving now, back by 6pm" message to a trusted contact makes a difference.
 
-📍 *Crime alert:* Stay alert on [AREA] — there have been reports of [INCIDENT TYPE] in the area this week.
+📍 *Community:* Stay alert and look out for your neighbours this week.
 
 Stay safe out there.
 
@@ -118,7 +122,7 @@ Stay safe out there.
   {
     id: "check_in",
     label: "Check-In",
-    description: "Check in with existing members — are they okay?",
+    description: "Check in with existing members",
     body: `Hi {name} 👋
 
 Just checking in from eblockwatch.
@@ -134,70 +138,116 @@ We're here.
   {
     id: "blank",
     label: "Blank",
-    description: "Start from scratch — write your own message",
+    description: "Start from scratch",
     body: "",
   },
 ];
 
-const statusColors: Record<string, string> = {
-  verified: "bg-emerald-500/20 text-emerald-400 border-emerald-500/40",
-  active: "bg-blue-500/20 text-blue-400 border-blue-500/40",
-  pending: "bg-yellow-500/20 text-yellow-400 border-yellow-500/40",
-  inactive: "bg-zinc-500/20 text-zinc-400 border-zinc-500/40",
-};
+function fmt(n: number) {
+  return n.toLocaleString("en-ZA");
+}
 
-export default function Broadcast() {
-  const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [message, setMessage] = useState(TEMPLATES[0].body);
-  const [activeTemplate, setActiveTemplate] = useState<string>(TEMPLATES[0].id);
-  const [search, setSearch] = useState("");
-  const [results, setResults] = useState<BroadcastResponse | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "verified">("all");
+function sourceBadgeColour(source: string | null) {
+  if (!source) return "border-zinc-600 text-zinc-400";
+  const map: Record<string, string> = {
+    gas: "border-blue-600 text-blue-400",
+    gass: "border-blue-600 text-blue-400",
+    webflow: "border-purple-600 text-purple-400",
+    paystack: "border-emerald-600 text-emerald-400",
+  };
+  return map[source.toLowerCase()] ?? "border-zinc-600 text-zinc-400";
+}
 
-  const { data, isLoading } = useQuery<PaginatedResponse>({
-    queryKey: ["members-broadcast"],
-    queryFn: () =>
-      fetch(`${BASE}/api/members?limit=500`, { credentials: "include" }).then((r) => r.json()),
+function ProgressBar({ jobId, onDone }: { jobId: string; onDone: (j: BroadcastJob) => void }) {
+  const doneRef = useRef(false);
+  const { data: job } = useQuery<BroadcastJob>({
+    queryKey: ["broadcast-job", jobId],
+    queryFn: () => fetch(`${BASE}/api/broadcast/job/${jobId}`, { credentials: "include" }).then((r) => r.json()),
+    refetchInterval: (q) => (q.state.data?.done ? false : 1500),
+    staleTime: 0,
   });
 
-  const members: Member[] = useMemo(() => {
-    const all = data?.data ?? [];
-    return all.filter((m) => {
-      if (!m.whatsappNumber) return false;
-      const q = search.toLowerCase();
-      if (q && !m.displayName.toLowerCase().includes(q) && !(m.mobile ?? "").includes(q)) return false;
-      if (statusFilter === "active") return m.memberStatus === "active";
-      if (statusFilter === "verified") return m.memberStatus === "verified";
-      return true;
-    });
-  }, [data, search, statusFilter]);
-
-  const allSelected = members.length > 0 && members.every((m) => selected.has(m.id));
-
-  function toggleAll() {
-    if (allSelected) {
-      setSelected((prev) => { const n = new Set(prev); members.forEach((m) => n.delete(m.id)); return n; });
-    } else {
-      setSelected((prev) => { const n = new Set(prev); members.forEach((m) => n.add(m.id)); return n; });
+  useEffect(() => {
+    if (job?.done && !doneRef.current) {
+      doneRef.current = true;
+      onDone(job);
     }
-  }
+  }, [job, onDone]);
 
-  function toggle(id: number) {
-    setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  }
+  if (!job) return <div className="text-xs text-muted-foreground animate-pulse">Starting send job…</div>;
 
-  function pickTemplate(t: Template) {
-    setActiveTemplate(t.id);
-    setMessage(t.body);
-    setResults(null);
-  }
+  const pct = job.total > 0 ? Math.round(((job.sent + job.failed) / job.total) * 100) : 0;
 
-  function onMessageChange(val: string) {
-    setMessage(val);
-    setActiveTemplate("custom");
-  }
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground font-mono uppercase tracking-wider flex items-center gap-1.5">
+          <Radio className="w-3 h-3 text-primary animate-pulse" />
+          {job.done ? "Send complete" : `Sending… ${fmt(job.sent + job.failed)} / ${fmt(job.total)}`}
+        </span>
+        <span className="font-bold text-foreground">{pct}%</span>
+      </div>
+      <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+        <div
+          className="h-full bg-primary transition-all duration-500 rounded-full"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="flex gap-4 text-xs">
+        <span className="text-emerald-400 font-bold">{fmt(job.sent)} sent</span>
+        {job.failed > 0 && <span className="text-red-400 font-bold">{fmt(job.failed)} failed</span>}
+        <span className="text-muted-foreground">of {fmt(job.total)}</span>
+      </div>
+      {job.errors.length > 0 && (
+        <div className="text-[10px] text-red-400/80 max-h-24 overflow-y-auto space-y-0.5">
+          {job.errors.slice(0, 10).map((e, i) => (
+            <div key={i}>{e.name}: {e.error.slice(0, 80)}</div>
+          ))}
+          {job.errors.length > 10 && <div>…and {job.errors.length - 10} more</div>}
+        </div>
+      )}
+    </div>
+  );
+}
 
-  const mutation = useMutation<BroadcastResponse, Error, { memberIds: number[]; message: string }>({
+export default function Broadcast() {
+  const [selectedAudience, setSelectedAudience] = useState<Audience | null>(null);
+  const [message, setMessage] = useState(TEMPLATES[0].body);
+  const [activeTemplate, setActiveTemplate] = useState(TEMPLATES[0].id);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
+  const [jobDone, setJobDone] = useState<BroadcastJob | null>(null);
+
+  const { data: counts, isLoading: countsLoading } = useQuery<Counts>({
+    queryKey: ["broadcast-counts"],
+    queryFn: () => fetch(`${BASE}/api/broadcast/counts`, { credentials: "include" }).then((r) => r.json()),
+    staleTime: 60_000,
+  });
+
+  const audiences: Audience[] = counts
+    ? [
+        { label: "Everyone", count: counts.total, filter: {} },
+        { label: "Known members (Active + Verified)", count: counts.known, filter: { status: "known" } },
+        { label: "Active only", count: counts.active, filter: { status: "active" } },
+        { label: "Verified only", count: counts.verified, filter: { status: "verified" } },
+        ...counts.bySource
+          .filter((s) => s.source && s.count > 0)
+          .map((s) => ({
+            label: `Source: ${s.source!.toUpperCase()}`,
+            count: s.count,
+            filter: { sourceBatch: s.source! },
+          })),
+        ...counts.bySource
+          .filter((s) => !s.source && s.count > 0)
+          .map((s) => ({
+            label: "Legacy (no source tag)",
+            count: s.count,
+            filter: { sourceBatch: "none" },
+          })),
+      ]
+    : [];
+
+  const mutation = useMutation<SendResult, Error, { filter: object; message: string }>({
     mutationFn: (payload) =>
       fetch(`${BASE}/api/broadcast`, {
         method: "POST",
@@ -205,14 +255,36 @@ export default function Broadcast() {
         credentials: "include",
         body: JSON.stringify(payload),
       }).then((r) => r.json()),
-    onSuccess: (d) => setResults(d),
+    onSuccess: (data) => {
+      if (data.queued) {
+        setJobId(data.jobId);
+        setSyncResult(null);
+        setJobDone(null);
+      } else {
+        setSyncResult(data as SyncResult);
+        setJobId(null);
+      }
+    },
   });
 
   function send() {
-    if (selected.size === 0 || !message.trim()) return;
-    setResults(null);
-    mutation.mutate({ memberIds: Array.from(selected), message: message.trim() });
+    if (!selectedAudience || !message.trim()) return;
+    setSyncResult(null);
+    setJobId(null);
+    setJobDone(null);
+    mutation.mutate({ filter: selectedAudience.filter, message: message.trim() });
   }
+
+  function pickTemplate(t: typeof TEMPLATES[0]) {
+    setActiveTemplate(t.id);
+    setMessage(t.body);
+    setSyncResult(null);
+    setJobId(null);
+    setJobDone(null);
+  }
+
+  const isSending = mutation.isPending;
+  const isRunning = !!jobId && !jobDone;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -222,122 +294,89 @@ export default function Broadcast() {
           <Megaphone className="w-5 h-5 text-primary" />
           <div>
             <h1 className="text-sm font-bold uppercase tracking-widest text-foreground">Broadcast</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">WhatsApp a message to selected members</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {selectedAudience
+                ? `${fmt(selectedAudience.count)} recipients selected`
+                : "Select an audience group to send to"}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          {selected.size > 0 && (
-            <span className="text-xs text-muted-foreground">
-              <span className="text-primary font-bold">{selected.size}</span> selected
-            </span>
-          )}
-          <Button
-            size="sm"
-            onClick={send}
-            disabled={selected.size === 0 || !message.trim() || mutation.isPending}
-            className="uppercase tracking-widest text-xs"
-          >
-            {mutation.isPending
-              ? <><Loader2 className="w-3 h-3 mr-2 animate-spin" />Sending…</>
-              : <><Send className="w-3 h-3 mr-2" />Send to {selected.size || "…"}</>}
-          </Button>
-        </div>
+        <Button
+          size="sm"
+          onClick={send}
+          disabled={!selectedAudience || !message.trim() || isSending || isRunning}
+          className="uppercase tracking-widest text-xs"
+        >
+          {isSending || isRunning
+            ? <><Loader2 className="w-3 h-3 mr-2 animate-spin" />{isRunning ? "Sending…" : "Queueing…"}</>
+            : <><Send className="w-3 h-3 mr-2" />Send to {selectedAudience ? fmt(selectedAudience.count) : "…"}</>}
+        </Button>
       </div>
 
       <div className="flex flex-1 min-h-0">
-        {/* ── Left: member list ──────────────────────────────────── */}
-        <div className="w-68 shrink-0 border-r border-border flex flex-col" style={{ width: "270px" }}>
-          <div className="p-3 border-b border-border space-y-2">
-            <Input
-              placeholder="Search members…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-8 text-xs"
-            />
-            <div className="flex gap-1">
-              {(["all", "active", "verified"] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setStatusFilter(f)}
-                  className={`text-[10px] uppercase tracking-wider px-2 py-1 rounded-sm border transition-colors ${
-                    statusFilter === f
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
+
+        {/* ── Left: audience selector ───────────────────────────── */}
+        <div className="w-72 shrink-0 border-r border-border flex flex-col overflow-hidden">
+          <div className="px-4 py-3 border-b border-border shrink-0">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+              <Users className="w-3 h-3" />
+              Audience
             </div>
           </div>
 
-          <button
-            onClick={toggleAll}
-            className="flex items-center gap-2 px-3 py-2 border-b border-border text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors shrink-0"
-          >
-            {allSelected
-              ? <CheckSquare className="w-4 h-4 text-primary" />
-              : <Square className="w-4 h-4" />}
-            <span className="uppercase tracking-wider">Select all ({members.length})</span>
-          </button>
-
-          <div className="flex-1 overflow-y-auto">
-            {isLoading ? (
+          <div className="flex-1 overflow-y-auto py-2">
+            {countsLoading ? (
               <div className="flex items-center justify-center h-20">
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
               </div>
-            ) : members.length === 0 ? (
-              <div className="p-4 text-xs text-muted-foreground text-center">No members found</div>
             ) : (
-              members.map((m) => {
-                const checked = selected.has(m.id);
-                const resultItem = results?.results.find((r) => r.id === m.id);
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => toggle(m.id)}
-                    className={`w-full flex items-start gap-2 px-3 py-2.5 border-b border-border/50 text-left transition-colors ${
-                      checked ? "bg-primary/10" : "hover:bg-secondary/40"
-                    }`}
-                  >
-                    <div className="mt-0.5 shrink-0">
-                      {checked
-                        ? <CheckSquare className="w-4 h-4 text-primary" />
-                        : <Square className="w-4 h-4 text-muted-foreground" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-medium text-foreground truncate">{m.displayName}</span>
-                        {resultItem && (
-                          resultItem.status === "sent"
-                            ? <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
-                            : <XCircle className="w-3 h-3 text-red-400 shrink-0" />
-                        )}
+              <div className="space-y-1 px-2">
+                {audiences.map((a) => {
+                  const isActive = selectedAudience?.label === a.label;
+                  const isSource = a.label.startsWith("Source:");
+                  const isLegacy = a.label.startsWith("Legacy");
+                  return (
+                    <button
+                      key={a.label}
+                      onClick={() => { setSelectedAudience(a); setSyncResult(null); setJobId(null); setJobDone(null); }}
+                      className={`w-full text-left px-3 py-2.5 rounded-sm border transition-colors flex items-center justify-between gap-2 ${
+                        isActive
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border/50 text-muted-foreground hover:border-border hover:text-foreground hover:bg-secondary/40"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {(isSource || isLegacy) && <Tag className="w-3 h-3 shrink-0" />}
+                        <span className={`text-xs truncate ${isActive ? "font-semibold" : ""}`}>{a.label}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                        <span className="text-[10px] text-muted-foreground font-mono">
-                          {(m.whatsappNumber ?? m.mobile ?? "").replace("whatsapp:", "")}
-                        </span>
-                        <span className={`text-[10px] px-1.5 rounded border ${statusColors[m.memberStatus] ?? statusColors.inactive}`}>
-                          {m.memberStatus}
-                        </span>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })
+                      <span className={`text-[11px] font-mono shrink-0 font-bold ${
+                        isSource || isLegacy
+                          ? sourceBadgeColour(a.filter.sourceBatch ?? null).replace("border-", "text-").split(" ")[0]
+                          : isActive ? "text-primary" : "text-muted-foreground"
+                      }`}>
+                        {fmt(a.count)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
+          </div>
+
+          {/* Opt-in notice */}
+          <div className="shrink-0 mx-2 mb-3 rounded-sm border border-yellow-500/30 bg-yellow-500/5 px-3 py-2.5 text-[10px] text-yellow-400/80 leading-relaxed">
+            <span className="font-bold text-yellow-400">WhatsApp opt-in:</span> You can only reach members who have previously messaged your number. New contacts must message you first.
           </div>
         </div>
 
-        {/* ── Right: templates + compose ────────────────────────── */}
+        {/* ── Right: templates + compose + results ─────────────── */}
         <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
 
           {/* Template picker */}
           <div className="shrink-0 px-5 pt-5 pb-4 border-b border-border">
             <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-1.5">
               <FileText className="w-3 h-3" />
-              Templates — click one to load, then edit freely
+              Templates
             </div>
             <div className="grid grid-cols-3 gap-2">
               {TEMPLATES.map((t) => {
@@ -352,14 +391,11 @@ export default function Broadcast() {
                         : "border-border bg-secondary/20 text-muted-foreground hover:border-border/80 hover:text-foreground hover:bg-secondary/50"
                     }`}
                   >
-                    <div className={`text-xs font-bold mb-0.5 ${isActive ? "text-primary" : ""}`}>
-                      {t.label}
-                    </div>
+                    <div className={`text-xs font-bold mb-0.5 ${isActive ? "text-primary" : ""}`}>{t.label}</div>
                     <div className="text-[10px] leading-snug opacity-80">{t.description}</div>
                   </button>
                 );
               })}
-              {/* Custom indicator — shows when user has edited away from a template */}
               {activeTemplate === "custom" && (
                 <div className="text-left p-3 rounded-md border border-primary bg-primary/10">
                   <div className="text-xs font-bold text-primary mb-0.5 flex items-center gap-1">
@@ -371,8 +407,10 @@ export default function Broadcast() {
             </div>
           </div>
 
-          {/* Compose area */}
+          {/* Compose + preview + results */}
           <div className="flex-1 px-5 py-4 flex flex-col gap-4">
+
+            {/* Compose */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -385,9 +423,9 @@ export default function Broadcast() {
               </div>
               <Textarea
                 value={message}
-                onChange={(e) => onMessageChange(e.target.value)}
+                onChange={(e) => { setMessage(e.target.value); setActiveTemplate("custom"); }}
                 className="font-mono text-xs resize-none h-52"
-                placeholder="Pick a template above or start typing your message…"
+                placeholder="Pick a template above or start typing…"
               />
               <p className="text-[10px] text-muted-foreground mt-1.5">
                 Use <code className="bg-secondary px-1 rounded text-[10px]">{"{name}"}</code> — replaced with each member's first name when sent.
@@ -396,7 +434,7 @@ export default function Broadcast() {
 
             {/* WhatsApp preview */}
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Preview — as seen on WhatsApp</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Preview</div>
               <div className="bg-[#0b141a] rounded-xl p-4 max-h-56 overflow-y-auto">
                 <div className="inline-block bg-[#202c33] rounded-lg px-4 py-3 max-w-[85%] text-xs text-[#e9edef] whitespace-pre-wrap leading-relaxed">
                   {message.replace(/\{name\}/gi, "Kieren") || (
@@ -409,13 +447,43 @@ export default function Broadcast() {
               </div>
             </div>
 
-            {/* Opt-in notice */}
-            <div className="rounded-md border border-yellow-500/30 bg-yellow-500/5 px-4 py-3 text-[11px] text-yellow-400 leading-relaxed">
-              <span className="font-bold">WhatsApp opt-in rule:</span> You can only send to people who have already messaged your WhatsApp number (+27825611065). Anyone who hasn't messaged you first — WhatsApp will block the delivery. To reach new contacts, send them an SMS or email asking them to save the number and send "Hi".
-            </div>
+            {/* Job progress (large async sends) */}
+            {jobId && !jobDone && (
+              <div className="border border-primary/30 bg-primary/5 rounded-lg px-4 py-4">
+                <ProgressBar jobId={jobId} onDone={setJobDone} />
+              </div>
+            )}
 
-            {/* Results */}
-            {results && (
+            {/* Job done summary */}
+            {jobDone && (
+              <div className="border border-border rounded-lg overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 bg-secondary/30 border-b border-border">
+                  <div className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    Broadcast complete
+                  </div>
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="text-emerald-400 font-bold">{fmt(jobDone.sent)} sent</span>
+                    {jobDone.failed > 0 && <span className="text-red-400 font-bold">{fmt(jobDone.failed)} failed</span>}
+                    <span className="text-muted-foreground">of {fmt(jobDone.total)}</span>
+                  </div>
+                </div>
+                {jobDone.errors.length > 0 && (
+                  <div className="max-h-32 overflow-y-auto divide-y divide-border/50">
+                    {jobDone.errors.map((e, i) => (
+                      <div key={i} className="flex items-center gap-3 px-4 py-2">
+                        <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                        <span className="text-xs text-foreground">{e.name}</span>
+                        <span className="text-[10px] text-red-400 truncate">{e.error.slice(0, 80)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Sync result (small sends ≤50) */}
+            {syncResult && (
               <div className="border border-border rounded-lg overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 bg-secondary/30 border-b border-border">
                   <div className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
@@ -423,27 +491,19 @@ export default function Broadcast() {
                     Results
                   </div>
                   <div className="flex items-center gap-3 text-xs">
-                    <span className="text-emerald-400 font-bold">{results.sent} sent</span>
-                    {results.failed > 0 && <span className="text-red-400 font-bold">{results.failed} failed</span>}
-                    <span className="text-muted-foreground">of {results.total}</span>
+                    <span className="text-emerald-400 font-bold">{syncResult.sent} sent</span>
+                    {syncResult.failed > 0 && <span className="text-red-400 font-bold">{syncResult.failed} failed</span>}
+                    <span className="text-muted-foreground">of {syncResult.total}</span>
                   </div>
                 </div>
                 <div className="max-h-48 overflow-y-auto divide-y divide-border/50">
-                  {results.results.map((r) => (
+                  {syncResult.results.map((r) => (
                     <div key={r.id} className="flex items-center gap-3 px-4 py-2.5">
                       {r.status === "sent"
                         ? <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                         : <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
                       <span className="text-xs text-foreground flex-1">{r.name}</span>
-                      {r.error && (
-                        <span className="text-[10px] text-red-400 truncate max-w-xs">{r.error}</span>
-                      )}
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] ${r.status === "sent" ? "border-emerald-500/40 text-emerald-400" : "border-red-500/40 text-red-400"}`}
-                      >
-                        {r.status}
-                      </Badge>
+                      {r.error && <span className="text-[10px] text-red-400 truncate max-w-xs">{r.error}</span>}
                     </div>
                   ))}
                 </div>
