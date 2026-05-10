@@ -1,4 +1,4 @@
-import { db, membersTable, tripsTable, messagesTable, conversationStatesTable } from "@workspace/db";
+import { db, membersTable, tripsTable, messagesTable, conversationStatesTable, respondersTable } from "@workspace/db";
 import { and, eq, ne, desc } from "drizzle-orm";
 import twilio from "twilio";
 import { enrichTripWithRoute, calculateRouteInfo, reverseGeocodeCoords, reverseGeocodeStreetAddress, minutesToSastTime, type RouteInfo } from "./route-service.js";
@@ -161,6 +161,49 @@ function shouldSendCheckin(trip: { lastMemberCheckinTime: Date | null | undefine
   if (!trip.lastMemberCheckinTime) return true;
   const mins = (Date.now() - new Date(trip.lastMemberCheckinTime).getTime()) / 60000;
   return mins > 25;
+}
+
+// ── Nearby responder count (haversine) ────────────────────────────────────────
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function countNearbyResponders(lat: string, lon: string, radiusKm = 50): Promise<number> {
+  try {
+    const all = await db
+      .select({ homeLat: respondersTable.homeLat, homeLon: respondersTable.homeLon })
+      .from(respondersTable)
+      .where(eq(respondersTable.active, true));
+
+    const memberLat = parseFloat(lat);
+    const memberLon = parseFloat(lon);
+    if (isNaN(memberLat) || isNaN(memberLon)) return 0;
+
+    return all.filter((r) => {
+      const rLat = parseFloat(r.homeLat);
+      const rLon = parseFloat(r.homeLon);
+      if (isNaN(rLat) || isNaN(rLon)) return false;
+      return haversineKm(memberLat, memberLon, rLat, rLon) <= radiusKm;
+    }).length;
+  } catch {
+    return 0;
+  }
+}
+
+function nearbyCoverageText(count: number): string {
+  if (count === 0) return "eblockwatch members are active across South Africa — you are not alone.";
+  if (count < 5)   return `There are a few eblockwatch members active in your vicinity.`;
+  if (count < 15)  return `There are several eblockwatch members active near you.`;
+  if (count < 30)  return `There are over 10 eblockwatch members active in your area.`;
+  return `There is a strong eblockwatch presence active in your area.`;
 }
 
 // ── Twilio ────────────────────────────────────────────────────────────────────
@@ -754,13 +797,20 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
 
 function membershipActivationText(name: string): string {
   return [
-    `${name}, let's get your membership activated.`,
+    `${name}, let's get your membership activated. 🛡️`,
     ``,
     `1. Entry Level — free`,
-    `2. Single Membership — R150/month`,
-    `3. Family Membership — R250/month`,
+    `   Stay connected to the eblockwatch network at no cost.`,
     ``,
-    `Reply with the number of your choice.`,
+    `2. Cyber Chaperone Individual — R150/month`,
+    `   Priority response, ICE escalation, full route tracking.`,
+    `   Pay now → https://paystack.shop/pay/cyber-chaperone`,
+    ``,
+    `3. Cyber Chaperone Family — R250/month`,
+    `   Cover your whole family (up to 5 members). Full suite.`,
+    `   Pay now → https://paystack.shop/pay/family-cyber-chaperone`,
+    ``,
+    `Reply 1, 2, or 3 to choose your plan.`,
     `Reply 0 for Main Menu.`,
   ].join("\n");
 }
@@ -2066,16 +2116,27 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
 
   if (choice === "2") {
     await saveMessage(from, to, body, messageSid, null);
+    const tier = member?.membershipTier;
+    const isFreeTier = !tier || tier.toLowerCase().includes("entry") || tier.toLowerCase().includes("free");
     await sendWhatsApp(from, to, [
       `${name}, here are your eblockwatch membership options.`,
       ``,
-      `1. Entry Level — your starting point in eblockwatch`,
-      `2. Single Membership — R150/month`,
-      `3. Family Membership — R250/month`,
+      `🟢 Entry Level — free`,
+      `   Basic trip monitoring and community safety access.`,
       ``,
-      `The stronger your membership, the stronger your support layer.`,
+      `⭐ Cyber Chaperone Individual — R150/month`,
+      `   Priority response, ICE escalation, route tracking.`,
+      `   👉 https://paystack.shop/pay/cyber-chaperone`,
       ``,
-      `Reply 3 to activate your membership.`,
+      `👨‍👩‍👧‍👦 Cyber Chaperone Family — R250/month`,
+      `   Cover up to 5 family members. Full suite.`,
+      `   👉 https://paystack.shop/pay/family-cyber-chaperone`,
+      ``,
+      isFreeTier
+        ? `You are currently on the free tier. Upgrading gives your family a stronger safety net.`
+        : `Your current plan: ${tier}. Thank you for your support!`,
+      ``,
+      `Reply 3 to activate or upgrade your membership now.`,
       `Reply 0 for Main Menu.`,
     ].join("\n"));
     return true;
@@ -2184,6 +2245,25 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     },
     "menu-router: inbound",
   );
+
+  // ── LIVE LOCATION PIN — nearby member count ────────────────────────────────
+  // Fires a supplemental coverage message for ANY location pin regardless of
+  // conversation state, then lets normal routing continue.
+  if (latitude && longitude) {
+    const nearbyCount = await countNearbyResponders(latitude, longitude);
+    const coverageLine = nearbyCoverageText(nearbyCount);
+    await sendWhatsApp(from, to, [
+      `📍 Location received — you are covered.`,
+      ``,
+      coverageLine,
+      ``,
+      `They can be mobilised through Andre and Cyber Chaperone when you need support.`,
+      `Everything goes through eblockwatch — members never contact them directly.`,
+      ``,
+      `Type HELP any time and the Situation Room responds immediately. 🛡️`,
+    ].join("\n"));
+    log.info({ from, latitude, longitude, nearbyCount }, "Nearby member count sent for live location");
+  }
 
   // ── GLOBAL MENU OVERRIDE ──────────────────────────────────────────────────
   // Runs BEFORE ICE detection, conversation state, trip logic, and all other
