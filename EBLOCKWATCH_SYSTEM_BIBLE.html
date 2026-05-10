@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>eblockwatch — Cyber Chaperone System Bible</title>
+<style>
+  :root {
+    --bg: #0d0f12; --surface: #161a1f; --border: #252b33;
+    --primary: #f97316; --green: #22c55e; --amber: #f59e0b; --red: #ef4444;
+    --text: #e2e8f0; --muted: #64748b; --code-bg: #1e2530;
+    --search-bg: #1a2030;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.7; }
+  a { color: var(--primary); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Layout */
+  #shell { display: flex; height: 100vh; overflow: hidden; }
+  #sidebar { width: 260px; min-width: 260px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  #main { flex: 1; overflow-y: auto; padding: 40px 48px; max-width: 900px; }
+
+  /* Sidebar */
+  #sidebar-header { padding: 20px 16px 12px; border-bottom: 1px solid var(--border); }
+  #sidebar-header .logo { font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--primary); }
+  #sidebar-header .sub { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
+  #search-box { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  #search { width: 100%; background: var(--search-bg); border: 1px solid var(--border); color: var(--text); padding: 8px 10px; border-radius: 4px; font-size: 12px; outline: none; }
+  #search:focus { border-color: var(--primary); }
+  #search::placeholder { color: var(--muted); }
+  #nav { flex: 1; overflow-y: auto; padding: 8px 0; }
+  .nav-section { padding: 8px 16px 4px; font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .nav-link { display: block; padding: 6px 16px; font-size: 12px; color: var(--muted); cursor: pointer; border-left: 2px solid transparent; transition: all 0.1s; }
+  .nav-link:hover, .nav-link.active { color: var(--text); border-left-color: var(--primary); background: rgba(249,115,22,0.05); }
+  #sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); font-size: 10px; color: var(--muted); }
+
+  /* Sections */
+  .section { margin-bottom: 64px; scroll-margin-top: 32px; }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 8px; }
+  h2 { font-size: 16px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--primary); margin-bottom: 20px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 13px; font-weight: 600; margin: 24px 0 10px; color: var(--text); }
+  p { margin-bottom: 12px; color: #94a3b8; }
+  .lead { font-size: 15px; color: var(--text); margin-bottom: 24px; }
+
+  /* Code */
+  pre, code { font-family: 'Courier New', monospace; }
+  code { background: var(--code-bg); padding: 2px 6px; border-radius: 3px; font-size: 12px; color: #7dd3fc; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 16px; font-size: 12px; overflow-x: auto; margin-bottom: 16px; line-height: 1.6; color: #94a3b8; }
+  pre .key { color: #7dd3fc; }
+  pre .val { color: #86efac; }
+  pre .comment { color: #475569; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+  th { text-align: left; padding: 8px 12px; background: var(--surface); color: var(--muted); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: #94a3b8; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td code { font-size: 11px; }
+
+  /* Badges */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
+  .badge-green { background: rgba(34,197,94,0.15); color: var(--green); }
+  .badge-amber { background: rgba(245,158,11,0.15); color: var(--amber); }
+  .badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
+  .badge-blue { background: rgba(96,165,250,0.15); color: #60a5fa; }
+  .badge-grey { background: rgba(100,116,139,0.15); color: var(--muted); }
+
+  /* Cards */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 16px 20px; margin-bottom: 12px; }
+  .card h4 { font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+  .card p { margin: 0; font-size: 12px; }
+
+  /* Callout */
+  .callout { border-left: 3px solid var(--primary); background: rgba(249,115,22,0.07); padding: 12px 16px; border-radius: 0 4px 4px 0; margin-bottom: 16px; font-size: 12px; color: #94a3b8; }
+  .callout.warn { border-left-color: var(--amber); background: rgba(245,158,11,0.07); }
+  .callout.danger { border-left-color: var(--red); background: rgba(239,68,68,0.07); }
+  .callout strong { color: var(--text); display: block; margin-bottom: 4px; }
+
+  /* Search highlight */
+  .highlight { background: rgba(249,115,22,0.3); border-radius: 2px; }
+  .hidden { display: none !important; }
+
+  /* Stat row */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 16px; text-align: center; }
+  .stat .num { font-size: 28px; font-weight: 700; color: var(--primary); line-height: 1; margin-bottom: 4px; }
+  .stat .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+
+  /* Print / export */
+  @media print {
+    #sidebar { display: none; }
+    #main { max-width: 100%; padding: 20px; }
+    body { background: white; color: black; }
+    pre, code { background: #f1f5f9; color: #1e293b; }
+    .card, .callout { border: 1px solid #cbd5e1; }
+  }
+</style>
+</head>
+<body>
+<div id="shell">
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+  <div id="sidebar-header">
+    <div class="logo">eblockwatch</div>
+    <div class="sub">Cyber Chaperone — System Bible</div>
+  </div>
+  <div id="search-box">
+    <input id="search" type="text" placeholder="Search everything…" oninput="doSearch(this.value)"/>
+  </div>
+  <div id="nav">
+    <div class="nav-section">Overview</div>
+    <div class="nav-link" onclick="scrollTo('overview')">System Overview</div>
+    <div class="nav-link" onclick="scrollTo('philosophy')">Philosophy</div>
+    <div class="nav-link" onclick="scrollTo('urls')">URLs &amp; Endpoints</div>
+
+    <div class="nav-section">Infrastructure</div>
+    <div class="nav-link" onclick="scrollTo('stack')">Tech Stack</div>
+    <div class="nav-link" onclick="scrollTo('secrets')">Environment Secrets</div>
+    <div class="nav-link" onclick="scrollTo('database')">Database Schema</div>
+    <div class="nav-link" onclick="scrollTo('files')">File Structure</div>
+
+    <div class="nav-section">WhatsApp</div>
+    <div class="nav-link" onclick="scrollTo('webhook')">Webhook Rules</div>
+    <div class="nav-link" onclick="scrollTo('menus')">Menu System</div>
+    <div class="nav-link" onclick="scrollTo('flows')">Conversation Flows</div>
+
+    <div class="nav-section">API Reference</div>
+    <div class="nav-link" onclick="scrollTo('api-public')">Public Endpoints</div>
+    <div class="nav-link" onclick="scrollTo('api-auth')">Authenticated Endpoints</div>
+    <div class="nav-link" onclick="scrollTo('broadcast')">Broadcast / Bulk Send</div>
+
+    <div class="nav-section">Operations</div>
+    <div class="nav-link" onclick="scrollTo('members')">Member Import</div>
+    <div class="nav-link" onclick="scrollTo('trips')">Trip Logic</div>
+    <div class="nav-link" onclick="scrollTo('payments')">Payment Links</div>
+    <div class="nav-link" onclick="scrollTo('email')">Email System</div>
+
+    <div class="nav-section">Rebuild Guide</div>
+    <div class="nav-link" onclick="scrollTo('rebuild')">How to Rebuild from Scratch</div>
+    <div class="nav-link" onclick="scrollTo('github')">GitHub Backup</div>
+    <div class="nav-link" onclick="scrollTo('checklist')">Launch Checklist</div>
+  </div>
+  <div id="sidebar-footer">
+    Generated: May 2026 · eblockwatch.co.za<br/>
+    <a href="javascript:window.print()">🖨 Print / Save PDF</a>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- OVERVIEW -->
+  <div class="section" id="overview">
+    <h1>Cyber Chaperone — System Bible</h1>
+    <p class="lead">This document contains everything needed to understand, operate, or rebuild the eblockwatch Cyber Chaperone system. It is independent of Replit and can be read offline, printed, or handed to any developer.</p>
+    <div class="stats">
+      <div class="stat"><div class="num">91,097</div><div class="label">Members in DB</div></div>
+      <div class="stat"><div class="num">530+</div><div class="label">WhatsApp Messages</div></div>
+      <div class="stat"><div class="num">2001</div><div class="label">Advocating Safety Since</div></div>
+    </div>
+    <div class="callout danger">
+      <strong>LOCKED RULES — Never change without explicit approval</strong>
+      Webhook guard: ignore ONLY when <code>req.body.MessageStatus</code> is truthy. Never block on <code>SmsStatus="received"</code> — that is a genuine inbound message.
+    </div>
+  </div>
+
+  <!-- PHILOSOPHY -->
+  <div class="section" id="philosophy">
+    <h2>Philosophy</h2>
+    <div class="card">
+      <h4>Andre Snyman's guiding principle</h4>
+      <p style="font-size:15px;color:var(--text);font-style:italic;">"We are not selling fear. We are selling safety. We are not a panic button. We are a community of people who care. Every word in this system — on WhatsApp, on the website, in every email — must reflect empowerment, confidence, and belonging."</p>
+    </div>
+    <p>The AI assistant is called <strong>AI Arnie</strong> — Andre's digital safety sidekick. Arnie is warm, calm, and direct. He never alarms. He never dramatises. He connects people to safety quietly and efficiently.</p>
+    <h3>Tone guide</h3>
+    <table>
+      <tr><th>Instead of</th><th>Use</th></tr>
+      <tr><td>"crisis management"</td><td>"safety monitoring"</td></tr>
+      <tr><td>"when you're in trouble"</td><td>"stay connected", "travel with confidence"</td></tr>
+      <tr><td>"risks like kidnapping"</td><td>"unexpected detours, breakdowns, delays"</td></tr>
+      <tr><td>"panic button"</td><td>"your safety network"</td></tr>
+      <tr><td>"danger"</td><td>"needs support"</td></tr>
+    </table>
+  </div>
+
+  <!-- URLs -->
+  <div class="section" id="urls">
+    <h2>URLs &amp; Endpoints</h2>
+    <table>
+      <tr><th>What</th><th>URL</th><th>Status</th></tr>
+      <tr><td>Production dashboard</td><td><code>https://cyber-chaperone-r--ryfsny.replit.app</code></td><td><span class="badge badge-green">LIVE</span></td></tr>
+      <tr><td>Twilio WhatsApp webhook</td><td><code>POST /api/webhook/twilio</code></td><td><span class="badge badge-green">LIVE</span></td></tr>
+      <tr><td>eblockwatch website</td><td><code>https://www.eblockwatch.co.za</code></td><td><span class="badge badge-green">LIVE</span></td></tr>
+      <tr><td>Single membership payment</td><td><code>https://paystack.shop/pay/cyber-chaperone</code></td><td><span class="badge badge-green">LIVE</span></td></tr>
+      <tr><td>Family membership payment</td><td><code>https://paystack.shop/pay/family-cyber-chaperone</code></td><td><span class="badge badge-green">LIVE</span></td></tr>
+      <tr><td>Facebook page</td><td><code>https://www.facebook.com/eblockwatchnational</code></td><td><span class="badge badge-green">LIVE</span></td></tr>
+      <tr><td>Twilio console</td><td><code>https://console.twilio.com</code></td><td><span class="badge badge-amber">SANDBOX</span></td></tr>
+      <tr><td>Paystack dashboard</td><td><code>https://dashboard.paystack.com</code></td><td><span class="badge badge-green">LIVE</span></td></tr>
+    </table>
+  </div>
+
+  <!-- STACK -->
+  <div class="section" id="stack">
+    <h2>Tech Stack</h2>
+    <table>
+      <tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+      <tr><td>Monorepo</td><td>pnpm workspaces</td><td>Manages all packages together</td></tr>
+      <tr><td>Runtime</td><td>Node.js 24</td><td>Server runtime</td></tr>
+      <tr><td>Language</td><td>TypeScript 5.9</td><td>All code is typed</td></tr>
+      <tr><td>API framework</td><td>Express 5</td><td>HTTP server and routing</td></tr>
+      <tr><td>Database</td><td>PostgreSQL + Drizzle ORM</td><td>All persistent data</td></tr>
+      <tr><td>Validation</td><td>Zod (v4)</td><td>Input/output validation</td></tr>
+      <tr><td>API contracts</td><td>OpenAPI + Orval codegen</td><td>Type-safe API hooks</td></tr>
+      <tr><td>Build</td><td>esbuild</td><td>Bundles server to CJS</td></tr>
+      <tr><td>Frontend</td><td>React + Vite + TailwindCSS + shadcn/ui</td><td>Situation Room dashboard</td></tr>
+      <tr><td>WhatsApp</td><td>Twilio Programmable Messaging</td><td>Inbound/outbound WhatsApp</td></tr>
+      <tr><td>Maps</td><td>OpenStreetMap + OSRM + Nominatim</td><td>Route planning, geocoding — no API key needed</td></tr>
+      <tr><td>Email</td><td>Nodemailer + Gmail</td><td>Operator alert emails</td></tr>
+      <tr><td>Hosting</td><td>Replit (cloud)</td><td>Dev and production environment</td></tr>
+      <tr><td>Payments</td><td>Paystack</td><td>Membership subscriptions</td></tr>
+    </table>
+
+    <h3>Key commands</h3>
+    <pre>
+<span class="comment"># Install all dependencies</span>
+pnpm install
+
+<span class="comment"># Full typecheck (all packages)</span>
+pnpm run typecheck
+
+<span class="comment"># Regenerate API hooks from OpenAPI spec</span>
+pnpm --filter @workspace/api-spec run codegen
+
+<span class="comment"># Push DB schema changes to dev database</span>
+pnpm --filter @workspace/db run push
+
+<span class="comment"># Build API server</span>
+pnpm --filter @workspace/api-server run build</pre>
+  </div>
+
+  <!-- SECRETS -->
+  <div class="section" id="secrets">
+    <h2>Environment Secrets</h2>
+    <div class="callout warn">
+      <strong>Never commit secrets to code or Git.</strong>
+      All secrets are stored in Replit's Secrets panel (lock icon in sidebar). To rebuild on another platform, add each of these as environment variables.
+    </div>
+    <table>
+      <tr><th>Secret Name</th><th>What it is</th><th>Where to get it</th></tr>
+      <tr><td><code>SESSION_SECRET</code></td><td>Random string for cookie signing</td><td>Generate: <code>openssl rand -hex 32</code></td></tr>
+      <tr><td><code>OPERATOR_PASSWORD</code></td><td>Dashboard login password</td><td>Set by Andre</td></tr>
+      <tr><td><code>TWILIO_ACCOUNT_SID</code></td><td>Twilio account ID (starts with AC...)</td><td>console.twilio.com → Account Info</td></tr>
+      <tr><td><code>TWILIO_AUTH_TOKEN</code></td><td>Twilio secret token</td><td>console.twilio.com → Account Info</td></tr>
+      <tr><td><code>GMAIL_USER</code></td><td>Gmail address for sending alerts</td><td>Andre's Gmail address</td></tr>
+      <tr><td><code>GMAIL_APP_PASSWORD</code></td><td>Gmail App Password (not regular password)</td><td>Google Account → Security → App Passwords</td></tr>
+      <tr><td><code>REGISTER_API_KEY</code></td><td>API key for website→DB member sync</td><td>Generate any random string, give to web developer</td></tr>
+      <tr><td><code>DATABASE_URL</code></td><td>PostgreSQL connection string</td><td>Replit provides automatically (or Neon/Supabase if self-hosting)</td></tr>
+    </table>
+    <h3>Shared env vars (not secrets)</h3>
+    <table>
+      <tr><th>Variable</th><th>Value</th><th>Purpose</th></tr>
+      <tr><td><code>OPERATOR_WHATSAPP_NUMBER</code></td><td><code>whatsapp:+27825611065</code></td><td>Operator mirror destination</td></tr>
+      <tr><td><code>OPERATOR_MIRROR_MODE</code></td><td><code>all</code></td><td>Mirror all messages to operator</td></tr>
+    </table>
+  </div>
+
+  <!-- DATABASE -->
+  <div class="section" id="database">
+    <h2>Database Schema</h2>
+    <p>All data lives in PostgreSQL. The ORM is Drizzle. Schema files are in <code>lib/db/src/schema/</code>.</p>
+
+    <h3>members</h3>
+    <p>91,097 records. The central registry. Unique on <code>whatsapp_number</code>.</p>
+    <pre>id, first_name, last_name, display_name
+whatsapp_number        <span class="comment">-- UNIQUE. Format: whatsapp:+27XXXXXXXXX</span>
+member_status          <span class="comment">-- 'active' | 'verified' | 'pending' | 'inactive' | 'unknown'</span>
+membership_tier        <span class="comment">-- 'Entry Level' | 'Single Membership' | 'Family Membership'</span>
+role                   <span class="comment">-- 'operator' | 'member' | null</span>
+email, mobile
+ice_contact_name       <span class="comment">-- In Case of Emergency contact name</span>
+ice_contact_phone      <span class="comment">-- Format: whatsapp:+27XXXXXXXXX</span>
+home_lat, home_lon     <span class="comment">-- GPS coordinates (text)</span>
+home_address, suburb, city, province, postal_code, country
+industry, notes
+source_batch           <span class="comment">-- Import batch tag — used to reverse imports</span>
+import_status
+created_at, updated_at</pre>
+
+    <h3>trips</h3>
+    <p>One record per traveler journey. Status drives the Situation Room colour.</p>
+    <pre>id, title, traveler_name, traveler_phone
+status                 <span class="comment">-- 'green' | 'amber' | 'red' | 'completed' | 'cancelled'</span>
+evidence_notes         <span class="comment">-- Timestamped log of what happened</span>
+inference_notes        <span class="comment">-- AI reasoning</span>
+next_action            <span class="comment">-- Recommended operator action</span>
+operator_notes         <span class="comment">-- Human notes added by Andre</span>
+original_member_eta    <span class="comment">-- e.g. "23:30"</span>
+eta_drift_minutes      <span class="comment">-- Minutes past ETA (updated on every message)</span>
+last_member_checkin_time
+ice_escalation_status  <span class="comment">-- null | 'SENT' | 'REPLIED'</span>
+start_lat, start_lon, dest_lat, dest_lon
+route_polyline         <span class="comment">-- GeoJSON LineString from OSRM</span>
+route_eta_minutes, route_eta_time
+checkpoint_list        <span class="comment">-- JSON array of checkpoint objects</span>
+created_at, updated_at</pre>
+
+    <h3>messages</h3>
+    <pre>id, from_number, to_number, body, message_sid
+trip_id                <span class="comment">-- Linked trip (nullable)</span>
+received_at</pre>
+
+    <h3>conversation_states</h3>
+    <pre>id, whatsapp_number
+current_flow           <span class="comment">-- 'MAIN_MENU' | 'CYBER_CHAPERONE' | 'TRIP_FLOW' | 'CHECKIN' | 'CLARIFICATION'</span>
+current_step           <span class="comment">-- Step within the flow</span>
+pending_trip_data      <span class="comment">-- JSON: partial trip data being collected</span>
+updated_at</pre>
+
+    <h3>responders</h3>
+    <pre>id, name, whatsapp_number, area_name
+home_lat, home_lon     <span class="comment">-- GPS for radar proximity matching</span>
+notes, active
+created_at, updated_at</pre>
+
+    <h3>Reversible import — how to undo a batch</h3>
+    <pre>
+<span class="comment">-- See all batches and their counts</span>
+SELECT source_batch, COUNT(*) FROM members GROUP BY source_batch;
+
+<span class="comment">-- Remove a specific batch (safe — uses source_batch tag)</span>
+DELETE FROM members WHERE source_batch = 'launch_test_10_members';</pre>
+  </div>
+
+  <!-- FILES -->
+  <div class="section" id="files">
+    <h2>File Structure</h2>
+    <pre>
+artifacts/
+  api-server/src/
+    index.ts              <span class="comment">-- Server entry point + keep-alive scheduler</span>
+    app.ts                <span class="comment">-- Express app setup, middleware, logging</span>
+    menu-router.ts        <span class="comment">-- All WhatsApp conversation logic (~2500 lines)</span>
+    email-service.ts      <span class="comment">-- Gmail alert emails</span>
+    checkpoint-scheduler.ts <span class="comment">-- Cron: ETA drift + checkpoint checks (3 min interval)</span>
+    weekly-digest.ts      <span class="comment">-- Sunday digest email to operator</span>
+    voice-service.ts      <span class="comment">-- Voice call integration (pre-existing TS bug, non-blocking)</span>
+    routes/
+      index.ts            <span class="comment">-- Mounts all routers; auth wall after register</span>
+      webhook.ts          <span class="comment">-- POST /api/webhook/twilio (LOCKED)</span>
+      members.ts          <span class="comment">-- GET /api/members (paginated), GET /api/members/map, POST</span>
+      trips.ts            <span class="comment">-- CRUD for trips</span>
+      broadcast.ts        <span class="comment">-- POST /api/broadcast — bulk WhatsApp send</span>
+      register.ts         <span class="comment">-- POST /api/register — public, API-key secured</span>
+      auth.ts             <span class="comment">-- POST /api/auth/login, logout, GET /me</span>
+      health.ts           <span class="comment">-- GET /api/healthz</span>
+      responders.ts       <span class="comment">-- Responder network CRUD</span>
+      case.ts             <span class="comment">-- Case management</span>
+    middleware/
+      require-auth.ts     <span class="comment">-- Session auth guard</span>
+
+  situation-room/src/
+    pages/
+      situation-room.tsx  <span class="comment">-- Main dashboard (trip cards, status filters)</span>
+      radar.tsx           <span class="comment">-- Map + radius broadcast tool</span>
+      members.tsx         <span class="comment">-- Member directory (paginated, server-side search)</span>
+      trip-detail.tsx     <span class="comment">-- Full trip view with map and message feed</span>
+      inbox.tsx           <span class="comment">-- All raw WhatsApp messages</span>
+      new-trip.tsx        <span class="comment">-- Manual trip creation form</span>
+
+lib/
+  db/src/schema/          <span class="comment">-- Drizzle table definitions</span>
+  api-spec/               <span class="comment">-- OpenAPI spec → generates hooks + Zod schemas</span>
+  api-hooks/              <span class="comment">-- Generated React Query hooks (do not edit manually)</span>
+  api-zod/                <span class="comment">-- Generated Zod validators (do not edit manually)</span>
+
+CYBER_CHAPERONE_LOCKED_SOURCE.md   <span class="comment">-- System snapshot record</span>
+EBLOCKWATCH_WEBSITE_DEVELOPER_BRIEF.md  <span class="comment">-- Brief for Webflow developer</span>
+EBLOCKWATCH_SYSTEM_BIBLE.html      <span class="comment">-- This file</span></pre>
+  </div>
+
+  <!-- WEBHOOK -->
+  <div class="section" id="webhook">
+    <h2>Webhook Rules</h2>
+    <div class="callout danger">
+      <strong>LOCKED — Do not change</strong>
+      Ignore incoming requests ONLY when <code>req.body.MessageStatus</code> is present and truthy (these are Twilio delivery status callbacks). Never block on <code>SmsStatus="received"</code> — that is a genuine inbound member message.
+    </div>
+    <h3>Webhook URL</h3>
+    <pre>POST https://cyber-chaperone-r--ryfsny.replit.app/api/webhook/twilio</pre>
+    <p>Set this in Twilio Console → Messaging → Sandbox Settings → "WHEN A MESSAGE COMES IN".</p>
+    <h3>Message processing order</h3>
+    <table>
+      <tr><th>#</th><th>Check</th><th>Action</th></tr>
+      <tr><td>0</td><td>ICE contact detection</td><td>Route to ICE reply handler (choices 1–4)</td></tr>
+      <tr><td>1</td><td>Distress keywords (help, sos, emergency…)</td><td>RED + auto-escalate to ICE</td></tr>
+      <tr><td>2</td><td>Arrival keywords (arrived, i have arrived…)</td><td>Complete trip</td></tr>
+      <tr><td>3</td><td>Menu reset trigger (Hi, 0, Menu…)</td><td>Show main menu</td></tr>
+      <tr><td>4</td><td>Conversation state routing</td><td>TRIP_FLOW → CLARIFICATION → CHECKIN → CYBER_CHAPERONE → MAIN_MENU</td></tr>
+      <tr><td>5</td><td>START [from] to [dest] ETA [time]</td><td>Create GREEN trip</td></tr>
+      <tr><td>6</td><td>ETA drift ≥15 min</td><td>CHECKIN flow; ≥45 min → auto-ICE escalation + AMBER</td></tr>
+      <tr><td>7</td><td>Ambiguous movement with active trip</td><td>AMBER + clarification menu</td></tr>
+      <tr><td>8</td><td>Freeform trip-start / follow-up</td><td>Existing parser</td></tr>
+    </table>
+  </div>
+
+  <!-- MENUS -->
+  <div class="section" id="menus">
+    <h2>WhatsApp Menu System</h2>
+    <h3>Main Menu (AI Arnie — member)</h3>
+    <pre>
+Hi {name} 👋 I'm AI Arnie — Andre's digital safety sidekick at eblockwatch.
+
+{membership status line}
+We are here to keep you and your family safer. What can I help you with today?
+
+1. What is eblockwatch?
+2. Membership options
+3. Activate my membership
+4. Update my profile
+5. Travel with Cyber Chaperone 🛡️
+6. eblockshop — safer products for you
+7. Speak to a human
+
+🚨 URGENT? Reply 10 — we will get a human on it right away.
+
+Reply with a number to choose.</pre>
+
+    <h3>Trigger words for main menu</h3>
+    <pre>Hi, Hello, Menu, Main Menu, Start, 0, Join</pre>
+
+    <h3>Membership activation sub-menu</h3>
+    <pre>
+1. Entry Level — free
+2. Single Membership — R150/month  →  paystack.shop/pay/cyber-chaperone
+3. Family Membership — R250/month  →  paystack.shop/pay/family-cyber-chaperone</pre>
+
+    <h3>Cyber Chaperone sub-menu (option 5)</h3>
+    <pre>Options 1–7: start trip, view active trip, check in, ETA update, arrived, need help, back</pre>
+  </div>
+
+  <!-- FLOWS -->
+  <div class="section" id="flows">
+    <h2>Conversation Flows</h2>
+    <table>
+      <tr><th>Flow</th><th>Steps</th><th>What it does</th></tr>
+      <tr><td><code>MAIN_MENU</code></td><td>1</td><td>Waiting for numeric choice 1–10</td></tr>
+      <tr><td><code>CYBER_CHAPERONE</code></td><td>1</td><td>Cyber Chaperone sub-menu choice 1–7</td></tr>
+      <tr><td><code>TRIP_FLOW</code></td><td>4</td><td>start location → destination → ETA → confirm → create trip</td></tr>
+      <tr><td><code>CLARIFICATION</code></td><td>1</td><td>Ambiguous destination — waiting for member to clarify</td></tr>
+      <tr><td><code>CHECKIN</code></td><td>1</td><td>ETA drift check-in (choices 1–6: okay / delayed / ETA changed / stopped / help / send pin)</td></tr>
+      <tr><td><code>FLOW_REGISTRATION</code></td><td>6</td><td>first name → last name → email → suburb → city → province → creates member record</td></tr>
+    </table>
+    <h3>ICE Escalation flow</h3>
+    <table>
+      <tr><th>Trigger</th><th>Action</th></tr>
+      <tr><td>Drift ≥ 45 min</td><td>Auto-send WhatsApp to ICE contact, set status AMBER, mirror to operator</td></tr>
+      <tr><td>Distress keyword</td><td>RED + ICE message if not yet sent</td></tr>
+      <tr><td>ICE replies "1"</td><td>GREEN + operator mirror</td></tr>
+      <tr><td>ICE replies "2"</td><td>RED + operator mirror</td></tr>
+      <tr><td>ICE replies "3"</td><td>AMBER + operator mirror</td></tr>
+      <tr><td>ICE replies "4"</td><td>Operator mirror with ICE phone number</td></tr>
+    </table>
+  </div>
+
+  <!-- API PUBLIC -->
+  <div class="section" id="api-public">
+    <h2>Public API Endpoints</h2>
+    <p>These endpoints do not require operator login.</p>
+    <div class="card">
+      <h4>POST /api/webhook/twilio</h4>
+      <p>Receives all inbound WhatsApp messages from Twilio. Set in Twilio sandbox settings.</p>
+    </div>
+    <div class="card">
+      <h4>POST /api/register</h4>
+      <p>Registers a new member from the website form. Requires <code>X-API-Key</code> header matching <code>REGISTER_API_KEY</code> secret.</p>
+      <pre>Body: { first_name, last_name, whatsapp_number, email, home_address, suburb, city, province, membership_tier, industry }</pre>
+    </div>
+    <div class="card">
+      <h4>GET /api/healthz</h4>
+      <p>Health check. Returns 200 if server is running.</p>
+    </div>
+    <div class="card">
+      <h4>POST /api/auth/login</h4>
+      <p>Operator login. Body: <code>{ password }</code>. Sets session cookie.</p>
+    </div>
+  </div>
+
+  <!-- API AUTH -->
+  <div class="section" id="api-auth">
+    <h2>Authenticated API Endpoints</h2>
+    <p>All require operator session (login first at dashboard).</p>
+    <div class="card">
+      <h4>GET /api/members?page=1&amp;limit=50&amp;search=&amp;province=&amp;city=</h4>
+      <p>Paginated member list. Returns <code>{ data: [], pagination: { page, limit, total, pages } }</code>.</p>
+    </div>
+    <div class="card">
+      <h4>GET /api/members/map</h4>
+      <p>Lightweight GPS-only member list for radar map. Only returns members with coordinates.</p>
+    </div>
+    <div class="card">
+      <h4>GET /api/trips · POST /api/trips · PATCH /api/trips/:id</h4>
+      <p>Trip CRUD. Status values: <code>green | amber | red | completed | cancelled</code>.</p>
+    </div>
+    <div class="card">
+      <h4>POST /api/broadcast</h4>
+      <p>Send bulk WhatsApp message to a list of members. Max 500 per call. 80ms delay between sends.</p>
+      <pre>Body: { message: string, recipients: [{ whatsappNumber, displayName }] }</pre>
+    </div>
+    <div class="card">
+      <h4>GET /api/messages · GET /api/responders · GET /api/cases</h4>
+      <p>Message inbox, responder network, and case management.</p>
+    </div>
+  </div>
+
+  <!-- BROADCAST -->
+  <div class="section" id="broadcast">
+    <h2>Broadcast / Bulk Send</h2>
+    <p>The <strong>Radar page</strong> in the Situation Room is the operator tool for radius-based bulk messaging:</p>
+    <table>
+      <tr><th>Step</th><th>Action</th></tr>
+      <tr><td>1</td><td>Open Radar page</td></tr>
+      <tr><td>2</td><td>Toggle "Radius Mode" on</td></tr>
+      <tr><td>3</td><td>Click any point on the map</td></tr>
+      <tr><td>4</td><td>Adjust the radius slider (km)</td></tr>
+      <tr><td>5</td><td>Panel shows all members inside the radius</td></tr>
+      <tr><td>6</td><td>Filter by status (all / active / verified)</td></tr>
+      <tr><td>7</td><td>Type your message and click Send</td></tr>
+    </table>
+    <div class="callout warn">
+      <strong>Limits:</strong> Max 500 recipients per broadcast. 80ms delay between each send to avoid Twilio rate limits. Currently requires WhatsApp Sandbox — members must have opted in.
+    </div>
+  </div>
+
+  <!-- MEMBERS -->
+  <div class="section" id="members">
+    <h2>Member Import</h2>
+    <h3>How existing members were imported</h3>
+    <p>91,097 members imported from Excel files using <code>scripts/src/import-members.ts</code> in batches tagged with <code>source_batch</code>.</p>
+    <h3>How to import new members manually</h3>
+    <pre>
+<span class="comment">-- Insert a single member (safe — ON CONFLICT ignores duplicates)</span>
+INSERT INTO members (first_name, last_name, display_name, whatsapp_number, member_status, source_batch)
+VALUES ('John', 'Smith', 'John Smith', 'whatsapp:+27821234567', 'active', 'manual_import_2026')
+ON CONFLICT (whatsapp_number) DO NOTHING;</pre>
+
+    <h3>How to import from CSV (via script)</h3>
+    <pre>
+<span class="comment"># Place CSV in scripts/src/data/</span>
+<span class="comment"># Run import script</span>
+pnpm --filter @workspace/scripts run import-members -- --file=myfile.csv --batch=my_batch_name</pre>
+
+    <h3>isKnown rule</h3>
+    <pre>isKnown = memberStatus === "verified" || memberStatus === "active"
+<span class="comment">-- Known members get the full AI Arnie menu</span>
+<span class="comment">-- Unknown members get a registration prompt</span></pre>
+  </div>
+
+  <!-- TRIPS -->
+  <div class="section" id="trips">
+    <h2>Trip Logic</h2>
+    <table>
+      <tr><th>Status</th><th>Meaning</th><th>Colour</th></tr>
+      <tr><td><code>green</code></td><td>Trip active, member on track</td><td><span class="badge badge-green">GREEN</span></td></tr>
+      <tr><td><code>amber</code></td><td>Delayed, ETA drift, or clarification needed</td><td><span class="badge badge-amber">AMBER</span></td></tr>
+      <tr><td><code>red</code></td><td>Distress signal received</td><td><span class="badge badge-red">RED</span></td></tr>
+      <tr><td><code>completed</code></td><td>Member arrived safely</td><td><span class="badge badge-grey">DONE</span></td></tr>
+      <tr><td><code>cancelled</code></td><td>Trip cancelled manually</td><td><span class="badge badge-grey">CANCELLED</span></td></tr>
+    </table>
+    <h3>ETA drift thresholds</h3>
+    <table>
+      <tr><th>Drift</th><th>Action</th></tr>
+      <tr><td>≥ 15 min</td><td>CHECKIN flow triggered (if no recent check-in in last 25 min)</td></tr>
+      <tr><td>≥ 45 min</td><td>Auto-ICE escalation + AMBER</td></tr>
+    </table>
+    <h3>Route enrichment (automatic, no API key needed)</h3>
+    <p>When a trip is created, the system automatically: geocodes start + destination via Nominatim, calculates driving route via OSRM, stores the polyline, ETA, and checkpoint list on the trip record.</p>
+  </div>
+
+  <!-- PAYMENTS -->
+  <div class="section" id="payments">
+    <h2>Payment Links</h2>
+    <table>
+      <tr><th>Plan</th><th>Price</th><th>Link</th></tr>
+      <tr><td>Single Membership</td><td>R150/month</td><td><a href="https://paystack.shop/pay/cyber-chaperone" target="_blank">paystack.shop/pay/cyber-chaperone</a></td></tr>
+      <tr><td>Family Membership</td><td>R250/month</td><td><a href="https://paystack.shop/pay/family-cyber-chaperone" target="_blank">paystack.shop/pay/family-cyber-chaperone</a></td></tr>
+      <tr><td>Entry Level</td><td>Free</td><td>No payment — just register</td></tr>
+    </table>
+    <p>Payments are processed by Paystack. To pull subscriber data into the system, use the Paystack API with the <code>sk_live_...</code> Secret Key from dashboard.paystack.com → Settings → API Keys.</p>
+  </div>
+
+  <!-- EMAIL -->
+  <div class="section" id="email">
+    <h2>Email System</h2>
+    <h3>Operator alert emails (automatic)</h3>
+    <p>Sent via Gmail (nodemailer) to Andre's inbox on every significant event:</p>
+    <table>
+      <tr><th>Event</th><th>Subject prefix</th></tr>
+      <tr><td>New trip created</td><td>🟢 NEW TRIP</td></tr>
+      <tr><td>Trip goes amber</td><td>🟡 AMBER ALERT</td></tr>
+      <tr><td>Distress signal</td><td>🔴 RED ALERT</td></tr>
+      <tr><td>ICE escalation</td><td>🚨 ICE ESCALATION</td></tr>
+      <tr><td>Member arrived</td><td>✅ ARRIVED</td></tr>
+      <tr><td>Operator mirror</td><td>📋 SITUATION ROOM</td></tr>
+    </table>
+    <h3>Weekly Sunday digest (automatic)</h3>
+    <p>Every Sunday at 08:00 SAST, a system digest email is sent to the operator with: total members, active trips, messages received that week, and any open issues.</p>
+    <h3>Bulk member email</h3>
+    <p><span class="badge badge-amber">NOT YET BUILT</span> — A bulk email tool to contact all 91k members is planned but not yet implemented. Will require a dedicated email service (SendGrid, Mailchimp, or Amazon SES) to handle volume reliably.</p>
+  </div>
+
+  <!-- REBUILD -->
+  <div class="section" id="rebuild">
+    <h2>How to Rebuild from Scratch</h2>
+    <div class="callout">
+      <strong>This section exists so the system can survive Replit going offline, bankrupt, or unavailable.</strong>
+      Any developer with this document and the GitHub repository can rebuild and redeploy the full system.
+    </div>
+    <h3>Step 1 — Clone the code</h3>
+    <pre>git clone https://github.com/[YOUR_GITHUB_ORG]/cyber-chaperone.git
+cd cyber-chaperone
+pnpm install</pre>
+
+    <h3>Step 2 — Set up a PostgreSQL database</h3>
+    <p>Use any of: Neon (neon.tech — free tier), Supabase (supabase.com — free tier), Railway, or a local Postgres instance.</p>
+    <pre>
+<span class="comment"># Set the DATABASE_URL environment variable</span>
+export DATABASE_URL="postgresql://user:password@host:5432/dbname"
+
+<span class="comment"># Push the schema</span>
+pnpm --filter @workspace/db run push</pre>
+
+    <h3>Step 3 — Set all environment secrets</h3>
+    <p>See the <strong>Environment Secrets</strong> section above. Set all 8 secrets as environment variables on your hosting platform.</p>
+
+    <h3>Step 4 — Deploy</h3>
+    <p>The system can run on any Node.js host: Railway, Render, Fly.io, DigitalOcean App Platform, or a plain VPS.</p>
+    <pre>
+<span class="comment"># Build the API server</span>
+pnpm --filter @workspace/api-server run build
+
+<span class="comment"># Start the server</span>
+PORT=8080 node artifacts/api-server/dist/index.mjs
+
+<span class="comment"># Build the frontend</span>
+pnpm --filter @workspace/situation-room run build
+<span class="comment"># Serve the dist/ folder as static files</span></pre>
+
+    <h3>Step 5 — Update Twilio webhook URL</h3>
+    <p>In Twilio Console → Messaging → Sandbox (or your production WhatsApp sender) → update "WHEN A MESSAGE COMES IN" to your new server URL:</p>
+    <pre>POST https://your-new-domain.com/api/webhook/twilio</pre>
+
+    <h3>Step 6 — Test</h3>
+    <pre>
+<span class="comment"># Health check</span>
+curl https://your-new-domain.com/api/healthz
+
+<span class="comment"># Send "Hi" from Andre's WhatsApp to test the menu</span></pre>
+
+    <h3>Alternative hosting options (no Replit)</h3>
+    <table>
+      <tr><th>Platform</th><th>Cost</th><th>Ease</th><th>Notes</th></tr>
+      <tr><td>Railway.app</td><td>~$5/month</td><td>Easy</td><td>Add Postgres as a plugin, push to deploy</td></tr>
+      <tr><td>Render.com</td><td>Free tier / $7</td><td>Easy</td><td>Free Postgres 90 days, then paid</td></tr>
+      <tr><td>Fly.io</td><td>~$3/month</td><td>Medium</td><td>Good for always-on apps</td></tr>
+      <tr><td>VPS (Hetzner/DigitalOcean)</td><td>$6–10/month</td><td>Technical</td><td>Full control, needs PM2 + Nginx</td></tr>
+    </table>
+  </div>
+
+  <!-- GITHUB -->
+  <div class="section" id="github">
+    <h2>GitHub Backup</h2>
+    <div class="callout">
+      <strong>The code must live on GitHub — independent of Replit.</strong>
+      GitHub is free, permanent, and any developer in the world can access it.
+    </div>
+    <h3>How to set up (one-time — Andre does this)</h3>
+    <ol style="margin-left:20px;color:#94a3b8;line-height:2.2;font-size:13px;">
+      <li>Go to <a href="https://github.com" target="_blank">github.com</a> and create an account (or log in)</li>
+      <li>Click <strong>New repository</strong> → name it <code>cyber-chaperone</code> → set to <strong>Private</strong> → Create</li>
+      <li>Copy the repository URL (looks like <code>https://github.com/yourname/cyber-chaperone.git</code>)</li>
+      <li>Tell your developer the repo URL — they can then clone it and have everything</li>
+      <li>In Replit: open the Git panel (branch icon in sidebar) → add the GitHub URL as a remote → push</li>
+    </ol>
+    <h3>After setup — keeping it in sync</h3>
+    <p>Replit automatically commits code changes. You or your developer can push to GitHub whenever you want a permanent backup:</p>
+    <pre>git push github main</pre>
+    <div class="callout warn">
+      <strong>Never push secrets to GitHub.</strong> The <code>.gitignore</code> file already excludes <code>.env</code> files. Secrets stay in Replit's Secrets panel (or your hosting platform's env vars).
+    </div>
+  </div>
+
+  <!-- CHECKLIST -->
+  <div class="section" id="checklist">
+    <h2>Launch Checklist</h2>
+    <table>
+      <tr><th>Item</th><th>Who</th><th>Status</th></tr>
+      <tr><td>Operator password set</td><td>Andre</td><td><span class="badge badge-green">DONE</span></td></tr>
+      <tr><td>Twilio credentials set</td><td>Andre</td><td><span class="badge badge-green">DONE</span></td></tr>
+      <tr><td>Gmail alert email working</td><td>Andre</td><td><span class="badge badge-green">DONE</span></td></tr>
+      <tr><td>Payment links live</td><td>—</td><td><span class="badge badge-green">DONE</span></td></tr>
+      <tr><td>Trip board cleared (18 test trips closed)</td><td>—</td><td><span class="badge badge-green">DONE</span></td></tr>
+      <tr><td>91,097 members in database</td><td>—</td><td><span class="badge badge-green">DONE</span></td></tr>
+      <tr><td>Member directory paginated and searchable</td><td>—</td><td><span class="badge badge-green">DONE</span></td></tr>
+      <tr><td>Radar broadcast working</td><td>—</td><td><span class="badge badge-green">DONE</span></td></tr>
+      <tr><td>Weekly Sunday digest email</td><td>—</td><td><span class="badge badge-green">DONE</span></td></tr>
+      <tr><td>Set REGISTER_API_KEY secret</td><td>Andre</td><td><span class="badge badge-amber">PENDING</span></td></tr>
+      <tr><td>Push code to GitHub</td><td>Andre + developer</td><td><span class="badge badge-amber">PENDING</span></td></tr>
+      <tr><td>Website form wired to API</td><td>Web developer</td><td><span class="badge badge-amber">PENDING</span></td></tr>
+      <tr><td>WhatsApp production number (off sandbox)</td><td>Andre → Twilio/Meta</td><td><span class="badge badge-amber">PENDING</span></td></tr>
+      <tr><td>Branded email (info@eblockwatch.co.za)</td><td>Andre → hosting provider</td><td><span class="badge badge-amber">PENDING</span></td></tr>
+      <tr><td>Paystack members imported (launch_test_10)</td><td>Andre → provide sk_live key</td><td><span class="badge badge-amber">PENDING</span></td></tr>
+    </table>
+  </div>
+
+</div><!-- /main -->
+</div><!-- /shell -->
+
+<script>
+function scrollTo(id) {
+  const el = document.getElementById(id);
+  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+function doSearch(query) {
+  const q = query.toLowerCase().trim();
+  const main = document.getElementById('main');
+  const sections = main.querySelectorAll('.section');
+
+  // Remove old highlights
+  main.querySelectorAll('.highlight').forEach(el => {
+    el.outerHTML = el.innerHTML;
+  });
+
+  if (!q) {
+    sections.forEach(s => s.classList.remove('hidden'));
+    return;
+  }
+
+  sections.forEach(s => {
+    const text = s.textContent.toLowerCase();
+    if (text.includes(q)) {
+      s.classList.remove('hidden');
+      // Highlight matches in text nodes
+      highlightInElement(s, q);
+    } else {
+      s.classList.add('hidden');
+    }
+  });
+}
+
+function highlightInElement(el, q) {
+  if (el.nodeType === 3) {
+    const idx = el.textContent.toLowerCase().indexOf(q);
+    if (idx >= 0) {
+      const span = document.createElement('span');
+      span.className = 'highlight';
+      span.textContent = el.textContent.substring(idx, idx + q.length);
+      const after = document.createTextNode(el.textContent.substring(idx + q.length));
+      const before = document.createTextNode(el.textContent.substring(0, idx));
+      el.parentNode.insertBefore(before, el);
+      el.parentNode.insertBefore(span, el);
+      el.parentNode.insertBefore(after, el);
+      el.parentNode.removeChild(el);
+    }
+    return;
+  }
+  if (el.nodeType === 1 && el.className !== 'highlight') {
+    Array.from(el.childNodes).forEach(c => highlightInElement(c, q));
+  }
+}
+
+// Intersection observer for active nav highlighting
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+      const link = document.querySelector(`.nav-link[onclick*="'${e.target.id}'"]`);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { threshold: 0.2 });
+document.querySelectorAll('.section').forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

@@ -12,3 +12,9 @@ id = "In_i1tk9sJYdT2gcqH4ks"
 uri = "file://EBLOCKWATCH_WEBSITE_DEVELOPER_BRIEF.md"
 type = "text"
 title = "eblockwatch.co.za — Developer Brief"
+
+[[outputs]]
+id = "prjU4ax2ho5a7essMohDE"
+uri = "file://EBLOCKWATCH_BACKUP_PACK.zip"
+type = "unspecified"
+title = "eblockwatch Backup Pack — System Bible + Dev Brief + Locked Source"
