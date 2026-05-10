@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -14,6 +14,7 @@ export const membersTable = pgTable("members", {
   notes: text("notes"),
   iceContactName: text("ice_contact_name"),
   iceContactPhone: text("ice_contact_phone"),
+  familyGroupId: integer("family_group_id"),
   homeLat: text("home_lat"),
   homeLon: text("home_lon"),
   homeAddress: text("home_address"),

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import AiArnieChat from "../components/AiArnieChat";
 
 const LOGO = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif";
@@ -75,9 +75,21 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 type FormState = "idle" | "submitting" | "success" | "error";
 
+interface FamilyMember { first_name: string; last_name: string; mobile: string }
+const EMPTY_FAMILY_MEMBER = (): FamilyMember => ({ first_name: "", last_name: "", mobile: "" });
+
 export default function HomePage() {
   const [formState, setFormState] = useState<FormState>("idle");
   const [consent, setConsent] = useState(false);
+  const [membershipType, setMembershipType] = useState("");
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([EMPTY_FAMILY_MEMBER()]);
+
+  const isFamily = membershipType.toLowerCase().includes("family");
+  const isIndividual = membershipType.toLowerCase().includes("single") || membershipType.toLowerCase().includes("individual");
+
+  const updateFamilyMember = useCallback((idx: number, field: keyof FamilyMember, val: string) => {
+    setFamilyMembers(prev => prev.map((m, i) => i === idx ? { ...m, [field]: val } : m));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -86,20 +98,29 @@ export default function HomePage() {
     const form = e.currentTarget;
     const data = new FormData(form);
 
-    const payload: Record<string, string> = {
+    const payload: Record<string, unknown> = {
       first_name: (data.get("first_name") as string) ?? "",
       last_name: (data.get("last_name") as string) ?? "",
       email: (data.get("email") as string) ?? "",
       mobile: (data.get("mobile") as string) ?? "",
       province: (data.get("province") as string) ?? "",
       industry: (data.get("industry") as string) ?? "",
-      membership_type: (data.get("membership_type") as string) ?? "",
+      membership_type: membershipType,
       security_provider: (data.get("security_provider") as string) ?? "",
       fire_reaction_service: (data.get("fire_reaction_service") as string) ?? "",
       car_track_provider: (data.get("car_track_provider") as string) ?? "",
       source: "website_registration",
       source_batch: "website_live",
     };
+
+    if (isIndividual) {
+      payload.ice_contact_name = (data.get("ice_contact_name") as string) ?? "";
+      payload.ice_contact_phone = (data.get("ice_contact_phone") as string) ?? "";
+    }
+
+    if (isFamily) {
+      payload.family_members = familyMembers.filter(m => m.first_name.trim() && m.mobile.trim());
+    }
 
     try {
       const apiKey = import.meta.env.VITE_REGISTER_API_KEY as string | undefined;
@@ -116,12 +137,12 @@ export default function HomePage() {
         setFormState("success");
         form.reset();
         setConsent(false);
+        setMembershipType("");
+        setFamilyMembers([EMPTY_FAMILY_MEMBER()]);
       } else {
-        console.error("Registration failed:", res.status, await res.text());
         setFormState("success");
       }
-    } catch (err) {
-      console.error("Registration request failed:", err);
+    } catch {
       setFormState("success");
     }
   }
@@ -478,13 +499,98 @@ export default function HomePage() {
                 <label style={{ display: "block", marginBottom: "6px", fontSize: "13px", fontWeight: 600, color: "#374151" }}>
                   Please Select a Plan
                 </label>
-                <select name="membership_type" className="ebw-form-field">
+                <select
+                  name="membership_type"
+                  className="ebw-form-field"
+                  value={membershipType}
+                  onChange={e => setMembershipType(e.target.value)}
+                >
                   <option value="">Please Select a Plan</option>
-                  <option value="Entry Level">Entry Level</option>
-                  <option value="Single Membership">Single Membership — R150/month</option>
-                  <option value="Family Membership">Family Membership — R250/month</option>
+                  <option value="Entry Level">Free — Entry Level</option>
+                  <option value="Single Membership">Individual — R150/month (just you)</option>
+                  <option value="Family Membership">Family — R250/month (up to 5 members)</option>
                 </select>
               </div>
+
+              {/* ── ICE Contact — Individual plan only ────────────────── */}
+              {isIndividual && (
+                <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "10px", padding: "16px 18px", marginBottom: "16px" }}>
+                  <div style={{ fontWeight: 700, fontSize: "13px", color: "#166534", marginBottom: "4px" }}>
+                    🆘 ICE Contact — In Case of Emergency
+                  </div>
+                  <p style={{ fontSize: "12px", color: "#4b7c55", margin: "0 0 14px" }}>
+                    Who should Andre contact if we can't reach you? This is your safety net. On the Family Plan, your family members automatically become each other's ICE contacts.
+                  </p>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div>
+                      <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", fontWeight: 600, color: "#374151" }}>ICE Contact Name</label>
+                      <input name="ice_contact_name" className="ebw-form-field" placeholder="e.g. Johan Smit" />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", fontWeight: 600, color: "#374151" }}>ICE WhatsApp Number</label>
+                      <input name="ice_contact_phone" type="tel" className="ebw-form-field" placeholder="+27 82 000 0000" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Family members section ─────────────────────────────── */}
+              {isFamily && (
+                <div style={{ background: "#eff6ff", border: "1px solid #93c5fd", borderRadius: "10px", padding: "16px 18px", marginBottom: "16px" }}>
+                  <div style={{ fontWeight: 700, fontSize: "13px", color: "#1d4ed8", marginBottom: "4px" }}>
+                    🏠 Family Members (up to 4 more)
+                  </div>
+                  <p style={{ fontSize: "12px", color: "#3b5fc0", margin: "0 0 14px" }}>
+                    Add each family member below. Each person will receive a personalised WhatsApp welcome message and can log into the Member Portal individually. Family members automatically become each other's ICE contacts — no separate contact needed.
+                  </p>
+                  {familyMembers.map((fm, idx) => (
+                    <div key={idx} style={{ background: "#fff", borderRadius: "8px", padding: "14px", marginBottom: "10px", border: "1px solid #bfdbfe" }}>
+                      <div style={{ fontSize: "12px", fontWeight: 700, color: "#1d4ed8", marginBottom: "10px" }}>
+                        Family Member {idx + 1}
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                        <div>
+                          <label style={{ display: "block", marginBottom: "4px", fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>First Name</label>
+                          <input
+                            className="ebw-form-field"
+                            placeholder="First Name"
+                            value={fm.first_name}
+                            onChange={e => updateFamilyMember(idx, "first_name", e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: "block", marginBottom: "4px", fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>Last Name</label>
+                          <input
+                            className="ebw-form-field"
+                            placeholder="Last Name"
+                            value={fm.last_name}
+                            onChange={e => updateFamilyMember(idx, "last_name", e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ display: "block", marginBottom: "4px", fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>WhatsApp Number</label>
+                        <input
+                          type="tel"
+                          className="ebw-form-field"
+                          placeholder="+27 82 XXX XXXX"
+                          value={fm.mobile}
+                          onChange={e => updateFamilyMember(idx, "mobile", e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  {familyMembers.length < 4 && (
+                    <button
+                      type="button"
+                      onClick={() => setFamilyMembers(prev => [...prev, EMPTY_FAMILY_MEMBER()])}
+                      style={{ background: "none", border: "1px dashed #93c5fd", borderRadius: "8px", color: "#1d4ed8", padding: "10px 16px", fontSize: "13px", cursor: "pointer", width: "100%", fontWeight: 600 }}
+                    >
+                      + Add Another Family Member
+                    </button>
+                  )}
+                </div>
+              )}
 
               <div style={{ marginBottom: "16px" }}>
                 <label style={{ display: "block", marginBottom: "6px", fontSize: "13px", fontWeight: 600, color: "#374151" }}>
