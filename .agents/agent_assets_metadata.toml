@@ -30,3 +30,9 @@ id = "__p4XGqZn1N0WwiCjQVlH"
 uri = "file://EBLOCKWATCH_MEMBER_IMPORT_CLEAN.csv"
 type = "table"
 title = "EBLOCKWATCH_MEMBER_IMPORT_CLEAN.csv — 850 GaSS Members"
+
+[[outputs]]
+id = "jEVMwn1QmK5lrKESDxdZI"
+uri = "file://EBLOCKWATCH_WEBSITE_DEVELOPER_BRIEF_V2.md"
+type = "text"
+title = "Website Developer Brief v2 — 9 Changes"
