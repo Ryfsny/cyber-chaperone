@@ -10,7 +10,10 @@ import {
 } from "@workspace/api-client-react";
 import type { Trip, Responder } from "@workspace/api-client-react";
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import L from "leaflet";
+import "leaflet.markercluster";
 
 interface Member {
   id: number;
@@ -518,7 +521,7 @@ export default function Radar() {
     setLastRefresh(new Date());
   }, [trips, responders, navigate]);
 
-  // Member markers
+  // Member markers — clustered for performance
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -530,16 +533,38 @@ export default function Radar() {
     const withGps = members.filter(
       (m) => m.homeLat && m.homeLon && !isNaN(parseFloat(m.homeLat)) && !isNaN(parseFloat(m.homeLon))
     );
+    if (withGps.length === 0) return;
+
+    const clusterGroup = (L as any).markerClusterGroup({
+      maxClusterRadius: 50,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true,
+      iconCreateFunction: (cluster: any) => {
+        const count = cluster.getChildCount();
+        const size = count < 50 ? 32 : count < 200 ? 38 : 44;
+        return L.divIcon({
+          html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:rgba(249,115,22,0.85);border:2px solid #fff;box-shadow:0 0 8px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-family:monospace;font-size:11px;font-weight:bold;color:#fff;">${count.toLocaleString()}</div>`,
+          className: "",
+          iconSize: [size, size],
+          iconAnchor: [size / 2, size / 2],
+        });
+      },
+    });
+
     for (const m of withGps) {
       const lat = parseFloat(m.homeLat!);
       const lon = parseFloat(m.homeLon!);
       const isSelected = inRadiusIds.has(m.id);
       const icon = makeMemberIcon(m.memberStatus, isSelected);
-      const marker = L.marker([lat, lon], { icon }).addTo(map);
+      const marker = L.marker([lat, lon], { icon });
       const locationLine = [m.suburb, m.city, m.province].filter(Boolean).join(", ");
       marker.bindTooltip(`${m.displayName}${locationLine ? ` — ${locationLine}` : ""}`, { permanent: false, direction: "top" });
-      memberMarkersRef.current.push(marker);
+      clusterGroup.addLayer(marker);
     }
+
+    clusterGroup.addTo(map);
+    memberMarkersRef.current.push(clusterGroup);
   }, [members, showMembers, membersInRadius]);
 
   const activeCount = trips.filter((t) => t.status !== "completed").length;

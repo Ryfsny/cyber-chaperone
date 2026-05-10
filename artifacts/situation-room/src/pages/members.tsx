@@ -5,7 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import L from "leaflet";
+import "leaflet.markercluster";
 
 interface Member {
   id: number;
@@ -271,7 +274,24 @@ function MemberMapView() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || withGps.length === 0) return;
-    const markers: L.Layer[] = [];
+
+    const clusterGroup = (L as any).markerClusterGroup({
+      maxClusterRadius: 60,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true,
+      iconCreateFunction: (cluster: any) => {
+        const count = cluster.getChildCount();
+        const size = count < 50 ? 34 : count < 200 ? 40 : 48;
+        return L.divIcon({
+          html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:rgba(34,197,94,0.85);border:2px solid #fff;box-shadow:0 0 8px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-family:monospace;font-size:11px;font-weight:bold;color:#fff;">${count.toLocaleString()}</div>`,
+          className: "",
+          iconSize: [size, size],
+          iconAnchor: [size / 2, size / 2],
+        });
+      },
+    });
+
     const bounds: [number, number][] = [];
     for (const m of withGps) {
       const lat = parseFloat(m.homeLat!);
@@ -283,7 +303,7 @@ function MemberMapView() {
         html: `<div style="width:10px;height:10px;border-radius:50%;background:${color};border:1.5px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>`,
         iconSize: [10, 10], iconAnchor: [5, 5],
       });
-      const marker = L.marker([lat, lon], { icon }).addTo(map);
+      const marker = L.marker([lat, lon], { icon });
       const locationLine = [m.suburb, m.city, m.province].filter(Boolean).join(", ");
       marker.bindPopup(`
         <div style="font-family:monospace;font-size:12px;min-width:160px;">
@@ -294,10 +314,12 @@ function MemberMapView() {
           ${m.email ? `<div style="color:#aaa;">${m.email}</div>` : ""}
         </div>
       `);
-      markers.push(marker);
+      clusterGroup.addLayer(marker);
     }
+
+    clusterGroup.addTo(map);
     if (bounds.length > 0) map.fitBounds(bounds as L.LatLngBoundsExpression, { padding: [40, 40] });
-    return () => { markers.forEach((mk) => mk.remove()); };
+    return () => { clusterGroup.remove(); };
   }, [withGps]);
 
   return (
