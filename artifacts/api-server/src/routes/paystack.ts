@@ -17,11 +17,11 @@ const PLAN_TIER_MAP: Record<string, string> = {
   PLN_p6zzo6fjbdh3jem: "entry",
 };
 
-function planCodeToTier(planCode: string): string {
+export function planCodeToTier(planCode: string): string {
   return PLAN_TIER_MAP[planCode] ?? "individual";
 }
 
-function normalisePhone(raw: string | null | undefined): string | null {
+export function normalisePhone(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const m = String(raw).replace(/\s+/g, "").replace(/[^0-9+]/g, "");
   if (!m || m.length < 8) return null;
@@ -32,7 +32,7 @@ function normalisePhone(raw: string | null | undefined): string | null {
   return null;
 }
 
-async function upsertMemberFromPaystack(opts: {
+export async function upsertMemberFromPaystack(opts: {
   email: string;
   phone?: string | null;
   customerId?: string | null;
@@ -47,7 +47,6 @@ async function upsertMemberFromPaystack(opts: {
   const tier = planCodeToTier(opts.planCode);
   const waNumber = normalisePhone(opts.phone);
 
-  // Try to find existing member by email or whatsapp number
   const conditions = [];
   if (opts.email) conditions.push(eq(membersTable.email, opts.email));
   if (waNumber) conditions.push(eq(membersTable.whatsappNumber, waNumber));
@@ -75,7 +74,6 @@ async function upsertMemberFromPaystack(opts: {
     return { action: "updated", memberId: existing.id };
   }
 
-  // Create new member stub from Paystack data
   const firstName = opts.firstName ?? opts.email.split("@")[0] ?? "Unknown";
   const lastName = opts.lastName ?? "";
   const displayName = [firstName, lastName].filter(Boolean).join(" ");
@@ -99,8 +97,7 @@ async function upsertMemberFromPaystack(opts: {
   return { action: "created", memberId: inserted[0]?.id };
 }
 
-// ── Generate a personalised Paystack payment link ────────────────────────────
-// POST /api/paystack/payment-link  (public — no auth required)
+// ── POST /api/paystack/payment-link  (public — members use this from the website)
 router.post("/paystack/payment-link", async (req: Request, res: Response) => {
   if (!PAYSTACK_SECRET) {
     res.status(503).json({ error: "Paystack not configured" });
@@ -149,7 +146,6 @@ router.post("/paystack/payment-link", async (req: Request, res: Response) => {
     if (data.status && data.data?.authorization_url) {
       res.json({ url: data.data.authorization_url });
     } else {
-      // Fall back to a static Paystack payment page URL
       const FALLBACK: Record<string, string> = {
         PLN_rnn4nj61oh0zy0c: "https://paystack.com/pay/cyber-chaperone",
         PLN_wopagttz7e5quyw: "https://paystack.com/pay/family-cyber-chaperone",
@@ -162,22 +158,26 @@ router.post("/paystack/payment-link", async (req: Request, res: Response) => {
   }
 });
 
-// ── Paystack webhook ──────────────────────────────────────────────────────────
-// POST /api/paystack/webhook
-// Paystack signs every request with HMAC-SHA512 of the raw body using your secret key.
+// ── POST /api/paystack/webhook  (public — called by Paystack servers)
+// HMAC-SHA512 verified — rejects any request without a valid signature
 router.post("/paystack/webhook", async (req: Request, res: Response) => {
   const sig = req.headers["x-paystack-signature"] as string | undefined;
   const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
 
-  if (PAYSTACK_SECRET && sig && rawBody) {
-    const expected = crypto
-      .createHmac("sha512", PAYSTACK_SECRET)
-      .update(rawBody)
-      .digest("hex");
-    if (sig !== expected) {
-      res.status(401).json({ error: "Invalid signature" });
-      return;
-    }
+  // Hard reject if no secret configured, no signature, or no raw body
+  if (!PAYSTACK_SECRET || !sig || !rawBody) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const expected = crypto
+    .createHmac("sha512", PAYSTACK_SECRET)
+    .update(rawBody)
+    .digest("hex");
+
+  if (sig !== expected) {
+    res.status(401).json({ error: "Invalid signature" });
+    return;
   }
 
   const event = req.body as {
@@ -215,15 +215,8 @@ router.post("/paystack/webhook", async (req: Request, res: Response) => {
 
       if (email && planCode) {
         const result = await upsertMemberFromPaystack({
-          email,
-          phone,
-          customerId,
-          firstName,
-          lastName,
-          planCode,
-          subscriptionCode,
-          paystackStatus,
-          paidAt,
+          email, phone, customerId, firstName, lastName,
+          planCode, subscriptionCode, paystackStatus, paidAt,
         });
         req.log?.info({ result, event: event.event }, "paystack member upserted");
       }
@@ -234,86 +227,6 @@ router.post("/paystack/webhook", async (req: Request, res: Response) => {
     req.log?.error({ err }, "paystack webhook error");
     res.status(500).json({ error: "Internal error" });
   }
-});
-
-// ── Bulk sync endpoint (operator-protected) ───────────────────────────────────
-// POST /api/paystack/sync  — pulls all subscriptions from Paystack and upserts them
-router.post("/paystack/sync", async (req: Request, res: Response) => {
-  if (!PAYSTACK_SECRET) {
-    res.status(503).json({ error: "PAYSTACK_SECRET_KEY not set" });
-    return;
-  }
-
-  const results: Array<{ email: string; action: string; memberId?: number }> = [];
-  const errors: Array<{ email: string; error: string }> = [];
-  let page = 1;
-  let hasMore = true;
-
-  while (hasMore) {
-    const url = `https://api.paystack.co/subscription?perPage=100&page=${page}`;
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` },
-    });
-    const json = await response.json() as {
-      status: boolean;
-      data: Array<Record<string, unknown>>;
-      meta?: { total?: number; page?: number; pageCount?: number };
-    };
-
-    if (!json.status || !json.data?.length) { hasMore = false; break; }
-
-    for (const sub of json.data) {
-      const customer = (sub.customer ?? {}) as Record<string, unknown>;
-      const plan = (sub.plan ?? {}) as Record<string, unknown>;
-      const email = (customer.email ?? "") as string;
-      const phone = (customer.phone ?? "") as string;
-      const customerId = String(customer.id ?? customer.customer_code ?? "");
-      const firstName = (customer.first_name ?? "") as string;
-      const lastName = (customer.last_name ?? "") as string;
-      const planCode = (plan.plan_code ?? "") as string;
-      const subscriptionCode = (sub.subscription_code ?? "") as string;
-      const rawStatus = (sub.status ?? "active") as string;
-      const paystackStatus = (
-        ["active", "cancelled", "attention", "non-renewing"].includes(rawStatus)
-          ? rawStatus
-          : "attention"
-      ) as "active" | "cancelled" | "attention" | "non-renewing";
-
-      if (!email || !planCode) continue;
-
-      try {
-        const result = await upsertMemberFromPaystack({
-          email, phone, customerId, firstName, lastName,
-          planCode, subscriptionCode, paystackStatus, paidAt: null,
-        });
-        results.push({ email, ...result });
-      } catch (err) {
-        errors.push({ email, error: String(err) });
-      }
-    }
-
-    const pageCount = json.meta?.pageCount ?? 1;
-    hasMore = page < pageCount;
-    page++;
-  }
-
-  req.log?.info({ synced: results.length, errors: errors.length }, "paystack bulk sync complete");
-  res.json({ synced: results.length, errorCount: errors.length, results, errors });
-});
-
-// ── Get Paystack sync status (operator) ──────────────────────────────────────
-// GET /api/paystack/status
-router.get("/paystack/status", async (_req: Request, res: Response) => {
-  if (!PAYSTACK_SECRET) {
-    res.json({ configured: false });
-    return;
-  }
-  const url = "https://api.paystack.co/subscription?perPage=1";
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` },
-  });
-  const json = await response.json() as { status: boolean; meta?: { total?: number } };
-  res.json({ configured: true, totalSubscriptions: json.meta?.total ?? 0 });
 });
 
 export default router;

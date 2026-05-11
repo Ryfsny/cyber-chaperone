@@ -15,6 +15,7 @@ import conversationsRouter from "./conversations";
 import arnieChatRouter from "./arnie-chat";
 import memberPortalRouter from "./member-portal";
 import paystackRouter from "./paystack";
+import paystackAdminRouter from "./paystack-admin";
 import { requireAuth } from "../middleware/require-auth";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -22,18 +23,20 @@ const __dirname = path.dirname(__filename);
 
 const router: IRouter = Router();
 
+// ── Public routes (no auth required) ─────────────────────────────────────────
 router.use(healthRouter);
-router.use(webhookRouter);
+router.use(webhookRouter);       // Twilio WhatsApp webhook
 router.use(authRouter);
-router.use(registerRouter);
+router.use(registerRouter);      // Member self-registration
 router.use(arnieChatRouter);
-router.use(memberPortalRouter);
-router.use(paystackRouter);
+router.use(memberPortalRouter);  // Member portal (JWT-based, self-auth)
+router.use(paystackRouter);      // Paystack webhook + payment-link only
 
 router.get("/flow-diagram", (_req, res) => {
   res.sendFile(path.resolve(__dirname, "flow-diagram.html"));
 });
 
+// ── Protected routes (operator session required) ──────────────────────────────
 router.use(requireAuth);
 
 router.use(tripsRouter);
@@ -43,5 +46,6 @@ router.use(respondersRouter);
 router.use(caseRouter);
 router.use(broadcastRouter);
 router.use(conversationsRouter);
+router.use(paystackAdminRouter);  // Paystack sync + status (operator only)
 
 export default router;
