@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { Download, Search, UserCheck, UserX, Clock, HelpCircle, Map, List, MapPin, ChevronLeft, ChevronRight, Tag, Copy, AlertTriangle, ExternalLink, Pencil, Check, X } from "lucide-react";
+import { Download, Search, UserCheck, UserX, Clock, HelpCircle, Map, List, MapPin, ChevronLeft, ChevronRight, Tag, Copy, AlertTriangle, ExternalLink, Pencil, Check, X, RefreshCw, CreditCard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,11 @@ interface Member {
   country: string | null;
   sourceBatch: string | null;
   importStatus: string | null;
+  paystackCustomerId: string | null;
+  paystackSubscriptionCode: string | null;
+  paystackStatus: string | null;
+  paystackPlanCode: string | null;
+  paystackPaidAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -162,6 +167,50 @@ function exportCsv(members: Member[]) {
   a.download = `eblockwatch-members-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function PaystackSyncButton() {
+  const queryClient = useQueryClient();
+  const [syncing, setSyncing] = useState(false);
+  const [result, setResult] = useState<{ synced: number; errorCount: number } | null>(null);
+
+  async function handleSync() {
+    setSyncing(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/paystack/sync", { method: "POST", credentials: "include" });
+      const data = await res.json() as { synced: number; errorCount: number };
+      setResult(data);
+      await queryClient.invalidateQueries({ queryKey: ["/api/members/paginated"] });
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setResult(null), 6000);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        className="gap-2 text-xs uppercase tracking-wider border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+        onClick={() => void handleSync()}
+        disabled={syncing}
+        title="Sync all Paystack subscribers into member records"
+      >
+        {syncing
+          ? <RefreshCw className="w-3 h-3 animate-spin" />
+          : <CreditCard className="w-3 h-3" />
+        }
+        {syncing ? "Syncing…" : "Sync Paystack"}
+      </Button>
+      {result && (
+        <span className="text-xs text-emerald-700 font-medium">
+          ✓ {result.synced} synced{result.errorCount > 0 ? `, ${result.errorCount} errors` : ""}
+        </span>
+      )}
+    </div>
+  );
 }
 
 function groupByLocation(members: Member[]) {
@@ -660,10 +709,13 @@ export default function Members() {
               <Copy className="w-3 h-3" /> Duplicates
             </button>
           </div>
-          <Button size="sm" variant="outline" className="gap-2 text-xs uppercase tracking-wider"
-            onClick={() => exportCsv(members)} disabled={members.length === 0 || view === "duplicates"}>
-            <Download className="w-3 h-3" />Export page
-          </Button>
+          <div className="flex items-center gap-2">
+            <PaystackSyncButton />
+            <Button size="sm" variant="outline" className="gap-2 text-xs uppercase tracking-wider"
+              onClick={() => exportCsv(members)} disabled={members.length === 0 || view === "duplicates"}>
+              <Download className="w-3 h-3" />Export page
+            </Button>
+          </div>
         </div>
       </div>
 

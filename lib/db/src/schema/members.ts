@@ -28,6 +28,11 @@ export const membersTable = pgTable("members", {
   country: text("country"),
   sourceBatch: text("source_batch"),
   importStatus: text("import_status"),
+  paystackCustomerId: text("paystack_customer_id"),
+  paystackSubscriptionCode: text("paystack_subscription_code"),
+  paystackStatus: text("paystack_status"),
+  paystackPlanCode: text("paystack_plan_code"),
+  paystackPaidAt: timestamp("paystack_paid_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

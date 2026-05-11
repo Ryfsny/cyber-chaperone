@@ -177,23 +177,26 @@ router.patch("/members/:id", async (req, res): Promise<void> => {
     "role", "notes", "iceContactName", "iceContactPhone",
     "email", "mobile", "homeAddress", "suburb", "city", "province", "postalCode", "country",
   ] as const;
-  type AllowedKey = typeof allowed[number];
-  const update: Partial<Record<AllowedKey, string | null>> = {};
 
+  const setValues: Record<string, string | null | Date> = { updatedAt: new Date() };
+
+  let fieldCount = 0;
   for (const key of allowed) {
     if (Object.prototype.hasOwnProperty.call(req.body, key)) {
       const val = req.body[key];
-      update[key] = typeof val === "string" ? val.trim() || null : null;
+      setValues[key] = typeof val === "string" ? val.trim() || null : null;
+      fieldCount++;
     }
   }
 
-  if (Object.keys(update).length === 0) {
+  if (fieldCount === 0) {
     res.status(400).json({ error: "No valid fields provided." }); return;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [updated] = await db
     .update(membersTable)
-    .set({ ...update, updatedAt: new Date() })
+    .set(setValues as any)
     .where(eq(membersTable.id, id))
     .returning();
 
