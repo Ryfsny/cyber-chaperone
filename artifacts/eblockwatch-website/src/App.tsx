@@ -2,6 +2,7 @@ import { Switch, Route, Router as WouterRouter } from "wouter";
 import HomePage from "@/pages/Home";
 import MemberLogin from "@/pages/MemberLogin";
 import MemberDashboard from "@/pages/MemberDashboard";
+import UpgradePage from "@/pages/UpgradePage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -10,6 +11,7 @@ function Router() {
       <Route path="/" component={HomePage} />
       <Route path="/login" component={MemberLogin} />
       <Route path="/member" component={MemberDashboard} />
+      <Route path="/upgrade" component={UpgradePage} />
       <Route component={NotFound} />
     </Switch>
   );

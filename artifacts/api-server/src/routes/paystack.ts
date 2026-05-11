@@ -99,6 +99,69 @@ async function upsertMemberFromPaystack(opts: {
   return { action: "created", memberId: inserted[0]?.id };
 }
 
+// ── Generate a personalised Paystack payment link ────────────────────────────
+// POST /api/paystack/payment-link  (public — no auth required)
+router.post("/paystack/payment-link", async (req: Request, res: Response) => {
+  if (!PAYSTACK_SECRET) {
+    res.status(503).json({ error: "Paystack not configured" });
+    return;
+  }
+
+  const { planCode, email, firstName, lastName } = req.body as {
+    planCode?: string; email?: string; firstName?: string; lastName?: string;
+  };
+
+  if (!planCode) {
+    res.status(400).json({ error: "planCode required" });
+    return;
+  }
+
+  try {
+    const payload: Record<string, unknown> = {
+      plan: planCode,
+      channels: ["card", "bank", "ussd", "mobile_money"],
+    };
+
+    if (email) payload.customer = { email };
+    if (firstName || lastName) {
+      payload.metadata = {
+        custom_fields: [
+          { display_name: "First Name", variable_name: "first_name", value: firstName ?? "" },
+          { display_name: "Last Name", variable_name: "last_name", value: lastName ?? "" },
+        ],
+      };
+    }
+
+    const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await paystackRes.json() as {
+      status: boolean;
+      data?: { authorization_url?: string };
+    };
+
+    if (data.status && data.data?.authorization_url) {
+      res.json({ url: data.data.authorization_url });
+    } else {
+      // Fall back to a static Paystack payment page URL
+      const FALLBACK: Record<string, string> = {
+        PLN_rnn4nj61oh0zy0c: "https://paystack.com/pay/cyber-chaperone",
+        PLN_wopagttz7e5quyw: "https://paystack.com/pay/family-cyber-chaperone",
+      };
+      res.json({ url: FALLBACK[planCode] ?? "https://paystack.com/pay/cyber-chaperone" });
+    }
+  } catch (err) {
+    req.log?.error({ err }, "paystack payment-link error");
+    res.status(500).json({ error: "Failed to generate payment link" });
+  }
+});
+
 // ── Paystack webhook ──────────────────────────────────────────────────────────
 // POST /api/paystack/webhook
 // Paystack signs every request with HMAC-SHA512 of the raw body using your secret key.
