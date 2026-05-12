@@ -82,8 +82,8 @@ export default function UpgradePage() {
 
   useEffect(() => {
     fetch(`${BASE}/api/member-portal/me`, { credentials: "include" })
-      .then(r => r.ok ? r.json() as Promise<Member> : Promise.reject())
-      .then(m => setMember(m))
+      .then(r => r.ok ? r.json() as Promise<{ member: Member }> : Promise.reject())
+      .then(data => setMember(data.member))
       .catch(() => {})
       .finally(() => setLoadingMember(false));
   }, []);

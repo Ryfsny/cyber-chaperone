@@ -8,7 +8,7 @@ interface TripAiPanelProps {
   onSendReply?: (draft: string) => void;
 }
 
-export function TripAiPanel({ tripId, tripStatus }: TripAiPanelProps) {
+export function TripAiPanel({ tripId, tripStatus, onSendReply }: TripAiPanelProps) {
   const [summary, setSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
 
