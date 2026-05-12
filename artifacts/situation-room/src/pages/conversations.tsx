@@ -217,16 +217,24 @@ export default function Conversations() {
                     active ? "bg-primary/15 border-l-2 border-l-primary" : "hover:bg-secondary/40"
                   }`}
                 >
+                  {/* Avatar — Facebook blue or standard green */}
                   <div
                     className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-xs font-bold mt-0.5 ${
-                      active ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
+                      c.channel === "facebook"
+                        ? active ? "bg-[#1877f2] text-white" : "bg-[#1877f2]/20 text-[#1877f2]"
+                        : active ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
                     }`}
                   >
-                    {c.displayName.charAt(0).toUpperCase()}
+                    {c.channel === "facebook" ? "f" : c.displayName.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <span className="text-xs font-semibold text-foreground truncate">{c.displayName}</span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-xs font-semibold text-foreground truncate">{c.displayName}</span>
+                        {c.channel === "facebook" && (
+                          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-[#1877f2]/15 text-[#1877f2] shrink-0 uppercase tracking-wide">FB</span>
+                        )}
+                      </div>
                       <span className="text-[10px] text-muted-foreground shrink-0">{msgTime(c.lastAt)}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -260,15 +268,22 @@ export default function Conversations() {
         <div className="flex-1 flex flex-col min-w-0">
           {/* Thread header */}
           <div className="px-5 py-3 flex items-center gap-3 border-b border-border shrink-0 bg-card">
-            <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary shrink-0">
-              {(thread?.member?.displayName ?? activeNumber).charAt(0).toUpperCase()}
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+              activeNumber.startsWith("fb:") ? "bg-[#1877f2]/20 text-[#1877f2]" : "bg-primary/20 text-primary"
+            }`}>
+              {activeNumber.startsWith("fb:") ? "f" : (thread?.member?.displayName ?? activeNumber).charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold text-foreground leading-none">
-                {thread?.member?.displayName ?? activeNumber.replace("whatsapp:", "")}
+              <div className="flex items-center gap-2">
+                <div className="text-sm font-bold text-foreground leading-none">
+                  {thread?.member?.displayName ?? activeNumber.replace("whatsapp:", "").replace("fb:", "FB User · ")}
+                </div>
+                {activeNumber.startsWith("fb:") && (
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#1877f2] text-white uppercase tracking-wide">Facebook Messenger</span>
+                )}
               </div>
               <div className="text-[10px] text-muted-foreground mt-0.5 font-mono">
-                {activeNumber.replace("whatsapp:", "")}
+                {activeNumber.startsWith("fb:") ? `PSID: ${activeNumber.slice(3)}` : activeNumber.replace("whatsapp:", "")}
               </div>
               {/* ICE contact */}
               {thread?.member?.iceContactName && (
