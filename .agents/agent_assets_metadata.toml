@@ -1,5 +1,22 @@
 uploads = []
-generated = []
+
+[[generated]]
+id = "oMrD9cJuU78IdOU81jydt"
+uri = "file://artifacts/cyber-chaperone-deck/public/hero-highway.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "n8IOa9GsDrl8REeMGtbsZ"
+uri = "file://artifacts/cyber-chaperone-deck/public/hero-arrival.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "Sky2asDxMz7f3no7UDKWi"
+uri = "file://artifacts/cyber-chaperone-deck/public/hero-danger.png"
+type = "image"
+title = "generated_image"
 
 [[outputs]]
 id = "GZcowUx324_zRD73VmXNW"
