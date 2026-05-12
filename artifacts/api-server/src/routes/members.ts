@@ -339,7 +339,38 @@ router.post("/members/:id/contact", async (req, res): Promise<void> => {
     return;
   }
 
-  res.status(400).json({ error: "Unknown channel. Use whatsapp, messenger, or email." });
+  // ── SMS (Twilio) ───────────────────────────────────────────────────────────
+  if (channel === "sms") {
+    if (!member.mobile) { res.status(400).json({ error: "No mobile number on file for this member" }); return; }
+    const sid   = process.env["TWILIO_ACCOUNT_SID"];
+    const token = process.env["TWILIO_AUTH_TOKEN"];
+    if (!sid || !token) { res.status(500).json({ error: "Twilio not configured" }); return; }
+
+    const smsFrom = process.env["TWILIO_SMS_NUMBER"] ?? process.env["TWILIO_WHATSAPP_NUMBER"]?.replace("whatsapp:", "") ?? "";
+    if (!smsFrom) { res.status(500).json({ error: "No SMS sender number configured" }); return; }
+
+    const toMobile = member.mobile.startsWith("+") ? member.mobile : `+${member.mobile}`;
+    const client = twilio(sid, token);
+    let messageSid: string | undefined;
+    try {
+      const sent = await client.messages.create({ from: smsFrom, to: toMobile, body });
+      messageSid = sent.sid;
+    } catch (err) {
+      res.status(500).json({ error: `SMS failed: ${String(err)}` });
+      return;
+    }
+    await db.insert(messagesTable).values({
+      fromNumber: smsFrom,
+      toNumber: toMobile,
+      body,
+      messageSid: messageSid ?? null,
+      direction: "outbound",
+    });
+    res.json({ ok: true, channel: "sms", to: toMobile });
+    return;
+  }
+
+  res.status(400).json({ error: "Unknown channel. Use whatsapp, messenger, email, or sms." });
 });
 
 // ── POST /api/members — create / upsert member ───────────────────────────────

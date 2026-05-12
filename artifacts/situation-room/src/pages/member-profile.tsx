@@ -202,7 +202,7 @@ export default function MemberProfile() {
   const [tab, setTab] = useState<"overview" | "messages" | "trips" | "activity">("overview");
   const [fbUrl, setFbUrl] = useState("");
   const [contactOpen, setContactOpen] = useState(false);
-  const [contactChannel, setContactChannel] = useState<"whatsapp" | "messenger" | "email">("whatsapp");
+  const [contactChannel, setContactChannel] = useState<"whatsapp" | "messenger" | "email" | "sms">("whatsapp");
   const [contactMsg, setContactMsg] = useState("");
   const [contactResult, setContactResult] = useState<{ ok: boolean; text: string } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -251,6 +251,7 @@ export default function MemberProfile() {
       const labels: Record<string, string> = {
         whatsapp: "WhatsApp message sent",
         messenger: "Messenger message sent",
+        sms: `SMS sent to ${member?.mobile ?? ""}`,
         email: `Email sent to ${member?.email ?? ""}`,
       };
       setContactResult({ ok: true, text: labels[contactChannel] ?? "Sent" });
@@ -395,6 +396,19 @@ export default function MemberProfile() {
                   💬 Messenger
                 </button>
               )}
+              {member.mobile && (
+                <button
+                  onClick={() => setContactChannel("sms")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-xs border transition-colors",
+                    contactChannel === "sms"
+                      ? "bg-amber-800 text-amber-200 border-amber-600"
+                      : "border-border text-muted-foreground hover:border-amber-700 hover:text-amber-400"
+                  )}
+                >
+                  💬 SMS <span className="opacity-60">{member.mobile}</span>
+                </button>
+              )}
               {member.email && (
                 <button
                   onClick={() => setContactChannel("email")}
@@ -405,11 +419,11 @@ export default function MemberProfile() {
                       : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
                   )}
                 >
-                  <Mail className="w-3 h-3" /> Email {member.email && <span className="opacity-60">{member.email}</span>}
+                  <Mail className="w-3 h-3" /> Email <span className="opacity-60">{member.email}</span>
                 </button>
               )}
-              {!member.email && (
-                <span className="text-[10px] text-muted-foreground italic">No email on file — add one in the member record to enable email</span>
+              {!member.email && !member.mobile && (
+                <span className="text-[10px] text-muted-foreground italic">Add email or mobile to this member to unlock more channels</span>
               )}
             </div>
 
@@ -428,6 +442,7 @@ export default function MemberProfile() {
                 placeholder={
                   contactChannel === "whatsapp" ? "Type a WhatsApp message… (Ctrl+Enter to send)" :
                   contactChannel === "messenger" ? "Type a Messenger message… (Ctrl+Enter to send)" :
+                  contactChannel === "sms" ? "Type an SMS… (Ctrl+Enter to send)" :
                   "Type an email message… (Ctrl+Enter to send)"
                 }
                 rows={3}
