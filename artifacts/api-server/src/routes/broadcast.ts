@@ -135,72 +135,75 @@ function buildEmailHtml(firstName: string, subject: string, body: string): strin
 <meta name="x-apple-disable-message-reformatting">
 <title>${subjectLine}</title>
 </head>
-<body style="margin:0;padding:0;background:#0a0a0a;font-family:Georgia,'Times New Roman',serif;-webkit-text-size-adjust:100%;">
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,sans-serif;-webkit-text-size-adjust:100%;">
 
 <!-- Preheader (hidden) -->
-<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;color:#0a0a0a;">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;color:#f1f5f9;">
   From Andre Snyman · eblockwatch · South Africa's trusted safety network since 2001.
 </div>
 
 <div style="max-width:620px;margin:0 auto;background:#ffffff;">
 
   <!-- Header -->
-  <div style="background:#0a0a0a;padding:40px 48px;text-align:center;">
-    <div style="display:inline-block;border:2px solid #c9a227;padding:10px 28px;">
-      <div style="color:#c9a227;font-size:22px;font-weight:bold;letter-spacing:5px;font-family:Arial,sans-serif;text-transform:uppercase;">eblockwatch</div>
+  <div style="background:#1a1f2e;padding:36px 48px;text-align:center;">
+    <img src="https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif"
+      alt="eblockwatch" width="160" style="display:block;margin:0 auto;max-width:160px;" />
+    <div style="color:#9ca3af;font-size:10px;letter-spacing:3px;margin-top:14px;text-transform:uppercase;">
+      Cyber Chaperone &nbsp;·&nbsp; Est. 2001 &nbsp;·&nbsp; South Africa
     </div>
-    <div style="color:#666;font-size:10px;letter-spacing:3px;margin-top:10px;font-family:Arial,sans-serif;text-transform:uppercase;">Cyber Chaperone · Est. 2001 · South Africa</div>
   </div>
 
-  <!-- Gold bar -->
-  <div style="height:3px;background:linear-gradient(90deg,#c9a227,#f0d060,#c9a227);"></div>
+  <!-- Green bar -->
+  <div style="height:4px;background:linear-gradient(90deg,#16a34a,#22c55e,#16a34a);"></div>
 
   <!-- Body -->
-  <div style="background:#ffffff;padding:44px 48px 32px;">
+  <div style="background:#ffffff;padding:44px 48px 32px;color:#1e293b;font-size:15px;line-height:1.7;">
     ${htmlBody}
   </div>
 
   <!-- Signature -->
-  <div style="background:#f9f7f2;padding:28px 48px;border-top:3px solid #c9a227;">
+  <div style="background:#f0fdf4;padding:28px 48px;border-top:3px solid #22c55e;">
     <table cellpadding="0" cellspacing="0" border="0" style="width:100%;">
       <tr>
         <td style="width:60px;vertical-align:top;">
-          <div style="width:52px;height:52px;border-radius:50%;background:#0a0a0a;border:2px solid #c9a227;text-align:center;line-height:52px;">
-            <span style="color:#c9a227;font-weight:bold;font-size:20px;font-family:Arial,sans-serif;">A</span>
+          <div style="width:52px;height:52px;border-radius:50%;background:#1a1f2e;border:2px solid #22c55e;text-align:center;line-height:52px;">
+            <span style="color:#22c55e;font-weight:bold;font-size:20px;font-family:Arial,sans-serif;">A</span>
           </div>
         </td>
         <td style="vertical-align:top;padding-left:16px;">
-          <div style="font-weight:bold;color:#0a0a0a;font-size:16px;font-family:Arial,sans-serif;">Andre Snyman</div>
-          <div style="color:#555;font-size:12px;font-family:Arial,sans-serif;margin-top:3px;">Founder · eblockwatch · Cyber Chaperone</div>
-          <div style="color:#888;font-size:11px;font-family:Arial,sans-serif;margin-top:2px;">+27 82 561 1065 · <a href="mailto:info@eblockwatch.co.za" style="color:#c9a227;text-decoration:none;">info@eblockwatch.co.za</a></div>
+          <div style="font-weight:bold;color:#1a1f2e;font-size:16px;font-family:Arial,sans-serif;">Andre Snyman</div>
+          <div style="color:#475569;font-size:12px;font-family:Arial,sans-serif;margin-top:3px;">Founder · eblockwatch · Cyber Chaperone</div>
+          <div style="color:#64748b;font-size:11px;font-family:Arial,sans-serif;margin-top:2px;">+27 82 561 1065 · <a href="mailto:info@eblockwatch.co.za" style="color:#16a34a;text-decoration:none;">info@eblockwatch.co.za</a></div>
         </td>
       </tr>
     </table>
-    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e8e4de;">
-      <p style="color:#888;font-size:12px;font-family:Arial,sans-serif;margin:0;font-style:italic;">
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #bbf7d0;">
+      <p style="color:#64748b;font-size:12px;font-family:Arial,sans-serif;margin:0;font-style:italic;">
         "I started eblockwatch in 2001 with one goal: make sure no South African faces danger alone. 25 years on, that mission hasn't changed."
       </p>
     </div>
   </div>
 
   <!-- Social CTAs -->
-  <div style="background:#0a0a0a;padding:24px 48px;text-align:center;">
+  <div style="background:#1a1f2e;padding:24px 48px;text-align:center;">
     <a href="https://www.facebook.com/eblockwatch" target="_blank" rel="noopener"
-      style="display:inline-block;background:#c9a227;color:#0a0a0a;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;">Facebook</a>
+      style="display:inline-block;background:#1877f2;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Facebook</a>
+    <a href="https://www.instagram.com/eblockwatch" target="_blank" rel="noopener"
+      style="display:inline-block;background:#e1306c;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Instagram</a>
     <a href="https://eblockwatch.co.za" target="_blank" rel="noopener"
-      style="display:inline-block;background:#c9a227;color:#0a0a0a;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;">Website</a>
+      style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Website</a>
     <a href="https://cyber-chaperone-r--ryfsny.replit.app/website/" target="_blank" rel="noopener"
-      style="display:inline-block;background:#c9a227;color:#0a0a0a;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;">Member Portal</a>
+      style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Member Portal</a>
     <a href="https://wa.me/27825611065" target="_blank" rel="noopener"
-      style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;">WhatsApp</a>
+      style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">WhatsApp</a>
   </div>
 
   <!-- Footer -->
-  <div style="background:#050505;padding:18px 48px;text-align:center;">
-    <p style="color:#444;font-size:10px;margin:0;letter-spacing:1px;font-family:Arial,sans-serif;text-transform:uppercase;">
+  <div style="background:#0f172a;padding:18px 48px;text-align:center;">
+    <p style="color:#475569;font-size:10px;margin:0;letter-spacing:1px;font-family:Arial,sans-serif;text-transform:uppercase;">
       © 2026 eblockwatch (Pty) Ltd · South Africa · Protecting families since 2001
     </p>
-    <p style="color:#333;font-size:10px;margin:6px 0 0;font-family:Arial,sans-serif;">
+    <p style="color:#334155;font-size:10px;margin:6px 0 0;font-family:Arial,sans-serif;">
       You are receiving this as an eblockwatch member. Reply to unsubscribe.
     </p>
   </div>

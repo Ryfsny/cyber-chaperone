@@ -825,24 +825,37 @@ export default function Broadcast() {
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Preview</div>
                 <div className="rounded-lg overflow-hidden border border-border max-h-72 overflow-y-auto">
-                  <div className="bg-[#0a0a0a] px-5 py-4 text-center">
-                    <div className="inline-block border-2 border-[#c9a227] px-4 py-2">
-                      <div className="text-[#c9a227] text-sm font-bold tracking-[5px] font-sans">eblockwatch</div>
-                    </div>
-                    <div className="text-[#555] text-[9px] tracking-[3px] mt-2 font-sans uppercase">Cyber Chaperone · Est. 2001</div>
+                  {/* Header — eblockwatch navy */}
+                  <div className="bg-[#1a1f2e] px-5 py-4 text-center">
+                    <img src="https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif" alt="eblockwatch" className="h-7 mx-auto object-contain" />
+                    <div className="text-[#6b7280] text-[9px] tracking-[3px] mt-2 font-sans uppercase">Cyber Chaperone · Est. 2001 · South Africa</div>
                   </div>
-                  <div className="h-0.5 bg-gradient-to-r from-[#c9a227] via-[#f0d060] to-[#c9a227]" />
+                  {/* Green bar */}
+                  <div className="h-0.5 bg-gradient-to-r from-[#16a34a] via-[#22c55e] to-[#16a34a]" />
                   {subject && <div className="bg-white px-5 py-2 border-b border-gray-100 text-[11px] font-bold text-gray-500">Subject: {subject.replace(/\{name\}/gi, "Kieren")}</div>}
-                  <div className="bg-white px-5 py-4 text-xs text-gray-800 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
+                  <div className="bg-white px-5 py-4 text-xs text-gray-800 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto font-sans">
                     {message.replace(/\{name\}/gi, "Kieren") || <span className="italic text-gray-400">Your message will appear here…</span>}
                   </div>
-                  <div className="bg-[#f9f7f2] px-5 py-3 border-t-2 border-[#c9a227]">
-                    <div className="text-xs font-bold text-gray-800 font-sans">Andre Snyman</div>
-                    <div className="text-[10px] text-gray-500 font-sans">Founder · eblockwatch · +27 82 561 1065</div>
+                  {/* Signature */}
+                  <div className="bg-[#f0fdf4] px-5 py-3 border-t-2 border-[#22c55e] flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-[#1a1f2e] border-2 border-[#22c55e] flex items-center justify-center shrink-0">
+                      <span className="text-[#22c55e] font-bold text-xs font-sans">A</span>
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-gray-800 font-sans">Andre Snyman</div>
+                      <div className="text-[10px] text-gray-500 font-sans">Founder · eblockwatch · +27 82 561 1065</div>
+                    </div>
                   </div>
-                  <div className="bg-[#0a0a0a] px-5 py-2.5 flex justify-center gap-2">
-                    {["Facebook","Website","Portal","WhatsApp"].map((l) => (
-                      <span key={l} style={{ background: l === "WhatsApp" ? "#25d366" : "#c9a227", color: l === "WhatsApp" ? "#fff" : "#0a0a0a" }} className="text-[8px] font-bold px-2 py-1 font-sans tracking-widest uppercase">{l}</span>
+                  {/* Social footer */}
+                  <div className="bg-[#1a1f2e] px-5 py-2.5 flex justify-center gap-1.5 flex-wrap">
+                    {[
+                      { l: "Facebook", bg: "#1877f2" },
+                      { l: "Instagram", bg: "#e1306c" },
+                      { l: "Website", bg: "#22c55e" },
+                      { l: "Portal", bg: "#22c55e" },
+                      { l: "WhatsApp", bg: "#25d366" },
+                    ].map(({ l, bg }) => (
+                      <span key={l} style={{ background: bg }} className="text-[8px] font-bold px-2 py-1 font-sans tracking-widest uppercase text-white rounded">{l}</span>
                     ))}
                   </div>
                 </div>
@@ -880,7 +893,7 @@ export default function Broadcast() {
             {channel === "email" && (
               <div className="flex items-start gap-2 rounded-sm border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-[10px] text-blue-400/80 leading-relaxed">
                 <Info className="w-3 h-3 shrink-0 mt-0.5" />
-                <span>Emails come from <strong>Andre Snyman | eblockwatch</strong> with black/gold branding, your signature, and Facebook · Website · Portal · WhatsApp links in the footer.</span>
+                <span>Emails come from <strong>Andre Snyman | eblockwatch</strong> with eblockwatch navy/green branding, your signature, and Facebook · Instagram · Website · Portal · WhatsApp links in the footer.</span>
               </div>
             )}
 

@@ -146,6 +146,23 @@ Ignore ONLY when `req.body.MessageStatus` is present and truthy. Never block on 
 - Stores: `routePolyline`, `routeEtaMinutes`, `routeEtaTime`, `checkpointList`
 - Dashboard: `TripRouteMap` (react-leaflet) renders on every trip detail page
 
+## Brand Alignment — 2026-05-12 (complete)
+
+**eblockwatch brand tokens applied across all touchpoints:**
+- Dark navy: `#1a1f2e` (header/footer backgrounds)
+- eblockwatch green: `#22c55e` / `hsl(142 76% 36%)` (all CTAs, active states, accents)
+- Darker green border: `#16a34a`
+- Light green signature bg: `#f0fdf4`
+
+**Changes applied:**
+1. **Situation Room** — primary colour changed from near-black to eblockwatch green. All buttons, nav active states, input rings, focus rings now match the brand.
+2. **Broadcast emails** (`buildEmailHtml` in broadcast.ts) — header changed from black/gold to dark navy + eblockwatch logo image + green bar. Signature uses green border and light-green background. Footer has proper social links including Instagram.
+3. **Operator emails** (`email-service.ts`) — upgraded from plain monospace HTML to full branded template with dark navy header, category-specific alert bars (green/blue/amber/red), and green accent line.
+4. **Broadcast preview panel** (broadcast.tsx) — preview now shows the actual navy/green email layout with logo, green bar, and correct social icons.
+5. **eblockwatch Website** — already correctly branded with green primary ✅
+
+**Facebook Messenger / Instagram DMs** — not yet integrated. Requires Meta Business API (separate from Twilio). See below if planning.
+
 ## System Audit — 2026-05-11 (41/41 green)
 
 All 41 moving parts verified green. One publish blocker (frozen prod DB — see above). Last successful production build: 2026-05-10. Code staged and ready to deploy the moment the DB is unfrozen.
