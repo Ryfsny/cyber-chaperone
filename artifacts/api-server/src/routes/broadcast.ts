@@ -186,7 +186,7 @@ function buildEmailHtml(firstName: string, subject: string, body: string): strin
 
   <!-- Social CTAs -->
   <div style="background:#1a1f2e;padding:24px 48px;text-align:center;">
-    <a href="https://www.facebook.com/eblockwatch" target="_blank" rel="noopener"
+    <a href="https://www.facebook.com/eblockwatchnational" target="_blank" rel="noopener"
       style="display:inline-block;background:#1877f2;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Facebook</a>
     <a href="https://www.instagram.com/eblockwatch" target="_blank" rel="noopener"
       style="display:inline-block;background:#e1306c;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Instagram</a>

@@ -97,7 +97,7 @@ function buildOperatorEmailHtml(category: EmailCategory, subject: string, body: 
   <!-- Footer -->
   <div style="background:#1a1f2e;padding:16px 36px;text-align:center;">
     <div style="color:#374151;font-size:10px;letter-spacing:1px;text-transform:uppercase;font-family:Arial,sans-serif;">
-      eblockwatch Situation Room · Operator Alert · <a href="https://eblockwatch.co.za" style="color:#22c55e;text-decoration:none;">eblockwatch.co.za</a>
+      eblockwatch Situation Room · Operator Alert · <a href="https://www.facebook.com/eblockwatchnational" style="color:#22c55e;text-decoration:none;">Facebook</a> &nbsp;·&nbsp; <a href="https://eblockwatch.co.za" style="color:#22c55e;text-decoration:none;">eblockwatch.co.za</a>
     </div>
   </div>
 
