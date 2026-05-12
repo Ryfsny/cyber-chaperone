@@ -1,4 +1,4 @@
-# Cyber Shepherd Main Project
+# Cyber Chaperone Main Project
 
 ## Overview
 
@@ -175,7 +175,7 @@ My production database is frozen and blocking every publish attempt. The publish
 **Account:** ryfsny
 **Repl ID:** 861f57c8-8edb-426d-bcdf-9ec68d1de62b
 **Production URL:** https://cyber-chaperone-r--ryfsny.replit.app
-**Project:** Cyber Shepherd Main Project
+**Project:** Cyber Chaperone Main Project
 
 **What happens:** I click Publish, a schema changes screen appears (new columns being added), I approve it — but no build is ever triggered and the publish silently fails every time.
 
@@ -190,4 +190,4 @@ Please unfreeze the production database so the schema migration can run during t
 
 Thank you,
 Andre Snyman
-eblockwatch / Cyber Shepherd
+eblockwatch / Cyber Chaperone
