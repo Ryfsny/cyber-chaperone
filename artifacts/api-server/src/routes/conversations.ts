@@ -5,7 +5,7 @@ import twilio from "twilio";
 
 const router: IRouter = Router();
 
-const OPERATOR_NUMBER = process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+27825611065";
+const OPERATOR_NUMBER = process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+14155238886";
 
 // ── GET /api/conversations
 // Returns one row per unique contact (member phone), with last message + member name.
