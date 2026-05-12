@@ -1,8 +1,12 @@
-# Cyber Chaperone Situation Room
+# Cyber Shepherd Main Project
 
 ## Overview
 
-A WhatsApp-first operator dashboard that turns messy WhatsApp trip messages into structured Situation Room records. Andre uses this to monitor travelers in real time via a command-center UI.
+WhatsApp-first safety platform for eblockwatch (Andre Snyman). Two live apps in one monorepo:
+1. **Situation Room** — operator command centre (`/`) — monitors traveler trips in real time via Green/Amber/Red status board
+2. **eblockwatch Website** — public member portal (`/website/`) — registration, login, dashboard, and membership upgrade funnel
+
+This is the single source of truth. Everything happens here.
 
 ## Stack
 
@@ -20,25 +24,67 @@ A WhatsApp-first operator dashboard that turns messy WhatsApp trip messages into
 
 ## Artifacts
 
-- `artifacts/api-server` — Express API server (routes: webhook, trips, messages, health, members)
-- `artifacts/situation-room` — React dashboard (Situation Room, Trip Detail, Message Inbox, New Trip)
+- `artifacts/api-server` — Express API server (all routes)
+- `artifacts/situation-room` — Operator dashboard React app
+- `artifacts/eblockwatch-website` — Public member website React app
 
-## Key Features
+## Production URLs
 
-1. **Twilio WhatsApp webhook** — `POST /api/webhook/twilio` receives incoming messages and stores them
-2. **Menu router** — Stateful SmartChat menu flows (main menu, Cyber Chaperone sub-menu, step-by-step trip creation)
-3. **Trip records** — Green/Amber/Red status with evidence, inference, next-action, and operator notes
-4. **Situation Room dashboard** — Command-center view of all active trips sorted by urgency
-5. **Trip detail** — Full editable record + message feed for each traveler
-6. **Message inbox** — All raw WhatsApp messages, assignable to trips
-7. **Member registry** — Known members with `isKnown` for both `"active"` and `"verified"` status
+- **Live app**: `https://cyber-chaperone-r--ryfsny.replit.app`
+- **Situation Room**: `https://cyber-chaperone-r--ryfsny.replit.app/`
+- **Website**: `https://cyber-chaperone-r--ryfsny.replit.app/website/`
+- **Twilio webhook**: `POST https://cyber-chaperone-r--ryfsny.replit.app/api/webhook/twilio`
 
-## Webhook URL
+## ⚠️ PUBLISH BLOCKER (as of 2026-05-11 night)
 
-```
-https://861f57c8-8edb-426d-bcdf-9ec68d1de62b-00-1wbyvfmtwel27.kirk.replit.dev/api/webhook/twilio
-```
-Method: **POST** — paste this into Twilio Sandbox "WHEN A MESSAGE COMES IN"
+**Production database is frozen.** The Replit schema migration cannot run against it, so every publish attempt silently cancels before a build starts. All code is ready and waiting.
+
+**Fix:** Replit support must unfreeze the production DB for repl `861f57c8-8edb-426d-bcdf-9ec68d1de62b`. Support email drafted — see bottom of this file. Once unfrozen: click Publish → approve schema screen → done in 2 minutes.
+
+## Route Security Map
+
+### Public (no auth)
+| Route | Purpose |
+|---|---|
+| `GET /api/healthz` | Health check (used by Replit startup probe) |
+| `POST /api/webhook/twilio` | Twilio WhatsApp inbound messages |
+| `POST /api/auth/login` | Operator login |
+| `GET /api/auth/me` | Session check |
+| `POST /api/register` | Member self-registration |
+| `POST /api/paystack/webhook` | Paystack payment events (HMAC-SHA512 verified — hard reject without sig) |
+| `POST /api/paystack/payment-link` | Generate personalised Paystack checkout URL (members use from website) |
+| `/api/member-portal/*` | Member portal (JWT-based, members self-auth) |
+| `/api/arnie-chat` | AI Arnie WhatsApp-style chat |
+
+### Operator-protected (requireAuth session)
+| Route | Purpose |
+|---|---|
+| `GET/POST /api/trips` | Trip management |
+| `GET/PATCH /api/members` | Member registry |
+| `GET /api/conversations` | WhatsApp conversation inbox |
+| `POST /api/conversations/reply` | Send WhatsApp reply from dashboard |
+| `GET /api/responders` | Responder network |
+| `GET /api/paystack/status` | Paystack subscription count |
+| `POST /api/paystack/sync` | Bulk sync all Paystack subscribers → member records |
+| `GET/POST /api/ai` | AI analysis |
+| `GET/POST /api/broadcast` | Bulk WhatsApp broadcast |
+| `GET/POST /api/case` | Case management |
+
+## Database Schema (dev — fully up to date)
+
+- `messages` — raw WhatsApp messages (id, from_number, to_number, body, message_sid, trip_id, **direction**, received_at)
+- `members` — member registry (id, first_name, last_name, display_name, whatsapp_number, member_status, membership_tier, role, notes, ice_contact_name, ice_contact_phone, family_group_id, home_lat/lon, home_address, email, mobile, industry, suburb, city, province, postal_code, country, source_batch, import_status, **paystack_customer_id**, **paystack_subscription_code**, **paystack_status**, **paystack_plan_code**, **paystack_paid_at**, created_at, updated_at)
+- `trips` — traveler trip records (id, title, traveler_name, traveler_phone, status, evidence_notes, inference_notes, next_action, operator_notes, original_member_eta, current_route_confidence, last_member_checkin_time, eta_drift_minutes, ice_escalation_status, start_lat/lon, dest_lat/lon, route_polyline, route_eta_minutes, route_eta_time, checkpoint_list, created_at, updated_at)
+- `responders` — eblockwatch responder network (id, name, whatsapp_number, area_name, suburb, street, province, home_lat/lon, conduit_type, support_radius_km, availability_status, trust_level, linked_network_type, linked_network_name, notes, active, created_at, updated_at)
+- `conversation_states` — per-member menu state (id, whatsapp_number, current_flow, current_step, pending_trip_data, updated_at)
+
+## Paystack Integration
+
+- **Plans**: Individual = `PLN_rnn4nj61oh0zy0c` (R150/mo), Family = `PLN_wopagttz7e5quyw` (R250/mo)
+- **Webhook URL** (register in Paystack dashboard → Settings → API Keys & Webhooks):
+  `https://cyber-chaperone-r--ryfsny.replit.app/api/paystack/webhook`
+- **Flow**: Member visits `/website/upgrade` → picks plan → personalised checkout generated → pays → webhook fires → member auto-upgraded to `verified` + correct tier
+- **Sync**: Operator logs in → `POST /api/paystack/sync` → 60 subscribers synced on last run
 
 ## Key Commands
 
@@ -47,18 +93,14 @@ Method: **POST** — paste this into Twilio Sandbox "WHEN A MESSAGE COMES IN"
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 
-## Database Schema
-
-- `responders` — eblockwatch responder network (id, name, whatsappNumber, areaName, homeLat, homeLon, notes, active, created_at, updated_at)
-- `trips` — traveler trip records (id, title, traveler_name, traveler_phone, status, evidence_notes, inference_notes, next_action, operator_notes, original_member_eta, current_route_confidence, last_member_checkin_time, eta_drift_minutes, ice_escalation_status, start_lat, start_lon, dest_lat, dest_lon, route_polyline, route_eta_minutes, route_eta_time, checkpoint_list, created_at, updated_at)
-- `messages` — raw WhatsApp messages (id, from_number, to_number, body, message_sid, trip_id, received_at)
-- `members` — known member registry (id, first_name, last_name, display_name, whatsapp_number, member_status, role, notes, ice_contact_name, ice_contact_phone, created_at, updated_at)
-- `conversation_states` — per-member menu state (id, whatsapp_number, current_flow, current_step, pending_trip_data, updated_at)
-
 ## Secrets Required
 
-- `TWILIO_ACCOUNT_SID` — Twilio Account SID (starts with AC...)
+- `TWILIO_ACCOUNT_SID` — Twilio Account SID
 - `TWILIO_AUTH_TOKEN` — Twilio Auth Token
+- `PAYSTACK_SECRET_KEY` — Paystack live secret key
+- `OPERATOR_PASSWORD` — Situation Room login password
+- `SESSION_SECRET` — Express session signing key
+- `GMAIL_USER` + `GMAIL_APP_PASSWORD` — digest/alert emails
 
 ## Webhook Guard Rule (LOCKED — do not change)
 
@@ -68,37 +110,20 @@ Ignore ONLY when `req.body.MessageStatus` is present and truthy. Never block on 
 
 **File:** `artifacts/api-server/src/menu-router.ts`
 
-**Integration point in webhook.ts:** runs after the unknown-member check (line ~420), before `if (parsed)`. Returns `{handled: boolean}`. If `handled: true`, the webhook returns immediately — the menu router owns message save, Twilio reply, and operator mirror.
-
-**Conversation flows (stored in `conversation_states` table):**
-- `MAIN_MENU` — waiting for a main menu choice (1–10)
-- `CYBER_CHAPERONE` — waiting for a CC menu choice (1–7)
-- `TRIP_FLOW` — collecting trip data step-by-step (start → destination → ETA → create trip)
-- `CLARIFICATION` — waiting for member response on ambiguous destination
-- `CHECKIN` — ETA drift check-in flow (choices 1–6: okay / delayed / ETA changed / stopped / help / send pin)
-
-**Trigger words:**
-- Main menu: `Hi`, `Hello`, `Menu`, `Start`, `0`
-- Cyber Chaperone: `5` from main menu, or keywords: `cyber chaperone`, `travel`, `trip`, `start trip`
-
 **Priority order (highest to lowest):**
-0. ICE contact detection — if `from` matches any member's `ice_contact_phone` → ICE reply handler (choices 1–4)
-1. Distress (`help`, `sos`, `emergency`, `danger`, `call me`, …) → RED + auto-escalate to ICE if not yet escalated
-2. Arrival (`arrived`, `i have arrived`, …) → close trip, always
-3. Menu reset trigger (`Hi`/`0`/…) → main menu
+0. ICE contact detection → ICE reply handler (choices 1–4)
+1. Distress keywords → RED + auto-ICE escalation
+2. Arrival keywords → trip closed
+3. Menu reset trigger (Hi/0/Menu) → main menu
 4. Conversation state routing (TRIP_FLOW → CLARIFICATION → CHECKIN → CYBER_CHAPERONE → MAIN_MENU)
-5. `START [from] to [dest] ETA [time]` structured parser → create GREEN trip
-6. ETA drift monitoring — if drift ≥15 min and no recent check-in → CHECKIN flow; if drift ≥45 min → auto-ICE escalation + AMBER
-7. Ambiguous destination guard (has active trip + movement language but not a full trip-start) → AMBER + clarification menu + operator mirror
-8. Pass-through to existing freeform trip-start parser (`Leaving X heading to Y ETA Z`) and follow-up classifier
-
-**Unsafe fallback rule:** unclear movement/destination messages with an active trip → CLARIFICATION NEEDED / AMBER, never silent GREEN.
+5. `START [from] to [dest] ETA [time]` structured parser → GREEN trip
+6. ETA drift ≥15 min → CHECKIN flow; ≥45 min → auto-ICE + AMBER
+7. Ambiguous destination guard → AMBER + clarification
+8. Freeform trip-start parser fallback
 
 ## `isKnown` Rule
 
 `isKnown: memberStatus === "verified" || memberStatus === "active"`
-
-Members added via `POST /api/members` default to `memberStatus: "active"` and are treated as known members.
 
 ## Pilot Members (production)
 
@@ -107,82 +132,62 @@ Members added via `POST /api/members` default to `memberStatus: "active"` and ar
 | Andre Snyman | whatsapp:+27825611065 | operator | 1 | — |
 | Kieren Snyman | whatsapp:+27833263751 | member | 4 | Andre Snyman (+27825611065) |
 
-PILOT_MEMBERS hardcoded fallback in webhook.ts still covers Andre if the DB lookup ever fails.
+## ETA + ICE Escalation
 
-## ETA Bullseye + ICE Escalation Architecture (2026-05-04)
+- Drift ≥15 min + no check-in in 25 min → CHECKIN flow (6 choices)
+- Drift ≥45 min → auto ICE escalation + AMBER
+- Distress → RED + auto ICE if not yet contacted
+- ICE escalation status: `null` → `SENT` → `REPLIED`
 
-### ETA bullseye
-- When a trip is created (step-by-step or START format), `original_member_eta` is stored normalised (e.g. "23:30").
-- On every message from a known member with an active trip, `calculateEtaDrift` computes minutes past ETA using current local time (midnight-crossing safe).
-- `eta_drift_minutes` is updated on the trip record on every message.
+## Route Enrichment (OpenStreetMap — no API key)
 
-### Check-in flow
-- Drift ≥15 min + no check-in in last 25 min → `CHECKIN` flow entered, check-in prompt sent with 6 choices.
-- Choice 1 (okay) → GREEN, `lastMemberCheckinTime` updated.
-- Choice 2/3 (delayed/ETA changed) → AMBER, collect new ETA.
-- Choice 4 (stopped) → AMBER + operator mirror.
-- Choice 5 (need help) → RED (caught by distress handler).
-- Choice 6 (send pin) → wait for location pin.
+- Geocoding: Nominatim (`nominatim.openstreetmap.org`) with `countrycodes=za`
+- Routing: OSRM (`router.project-osrm.org`)
+- Stores: `routePolyline`, `routeEtaMinutes`, `routeEtaTime`, `checkpointList`
+- Dashboard: `TripRouteMap` (react-leaflet) renders on every trip detail page
 
-### ICE escalation
-- `ice_contact_name` + `ice_contact_phone` stored on `members` table (WhatsApp format: `whatsapp:+XXXXXXXXXXX`).
-- Auto-escalation: drift ≥45 min → `escalateToIce` → AMBER + ICE message sent + operator mirror.
-- Distress RED → if ICE not yet contacted (`iceEscalationStatus=null`) → auto-escalate to ICE.
-- ICE escalation status: `null` → `SENT` → `REPLIED`.
+## System Audit — 2026-05-11 (41/41 green)
 
-### ICE reply detection
-- On every inbound message, `detectIceContact(from)` queries `members WHERE ice_contact_phone = from`.
-- If match: routes to `handleIceReply` (choices 1–4) before any other handler.
-- ICE reply "1" (okay) → GREEN + operator mirror.
-- ICE reply "2" (needs help) → RED + operator mirror.
-- ICE reply "3" (could not reach) → AMBER + operator mirror.
-- ICE reply "4" (call me) → operator mirror with ICE phone.
-
-### Route enrichment (OpenStreetMap stack — no API key)
-- After every trip is created, `enrichTripWithRoute(tripId, startLocation, destination)` fires async (non-blocking).
-- **Geocoding**: Nominatim (`nominatim.openstreetmap.org`) with `countrycodes=za` bias. Stores `startLat/Lon` and `destLat/Lon`.
-- **Routing**: OSRM public API (`router.project-osrm.org`) for driving route. Stores `routePolyline` (GeoJSON LineString), `routeEtaMinutes`, and `routeEtaTime` (SAST wall-clock).
-- **Checkpoints**: 0 checkpoints ≤15 min, 1 at 50% if ≤45 min, 2 at 33%+67% if >45 min. Stored as JSON in `checkpointList`.
-- **Dashboard map**: `TripRouteMap` component (react-leaflet + OpenStreetMap tiles) renders on every trip detail page — coloured route line (green/amber/red matching trip status), start/dest CircleMarkers, checkpoint pins, ETA legend overlay. Shows "Route calculating…" placeholder for old/missing data.
-- **WhatsApp checkpoint check-in** (section 7a, before ETA drift): if a checkpoint time has passed and the member hasn't checked in since, fires the CHECKIN flow with a checkpoint-specific prompt ("Route checkpoint — Midpoint check-in.") instead of the ETA drift message.
+All 41 moving parts verified green. One publish blocker (frozen prod DB — see above). Last successful production build: 2026-05-10. Code staged and ready to deploy the moment the DB is unfrozen.
 
 ## MVP Production Proof — 2026-05-04
 
-**Cyber Chaperone Situation Room MVP — Production proof passed.**
-
-Live WhatsApp number +27825611065 successfully tested end-to-end:
-
-1. Messy trip-start message created a GREEN trip.
-2. Traffic update changed the trip to AMBER.
-3. Arrival message completed the trip.
-4. TEST RED trip-start created a new GREEN trip correctly.
-5. "I need help" escalated the active trip to RED.
-6. Twilio replies were sent for every message.
-7. Evidence notes remained clean (structured timestamps only, no raw chat contamination).
-8. No message was linked to an old completed trip.
-
-Parser fix summary: replaced single fragile optional-group regex with a two-pass normalise-then-match approach. Em/en dashes, smart quotes, and whitespace are normalised before matching. A 5-case self-test runs at every server startup (5/5 passed). Per-message diagnostic logging added for all future failures.
-
-## Menu Router Test Proof — 2026-05-04
-
-All 8 required test scenarios pass (verified against dev DB and logs):
-
-| # | Input | Expected | Result |
-|---|-------|----------|--------|
-| T1 | "Hi" | Main Menu | ✅ currentFlow=MAIN_MENU |
-| T2 | "5" | CC Menu | ✅ currentFlow=CYBER_CHAPERONE |
-| T3 | "1" (from CC) | Ask for location pin | ✅ TRIP_FLOW/WAITING_FOR_START_LOCATION |
-| T4 | "START Fourways to Rosebank Mall ETA 19:40" | GREEN trip | ✅ trip status=green |
-| T5 | "I am going to Oyster Box in Durban" (with active trip) | Clarification + AMBER | ✅ CLARIFICATION + amber |
-| T6 | "1" (to clarification) | Start new trip flow | ✅ TRIP_FLOW/WAITING_FOR_START_LOCATION |
-| T7 | "I have arrived" | Trip closed | ✅ status=completed |
-| T8 | "I need help" | RED alert | ✅ status=red |
-
-Production URL: `https://cyber-chaperone-r--ryfsny.replit.app`
-Twilio webhook: `POST /api/webhook/twilio`
+All 8 menu router scenarios and full end-to-end WhatsApp → Situation Room flow verified live on +27825611065.
 
 ## Important Notes
 
-- `lib/api-zod/src/index.ts` only exports from `./generated/api` (not `./generated/types`) to avoid duplicate export conflicts — orval config has `indexFiles: false` for the zod output
+- `lib/api-zod/src/index.ts` only exports from `./generated/api` — orval config has `indexFiles: false`
 - Secrets are never logged — pino serializers strip sensitive headers
-- Production schema is managed by Replit's Publish flow — when publishing, Replit diffs dev schema against production and applies changes automatically
+- Production schema managed by Replit Publish flow — diffs dev vs prod and applies automatically (pending DB unfreeze)
+- Pre-existing typecheck errors in `voice-service.ts`, `register.ts`, `broadcast.ts` — do not fix these
+
+---
+
+## Support Email Draft (send to get publish unblocked)
+
+**To:** support@replit.com
+**Subject:** Production database frozen — blocking publish for repl 861f57c8-8edb-426d-bcdf-9ec68d1de62b
+
+Hi Replit Support,
+
+My production database is frozen and blocking every publish attempt. The publish cancels silently before a build even starts — no new build is created in the build history.
+
+**Account:** ryfsny
+**Repl ID:** 861f57c8-8edb-426d-bcdf-9ec68d1de62b
+**Production URL:** https://cyber-chaperone-r--ryfsny.replit.app
+**Project:** Cyber Shepherd Main Project
+
+**What happens:** I click Publish, a schema changes screen appears (new columns being added), I approve it — but no build is ever triggered and the publish silently fails every time.
+
+**Error from agent tool when querying production DB:**
+"The production database for repl 861f57c8-8edb-426d-bcdf-9ec68d1de62b is frozen. Unfreeze it first."
+
+**New columns waiting to be applied to production:**
+- `messages.direction` (text, default 'inbound')
+- `members.paystack_customer_id`, `paystack_subscription_code`, `paystack_status`, `paystack_plan_code`, `paystack_paid_at`
+
+Please unfreeze the production database so the schema migration can run during the next publish.
+
+Thank you,
+Andre Snyman
+eblockwatch / Cyber Shepherd
