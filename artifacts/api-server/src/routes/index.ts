@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import healthRouter from "./health";
 import webhookRouter from "./webhook";
+import facebookWebhookRouter from "./facebook-webhook";
 import tripsRouter from "./trips";
 import aiRouter from "./ai";
 import membersRouter from "./members";
@@ -25,7 +26,8 @@ const router: IRouter = Router();
 
 // ── Public routes (no auth required) ─────────────────────────────────────────
 router.use(healthRouter);
-router.use(webhookRouter);       // Twilio WhatsApp webhook
+router.use(webhookRouter);            // Twilio WhatsApp webhook
+router.use(facebookWebhookRouter);    // Facebook Messenger webhook
 router.use(authRouter);
 router.use(registerRouter);      // Member self-registration
 router.use(arnieChatRouter);

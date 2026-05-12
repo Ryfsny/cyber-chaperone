@@ -18,6 +18,7 @@ interface Conversation {
   displayName: string;
   memberStatus: string | null;
   memberId: number | null;
+  channel: "whatsapp" | "facebook";
   lastMessage: string;
   lastDirection: string;
   lastAt: string;
