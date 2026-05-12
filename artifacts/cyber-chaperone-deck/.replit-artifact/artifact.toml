@@ -1,0 +1,31 @@
+kind = "slides"
+previewPath = "/cyber-chaperone-deck/"
+title = "Cyber Chaperone Presentation"
+version = "1.0.0"
+id = "artifacts/cyber-chaperone-deck"
+router = "path"
+
+[[integratedSkills]]
+name = "slides"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/cyber-chaperone-deck/" ]
+localPort = 25112
+
+[services.development]
+run = "pnpm --filter @workspace/cyber-chaperone-deck run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/cyber-chaperone-deck", "run", "build" ]
+publicDir = "artifacts/cyber-chaperone-deck/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25112"
+BASE_PATH = "/cyber-chaperone-deck/"
