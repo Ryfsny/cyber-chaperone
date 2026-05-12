@@ -1,11 +1,12 @@
 export default function Slide13WhySA() {
   return (
-    <div className="relative w-screen h-screen overflow-hidden" style={{ background: "#f5f3ee" }}>
-      <div className="absolute bottom-0 right-0" style={{ width: "45vw", height: "60vh", background: "#1a2744", clipPath: "polygon(30% 100%, 100% 0%, 100% 100%)" }} />
-      <div className="absolute top-0 left-0" style={{ width: "0.6vw", height: "100vh", background: "#e8a020" }} />
+    <div className="relative w-screen h-screen overflow-hidden" style={{ background: "#ffffff" }}>
+      <div className="absolute top-0 left-0 right-0" style={{ height: "0.55vh", background: "#22c55e" }} />
+      <div className="absolute bottom-0 right-0" style={{ width: "42vw", height: "58vh", background: "#1a2744", clipPath: "polygon(28% 100%, 100% 0%, 100% 100%)" }} />
+      <div className="absolute top-0 left-0" style={{ width: "0.5vw", height: "100vh", background: "#22c55e" }} />
 
       <div className="absolute inset-0 flex flex-col justify-center" style={{ padding: "0 8vw 0 10vw" }}>
-        <p className="font-body font-medium uppercase tracking-widest" style={{ fontSize: "1.6vw", color: "#e8a020", marginBottom: "1.5vh" }}>
+        <p className="font-body font-bold uppercase tracking-widest" style={{ fontSize: "1.6vw", color: "#22c55e", marginBottom: "1.5vh" }}>
           The heart of it
         </p>
         <h2
@@ -28,7 +29,7 @@ export default function Slide13WhySA() {
           <p className="font-body font-bold" style={{ fontSize: "2.3vw", color: "#1a2744", lineHeight: 1.5 }}>
             It was born here. Built here. For our roads. Our risks. Our people.
           </p>
-          <div style={{ borderLeft: "0.4vw solid #e8a020", paddingLeft: "2vw", marginTop: "1vh" }}>
+          <div style={{ borderLeft: "0.4vw solid #22c55e", paddingLeft: "2vw", marginTop: "1vh" }}>
             <p className="font-body font-bold" style={{ fontSize: "2.4vw", color: "#1a2744", lineHeight: 1.4 }}>
               We speak the language of South African safety — and that language is WhatsApp.
             </p>

@@ -84,20 +84,28 @@
     "position": 11,
     "filepath": "src/pages/slides/Slide11WhereWeAre.tsx",
     "title": "Where We Are Today",
-    "description": "6 green live features + production URL",
+    "description": "Live features including Facebook Messenger + member profile tracking",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1b2c3d4-1200-4000-8000-000000001200",
+    "position": 12,
+    "filepath": "src/pages/slides/Slide12FacebookMessenger.tsx",
+    "title": "Now Live: Facebook Messenger",
+    "description": "Full Cyber Chaperone menu on Facebook Messenger — any platform, one team watching",
     "speakerNotes": ""
   },
   {
     "id": "a1b2c3d4-0012-4000-8000-000000000012",
-    "position": 12,
+    "position": 13,
     "filepath": "src/pages/slides/Slide12WhatsNext.tsx",
     "title": "What's Coming Next",
-    "description": "Roadmap — 7 upcoming features",
+    "description": "Roadmap — upcoming features",
     "speakerNotes": ""
   },
   {
     "id": "a1b2c3d4-0013-4000-8000-000000000013",
-    "position": 13,
+    "position": 14,
     "filepath": "src/pages/slides/Slide13WhySA.tsx",
     "title": "Why South Africa. Why Now.",
     "description": "The heart of it — born here, built here",
@@ -105,7 +113,7 @@
   },
   {
     "id": "a1b2c3d4-0014-4000-8000-000000000014",
-    "position": 14,
+    "position": 15,
     "filepath": "src/pages/slides/Slide14Closing.tsx",
     "title": "Someone Who Always Knows You're Okay.",
     "description": "Closing — arrival image, contact details",
