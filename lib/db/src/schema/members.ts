@@ -33,6 +33,7 @@ export const membersTable = pgTable("members", {
   paystackStatus: text("paystack_status"),
   paystackPlanCode: text("paystack_plan_code"),
   paystackPaidAt: timestamp("paystack_paid_at", { withTimezone: true }),
+  facebookUrl: text("facebook_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

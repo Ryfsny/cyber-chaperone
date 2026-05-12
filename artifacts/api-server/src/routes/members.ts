@@ -176,6 +176,7 @@ router.patch("/members/:id", async (req, res): Promise<void> => {
     "firstName", "lastName", "displayName", "memberStatus", "membershipTier",
     "role", "notes", "iceContactName", "iceContactPhone",
     "email", "mobile", "homeAddress", "suburb", "city", "province", "postalCode", "country",
+    "facebookUrl",
   ] as const;
 
   const setValues: Record<string, string | null | Date> = { updatedAt: new Date() };

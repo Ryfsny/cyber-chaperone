@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import {
   ArrowLeft, Phone, Mail, MapPin, User, Shield, Calendar, Tag, MessageSquare,
   Navigation, CheckCircle2, AlertCircle, AlertTriangle, Clock, Users, FileText,
-  Home, Fingerprint,
+  Home, Fingerprint, ExternalLink,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -37,6 +37,7 @@ interface MemberFull {
   country: string | null;
   sourceBatch: string | null;
   importStatus: string | null;
+  facebookUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -199,6 +200,8 @@ export default function MemberProfile() {
   const { id } = useParams<{ id: string }>();
   const memberId = parseInt(id ?? "0", 10);
   const [tab, setTab] = useState<"overview" | "messages" | "trips" | "activity">("overview");
+  const [fbUrl, setFbUrl] = useState("");
+  const queryClient = useQueryClient();
 
   const { data: member, isLoading } = useQuery<MemberFull>({
     queryKey: ["/api/members", memberId],
@@ -222,6 +225,26 @@ export default function MemberProfile() {
 
   const liveTrips = trips.filter((t) => t.status !== "completed");
   const pastTrips = trips.filter((t) => t.status === "completed");
+
+  useEffect(() => {
+    if (member?.facebookUrl != null) setFbUrl(member.facebookUrl);
+  }, [member?.facebookUrl]);
+
+  const { mutate: saveFbUrl, isPending: fbSaving } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/members/${memberId}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ facebookUrl: fbUrl.trim() || null }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      return res.json() as Promise<MemberFull>;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["/api/members", memberId], data);
+    },
+  });
 
   if (isLoading) {
     return (
@@ -266,6 +289,11 @@ export default function MemberProfile() {
                   <Users className="w-2.5 h-2.5 mr-1" />Family #{member.familyGroupId}
                 </Badge>
               )}
+              {member.whatsappNumber.startsWith("fb:") && (
+                <Badge className="bg-blue-950 text-blue-300 border-blue-700 text-[10px]">
+                  Messenger
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Member #{member.id}
@@ -292,6 +320,25 @@ export default function MemberProfile() {
               className="flex items-center gap-1.5 text-xs border border-border text-muted-foreground px-3 py-1.5 hover:text-foreground transition-colors"
             >
               <Mail className="w-3 h-3" /> Email
+            </a>
+          )}
+          {member.facebookUrl ? (
+            <a
+              href={member.facebookUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 text-xs border border-blue-700 text-blue-400 px-3 py-1.5 hover:bg-blue-900/30 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" /> Facebook
+            </a>
+          ) : (
+            <a
+              href={`https://www.facebook.com/search/people/?q=${encodeURIComponent(member.displayName)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 text-xs border border-border text-muted-foreground px-3 py-1.5 hover:text-blue-400 hover:border-blue-700 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" /> Search FB
             </a>
           )}
         </div>
@@ -403,6 +450,58 @@ export default function MemberProfile() {
               <InfoRow label="Date registered" value={fmtDatetime(member.createdAt)} />
               <InfoRow label="Import status" value={member.importStatus} />
             </SectionCard>
+
+            {/* Facebook */}
+            <div className="border border-border bg-card">
+              <div className="px-4 py-2 border-b border-border flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Facebook Profile</span>
+                </div>
+                <a
+                  href={`https://www.facebook.com/search/people/?q=${encodeURIComponent(member.displayName)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
+                >
+                  <ExternalLink className="w-2.5 h-2.5" />
+                  Search on Facebook
+                </a>
+              </div>
+              <div className="p-4 flex flex-col gap-3">
+                {member.facebookUrl && (
+                  <a
+                    href={member.facebookUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-blue-400 hover:underline flex items-center gap-1.5 break-all"
+                  >
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                    {member.facebookUrl}
+                  </a>
+                )}
+                {!member.facebookUrl && (
+                  <p className="text-xs text-muted-foreground">No Facebook profile saved yet. Paste the URL below.</p>
+                )}
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="url"
+                    value={fbUrl}
+                    onChange={(e) => setFbUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && saveFbUrl()}
+                    placeholder="https://www.facebook.com/..."
+                    className="flex-1 bg-background border border-border text-sm px-3 py-1.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <button
+                    onClick={() => saveFbUrl()}
+                    disabled={fbSaving}
+                    className="text-xs border border-primary text-primary px-3 py-1.5 hover:bg-primary/10 transition-colors disabled:opacity-50 shrink-0"
+                  >
+                    {fbSaving ? "Saving…" : "Save"}
+                  </button>
+                </div>
+              </div>
+            </div>
 
             {/* ICE contact */}
             {(member.iceContactName || member.iceContactPhone) && (
