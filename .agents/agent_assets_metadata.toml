@@ -53,3 +53,9 @@ id = "jEVMwn1QmK5lrKESDxdZI"
 uri = "file://EBLOCKWATCH_WEBSITE_DEVELOPER_BRIEF_V2.md"
 type = "text"
 title = "Website Developer Brief v2 — 9 Changes"
+
+[[outputs]]
+id = "3B5blhAB8L-Goc3jm6TDl"
+uri = "file://.local/outputs/Cyber-Chaperone-eblockwatch.pptx"
+type = "slides"
+title = "Cyber Chaperone — eblockwatch (PowerPoint)"
