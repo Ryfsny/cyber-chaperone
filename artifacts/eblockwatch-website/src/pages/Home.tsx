@@ -699,11 +699,11 @@ export default function HomePage() {
           </div>
           <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
             <p style={{ color: "#6b7280", fontSize: "13px", margin: 0 }}>
-              Copyright © 2024 eblockwatch | All Rights Reserved
+              Copyright © 2026 eblockwatch | All Rights Reserved
             </p>
-            <a href="#" style={{ color: "#6b7280", fontSize: "13px", textDecoration: "none" }}>
-              Terms and Conditions
-            </a>
+            <span style={{ color: "#6b7280", fontSize: "13px" }}>
+              POPIA compliant · All data protected
+            </span>
           </div>
         </div>
       </footer>
