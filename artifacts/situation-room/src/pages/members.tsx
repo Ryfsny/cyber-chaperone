@@ -77,7 +77,12 @@ interface DuplicatesResponse {
 }
 
 function formatPhone(raw: string): string {
+  if (raw.startsWith("fb:")) return "via Messenger";
   return raw.replace(/^whatsapp:/, "");
+}
+
+function isFacebookMember(m: Member): boolean {
+  return m.whatsappNumber?.startsWith("fb:");
 }
 
 function formatDate(iso: string): string {
@@ -92,6 +97,7 @@ const SOURCE_COLOURS: Record<string, string> = {
   gass: "bg-blue-900 text-blue-200 border-blue-700",
   webflow: "bg-purple-900 text-purple-200 border-purple-700",
   paystack: "bg-emerald-900 text-emerald-200 border-emerald-700",
+  facebook: "bg-blue-800 text-blue-100 border-blue-500",
   legacy: "bg-zinc-800 text-zinc-300 border-zinc-600",
   manual: "bg-orange-900 text-orange-200 border-orange-700",
 };
@@ -106,6 +112,21 @@ function SourceBadge({ source }: { source: string | null }) {
   return (
     <Badge className={`${sourceBadgeClass(source)} flex items-center gap-1 font-mono text-[10px] uppercase`}>
       <Tag className="w-2.5 h-2.5" />{source}
+    </Badge>
+  );
+}
+
+function ChannelBadge({ member }: { member: Member }) {
+  if (isFacebookMember(member)) {
+    return (
+      <Badge className="bg-blue-900 text-blue-200 border-blue-500 flex items-center gap-1 text-[10px] font-bold">
+        <span style={{ fontSize: "9px" }}>💬</span> Messenger
+      </Badge>
+    );
+  }
+  return (
+    <Badge className="bg-green-900 text-green-300 border-green-700 flex items-center gap-1 text-[10px] font-bold">
+      <span style={{ fontSize: "9px" }}>📱</span> WhatsApp
     </Badge>
   );
 }
@@ -490,9 +511,10 @@ function MemberListView({ members, search }: { members: Member[]; search: string
                             <div>
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-medium text-xs text-foreground group-hover:text-primary transition-colors">{m.displayName}</span>
+                                <ChannelBadge member={m} />
                                 <StatusBadge status={m.memberStatus} />
                                 {m.membershipTier && <span className="text-xs text-muted-foreground border border-border px-1">{m.membershipTier}</span>}
-                                <SourceBadge source={m.sourceBatch} />
+                                {m.sourceBatch && m.sourceBatch !== "facebook" && <SourceBadge source={m.sourceBatch} />}
                               </div>
                               {m.homeAddress && (
                                 <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
@@ -500,7 +522,7 @@ function MemberListView({ members, search }: { members: Member[]; search: string
                                 </div>
                               )}
                               <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
-                                <span className="text-xs text-muted-foreground font-mono">{formatPhone(m.whatsappNumber)}</span>
+                                <span className={`text-xs font-mono ${isFacebookMember(m) ? "text-blue-400" : "text-muted-foreground"}`}>{formatPhone(m.whatsappNumber)}</span>
                                 {m.mobile && <span className="text-xs text-muted-foreground font-mono">{m.mobile}</span>}
                                 {m.email && <span className="text-xs text-muted-foreground">{m.email}</span>}
                                 {m.industry && <span className="text-xs text-muted-foreground/60 italic">{m.industry}</span>}
@@ -737,6 +759,24 @@ export default function Members() {
 
           {/* Filter chips */}
           <div className="px-6 py-2 border-b border-border shrink-0 flex items-center gap-3 flex-wrap">
+
+            {/* Channel quick-filter */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0">Channel:</span>
+              <button
+                onClick={() => setSourceFilter("")}
+                className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors ${sourceFilter === "" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
+                All
+              </button>
+              <button
+                onClick={() => setSourceFilter(sourceFilter === "facebook" ? "" : "facebook")}
+                className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors flex items-center gap-1 ${sourceFilter === "facebook" ? "bg-blue-800 text-blue-100 border-blue-500" : "border-border text-muted-foreground hover:text-foreground"}`}>
+                💬 Messenger only
+              </button>
+            </div>
+
+            <div className="h-4 w-px bg-border shrink-0" />
+
             {/* Status filter */}
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0">Status:</span>

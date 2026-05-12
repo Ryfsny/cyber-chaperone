@@ -1,7 +1,8 @@
 import { Link, useLocation } from "wouter";
 import {
-  MessageSquare, Plus, Shield, Bot, Radio, Users, BookUser,
-  LogOut, Megaphone, MessagesSquare, Home, Menu, X,
+  Plus, Shield, Bot, Users, BookUser,
+  LogOut, Megaphone, MessagesSquare, Menu, X,
+  LayoutDashboard, Map, ScrollText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
@@ -9,13 +10,48 @@ import { AiAssistant } from "@/components/ai/AiAssistant";
 import { useAuth } from "@/hooks/use-auth";
 
 const navItems = [
-  { href: "/", label: "Situation Room", icon: Shield },
-  { href: "/radar", label: "Live Radar", icon: Radio },
-  { href: "/messages", label: "Inbox", icon: MessageSquare },
-  { href: "/responders", label: "Responders", icon: Users },
-  { href: "/members", label: "Members", icon: BookUser },
-  { href: "/conversations", label: "Conversations", icon: MessagesSquare },
-  { href: "/broadcast", label: "Broadcast", icon: Megaphone },
+  {
+    href: "/",
+    label: "Live Trips",
+    sub: "Active monitoring board",
+    icon: LayoutDashboard,
+  },
+  {
+    href: "/conversations",
+    label: "WhatsApp & Messenger",
+    sub: "Message members directly",
+    icon: MessagesSquare,
+  },
+  {
+    href: "/members",
+    label: "Members",
+    sub: "Registry — WhatsApp & Facebook",
+    icon: BookUser,
+  },
+  {
+    href: "/broadcast",
+    label: "Broadcast",
+    sub: "Send message to all members",
+    icon: Megaphone,
+  },
+  {
+    href: "/radar",
+    label: "Network Map",
+    sub: "Member locations across SA",
+    icon: Map,
+  },
+  {
+    href: "/messages",
+    label: "Message Log",
+    sub: "Raw inbound / outbound feed",
+    icon: ScrollText,
+  },
+  {
+    href: "/responders",
+    label: "Responders",
+    sub: "eblockwatch field network",
+    icon: Users,
+  },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -24,7 +60,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [showNav, setShowNav] = useState(false);
   const { logout } = useAuth();
 
-  // Close drawers on route change (mobile)
   useEffect(() => {
     setShowNav(false);
     setShowAi(false);
@@ -75,9 +110,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* ── Sidebar ────────────────────────────────────────────────────── */}
       <aside
         className={cn(
-          // Desktop: always visible, fixed width
           "md:relative md:flex md:w-64 md:translate-x-0",
-          // Mobile: off-canvas drawer
           "fixed inset-y-0 left-0 z-40 w-64 flex flex-col bg-card border-r border-border shrink-0 transition-transform duration-200",
           showNav ? "translate-x-0" : "-translate-x-full md:translate-x-0",
         )}
@@ -93,10 +126,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
             alt="eblockwatch"
             className="h-8 w-auto object-contain"
           />
+          <div className="ml-3">
+            <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold leading-none">Cyber Chaperone</p>
+            <p className="text-[9px] uppercase tracking-widest text-primary font-bold leading-none mt-0.5">Situation Room</p>
+          </div>
         </a>
 
         {/* Nav */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = location === item.href;
@@ -105,30 +142,44 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 text-sm uppercase tracking-wider rounded-sm transition-colors",
+                  "flex items-start gap-3 px-3 py-2.5 rounded-sm transition-colors",
                   active
-                    ? "bg-primary text-primary-foreground font-bold"
+                    ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary",
                 )}
               >
-                <Icon className="w-4 h-4 shrink-0" />
-                {item.label}
+                <Icon className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <div className={cn("text-xs uppercase tracking-wider font-bold leading-tight", active ? "text-primary-foreground" : "text-foreground")}>
+                    {item.label}
+                  </div>
+                  <div className={cn("text-[10px] leading-tight mt-0.5", active ? "text-primary-foreground/70" : "text-muted-foreground/70")}>
+                    {item.sub}
+                  </div>
+                </div>
               </Link>
             );
           })}
 
-          {/* AI toggle — desktop only (mobile has top bar button) */}
+          {/* AI toggle */}
           <button
             onClick={() => setShowAi((v) => !v)}
             className={cn(
-              "hidden md:flex items-center gap-3 px-3 py-2.5 text-sm uppercase tracking-wider rounded-sm transition-colors w-full text-left",
+              "hidden md:flex items-start gap-3 px-3 py-2.5 rounded-sm transition-colors w-full text-left",
               showAi
-                ? "bg-primary text-primary-foreground font-bold"
+                ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary",
             )}
           >
-            <Bot className="w-4 h-4 shrink-0" />
-            AI Assistant
+            <Bot className="w-4 h-4 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <div className={cn("text-xs uppercase tracking-wider font-bold leading-tight", showAi ? "text-primary-foreground" : "text-foreground")}>
+                AI Assistant
+              </div>
+              <div className={cn("text-[10px] leading-tight mt-0.5", showAi ? "text-primary-foreground/70" : "text-muted-foreground/70")}>
+                Arnie — trip analysis & alerts
+              </div>
+            </div>
           </button>
         </nav>
 
@@ -157,14 +208,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
 
-        {/* AI panel — desktop: side column | mobile: full-screen overlay */}
         {showAi && (
           <>
-            {/* Mobile full-screen overlay */}
             <div className="md:hidden fixed inset-0 z-50 flex flex-col bg-card">
               <AiAssistant onClose={() => setShowAi(false)} />
             </div>
-            {/* Desktop side panel */}
             <div className="hidden md:flex w-80 shrink-0 flex-col overflow-hidden border-l border-border">
               <AiAssistant onClose={() => setShowAi(false)} />
             </div>
