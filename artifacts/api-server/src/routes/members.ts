@@ -2,6 +2,13 @@ import { Router, type IRouter } from "express";
 import { db, membersTable, tripsTable, messagesTable } from "@workspace/db";
 import { insertMemberSchema } from "@workspace/db";
 import { ilike, or, sql, asc, eq, desc } from "drizzle-orm";
+import twilio from "twilio";
+import nodemailer from "nodemailer";
+import { sendFacebookMessage } from "../facebook-service.js";
+
+const OPERATOR_WA = process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+14155238886";
+const GMAIL_USER  = process.env["GMAIL_USER"] ?? "";
+const GMAIL_PASS  = process.env["GMAIL_APP_PASSWORD"] ?? "";
 
 const router: IRouter = Router();
 
@@ -203,6 +210,136 @@ router.patch("/members/:id", async (req, res): Promise<void> => {
 
   if (!updated) { res.status(404).json({ error: "Member not found." }); return; }
   res.json(updated);
+});
+
+// ── POST /api/members/:id/contact — send WhatsApp/Messenger/email to a member ─
+router.post("/members/:id/contact", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { channel, message } = req.body as { channel?: string; message?: string };
+  if (!channel || !message?.trim()) {
+    res.status(400).json({ error: "channel and message are required" });
+    return;
+  }
+
+  const [member] = await db.select().from(membersTable).where(eq(membersTable.id, id));
+  if (!member) { res.status(404).json({ error: "Member not found" }); return; }
+
+  const body = message.trim();
+
+  // ── Facebook Messenger ─────────────────────────────────────────────────────
+  if (channel === "messenger") {
+    if (!member.whatsappNumber.startsWith("fb:")) {
+      res.status(400).json({ error: "This member is not a Messenger contact" });
+      return;
+    }
+    const psid = member.whatsappNumber.slice(3);
+    await sendFacebookMessage(psid, body);
+    await db.insert(messagesTable).values({
+      fromNumber: "fb:page",
+      toNumber: member.whatsappNumber,
+      body,
+      messageSid: null,
+      direction: "outbound",
+    });
+    res.json({ ok: true, channel: "messenger" });
+    return;
+  }
+
+  // ── WhatsApp (Twilio) ──────────────────────────────────────────────────────
+  if (channel === "whatsapp") {
+    const sid   = process.env["TWILIO_ACCOUNT_SID"];
+    const token = process.env["TWILIO_AUTH_TOKEN"];
+    if (!sid || !token) { res.status(500).json({ error: "Twilio not configured" }); return; }
+
+    const toNumber = member.whatsappNumber.startsWith("whatsapp:")
+      ? member.whatsappNumber
+      : `whatsapp:${member.whatsappNumber}`;
+
+    const client = twilio(sid, token);
+    let messageSid: string | undefined;
+    try {
+      const sent = await client.messages.create({ from: OPERATOR_WA, to: toNumber, body });
+      messageSid = sent.sid;
+    } catch (err) {
+      res.status(500).json({ error: `WhatsApp failed: ${String(err)}` });
+      return;
+    }
+    await db.insert(messagesTable).values({
+      fromNumber: OPERATOR_WA,
+      toNumber,
+      body,
+      messageSid: messageSid ?? null,
+      direction: "outbound",
+    });
+    res.json({ ok: true, channel: "whatsapp" });
+    return;
+  }
+
+  // ── Email ──────────────────────────────────────────────────────────────────
+  if (channel === "email") {
+    if (!member.email) { res.status(400).json({ error: "No email address on file for this member" }); return; }
+    if (!GMAIL_USER || !GMAIL_PASS) { res.status(500).json({ error: "Email not configured" }); return; }
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: GMAIL_USER, pass: GMAIL_PASS },
+    });
+
+    const paragraphs = body.split("\n\n")
+      .map((p) => `<p style="margin:0 0 14px;color:#1e293b;font-size:14px;line-height:1.7;font-family:Arial,sans-serif;">${p.replace(/\n/g, "<br>")}</p>`)
+      .join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,sans-serif;">
+<div style="max-width:600px;margin:0 auto;background:#ffffff;">
+  <div style="background:#1a1f2e;padding:24px 36px;display:flex;align-items:center;justify-content:space-between;">
+    <div>
+      <div style="color:#22c55e;font-size:18px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">eblockwatch</div>
+      <div style="color:#6b7280;font-size:10px;letter-spacing:2px;margin-top:3px;text-transform:uppercase;">Cyber Chaperone · Safety Platform</div>
+    </div>
+    <img src="https://eblockwatch.co.za/wp-content/uploads/2021/01/eblockwatch-logo.png" alt="eblockwatch" style="height:36px;opacity:0.9;" />
+  </div>
+  <div style="height:3px;background:linear-gradient(90deg,#16a34a,#22c55e,#16a34a);"></div>
+  <div style="padding:28px 36px 20px;">${paragraphs}</div>
+  <div style="margin:0 36px 28px;background:#f0fdf4;border-left:4px solid #22c55e;padding:14px 18px;">
+    <div style="color:#166534;font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;">eblockwatch Cyber Chaperone</div>
+    <div style="color:#4ade80;font-size:12px;margin-top:3px;">Get hold of the right person, at the right place, at the right time.</div>
+  </div>
+  <div style="background:#1a1f2e;padding:16px 36px;text-align:center;">
+    <div style="margin-bottom:6px;">
+      <a href="https://www.facebook.com/eblockwatchnational" style="color:#22c55e;text-decoration:none;font-size:11px;margin:0 8px;">Facebook</a>
+      <span style="color:#374151;font-size:11px;">·</span>
+      <a href="https://eblockwatch.co.za" style="color:#22c55e;text-decoration:none;font-size:11px;margin:0 8px;">eblockwatch.co.za</a>
+      <span style="color:#374151;font-size:11px;">·</span>
+      <a href="https://www.instagram.com/eblockwatch" style="color:#22c55e;text-decoration:none;font-size:11px;margin:0 8px;">Instagram</a>
+    </div>
+    <div style="color:#374151;font-size:10px;letter-spacing:1px;text-transform:uppercase;">eblockwatch · Cyber Chaperone · South Africa</div>
+  </div>
+</div>
+</body>
+</html>`;
+
+    try {
+      await transporter.sendMail({
+        from: `"eblockwatch Cyber Chaperone" <${GMAIL_USER}>`,
+        to: member.email,
+        subject: `Message from eblockwatch Cyber Chaperone`,
+        text: body,
+        html,
+      });
+    } catch (err) {
+      res.status(500).json({ error: `Email failed: ${String(err)}` });
+      return;
+    }
+    res.json({ ok: true, channel: "email", to: member.email });
+    return;
+  }
+
+  res.status(400).json({ error: "Unknown channel. Use whatsapp, messenger, or email." });
 });
 
 // ── POST /api/members — create / upsert member ───────────────────────────────

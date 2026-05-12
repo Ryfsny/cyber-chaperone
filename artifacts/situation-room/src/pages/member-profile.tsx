@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import {
-  ArrowLeft, Phone, Mail, MapPin, User, Shield, Calendar, Tag, MessageSquare,
+  ArrowLeft, Phone, Mail, MapPin, Shield, Calendar, MessageSquare,
   Navigation, CheckCircle2, AlertCircle, AlertTriangle, Clock, Users, FileText,
-  Home, Fingerprint, ExternalLink,
+  Home, Fingerprint, ExternalLink, Send, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -201,6 +201,11 @@ export default function MemberProfile() {
   const memberId = parseInt(id ?? "0", 10);
   const [tab, setTab] = useState<"overview" | "messages" | "trips" | "activity">("overview");
   const [fbUrl, setFbUrl] = useState("");
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactChannel, setContactChannel] = useState<"whatsapp" | "messenger" | "email">("whatsapp");
+  const [contactMsg, setContactMsg] = useState("");
+  const [contactResult, setContactResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
 
   const { data: member, isLoading } = useQuery<MemberFull>({
@@ -229,6 +234,34 @@ export default function MemberProfile() {
   useEffect(() => {
     if (member?.facebookUrl != null) setFbUrl(member.facebookUrl);
   }, [member?.facebookUrl]);
+
+  const { mutate: sendContact, isPending: sendingContact } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/members/${memberId}/contact`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel: contactChannel, message: contactMsg }),
+      });
+      const json = await res.json() as { ok?: boolean; error?: string; to?: string };
+      if (!res.ok) throw new Error(json.error ?? "Send failed");
+      return json;
+    },
+    onSuccess: (_data) => {
+      const labels: Record<string, string> = {
+        whatsapp: "WhatsApp message sent",
+        messenger: "Messenger message sent",
+        email: `Email sent to ${member?.email ?? ""}`,
+      };
+      setContactResult({ ok: true, text: labels[contactChannel] ?? "Sent" });
+      setContactMsg("");
+      void queryClient.invalidateQueries({ queryKey: ["/api/members", memberId, "messages"] });
+      setTimeout(() => setContactResult(null), 5000);
+    },
+    onError: (err: Error) => {
+      setContactResult({ ok: false, text: err.message });
+    },
+  });
 
   const { mutate: saveFbUrl, isPending: fbSaving } = useMutation({
     mutationFn: async () => {
@@ -304,45 +337,126 @@ export default function MemberProfile() {
           </div>
         </div>
 
-        {/* Quick contact */}
-        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-          <a
-            href={`https://wa.me/${fmt(member.whatsappNumber).replace(/[^0-9]/g, "")}`}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1.5 text-xs border border-green-700 text-green-400 px-3 py-1.5 hover:bg-green-900/30 transition-colors"
-          >
-            <Phone className="w-3 h-3" /> WhatsApp
-          </a>
-          {member.email && (
-            <a
-              href={`mailto:${member.email}`}
-              className="flex items-center gap-1.5 text-xs border border-border text-muted-foreground px-3 py-1.5 hover:text-foreground transition-colors"
-            >
-              <Mail className="w-3 h-3" /> Email
-            </a>
+        {/* Send Message button */}
+        <button
+          onClick={() => {
+            setContactOpen((o) => !o);
+            // Auto-pick best channel
+            if (!contactOpen && member.whatsappNumber.startsWith("fb:")) setContactChannel("messenger");
+            else if (!contactOpen) setContactChannel("whatsapp");
+            setTimeout(() => textareaRef.current?.focus(), 80);
+          }}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-widest transition-colors border shrink-0",
+            contactOpen
+              ? "bg-primary text-primary-foreground border-primary"
+              : "border-primary text-primary hover:bg-primary hover:text-primary-foreground"
           )}
-          {member.facebookUrl ? (
-            <a
-              href={member.facebookUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 text-xs border border-blue-700 text-blue-400 px-3 py-1.5 hover:bg-blue-900/30 transition-colors"
-            >
-              <ExternalLink className="w-3 h-3" /> Facebook
-            </a>
-          ) : (
-            <a
-              href={`https://www.facebook.com/search/people/?q=${encodeURIComponent(member.displayName)}`}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 text-xs border border-border text-muted-foreground px-3 py-1.5 hover:text-blue-400 hover:border-blue-700 transition-colors"
-            >
-              <ExternalLink className="w-3 h-3" /> Search FB
-            </a>
-          )}
-        </div>
+        >
+          <Send className="w-3.5 h-3.5" />
+          {contactOpen ? "Close" : "Send Message"}
+          {contactOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        </button>
       </header>
+
+      {/* ── Contact / Send panel ─────────────────────────────────────────────── */}
+      {contactOpen && member && (
+        <div className="shrink-0 border-b border-primary/30 bg-primary/5 px-6 py-4">
+          <div className="max-w-2xl">
+            <p className="text-[10px] uppercase tracking-widest text-primary font-bold mb-3">
+              Send a message to {member.displayName}
+            </p>
+
+            {/* Channel selector */}
+            <div className="flex items-center gap-2 mb-3">
+              {!member.whatsappNumber.startsWith("fb:") && (
+                <button
+                  onClick={() => setContactChannel("whatsapp")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-xs border transition-colors",
+                    contactChannel === "whatsapp"
+                      ? "bg-green-800 text-green-200 border-green-600"
+                      : "border-border text-muted-foreground hover:border-green-700 hover:text-green-400"
+                  )}
+                >
+                  📱 WhatsApp
+                </button>
+              )}
+              {member.whatsappNumber.startsWith("fb:") && (
+                <button
+                  onClick={() => setContactChannel("messenger")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-xs border transition-colors",
+                    contactChannel === "messenger"
+                      ? "bg-blue-800 text-blue-200 border-blue-600"
+                      : "border-border text-muted-foreground hover:border-blue-700 hover:text-blue-400"
+                  )}
+                >
+                  💬 Messenger
+                </button>
+              )}
+              {member.email && (
+                <button
+                  onClick={() => setContactChannel("email")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-xs border transition-colors",
+                    contactChannel === "email"
+                      ? "bg-zinc-700 text-white border-zinc-500"
+                      : "border-border text-muted-foreground hover:border-zinc-500 hover:text-foreground"
+                  )}
+                >
+                  <Mail className="w-3 h-3" /> Email {member.email && <span className="opacity-60">{member.email}</span>}
+                </button>
+              )}
+              {!member.email && (
+                <span className="text-[10px] text-muted-foreground italic">No email on file — add one in the member record to enable email</span>
+              )}
+            </div>
+
+            {/* Message box */}
+            <div className="flex gap-2 items-end">
+              <textarea
+                ref={textareaRef}
+                value={contactMsg}
+                onChange={(e) => setContactMsg(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && contactMsg.trim()) {
+                    e.preventDefault();
+                    sendContact();
+                  }
+                }}
+                placeholder={
+                  contactChannel === "whatsapp" ? "Type a WhatsApp message… (Ctrl+Enter to send)" :
+                  contactChannel === "messenger" ? "Type a Messenger message… (Ctrl+Enter to send)" :
+                  "Type an email message… (Ctrl+Enter to send)"
+                }
+                rows={3}
+                className="flex-1 bg-background border border-border text-sm px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+              />
+              <button
+                onClick={() => sendContact()}
+                disabled={sendingContact || !contactMsg.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-widest hover:bg-primary/90 transition-colors disabled:opacity-40 self-stretch"
+              >
+                <Send className="w-3.5 h-3.5" />
+                {sendingContact ? "Sending…" : "Send"}
+              </button>
+            </div>
+
+            {/* Result */}
+            {contactResult && (
+              <div className={cn(
+                "mt-2 text-xs px-3 py-1.5 border",
+                contactResult.ok
+                  ? "text-green-400 border-green-700 bg-green-900/20"
+                  : "text-red-400 border-red-700 bg-red-900/20"
+              )}>
+                {contactResult.ok ? "✓ " : "✗ "}{contactResult.text}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Tabs ────────────────────────────────────────────────── */}
       <div className="shrink-0 border-b border-border bg-card flex">
