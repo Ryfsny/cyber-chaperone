@@ -21,6 +21,7 @@ This is the single source of truth. Everything happens here.
 - **Build**: esbuild (CJS bundle)
 - **Frontend**: React + Vite + TailwindCSS + shadcn/ui
 - **WhatsApp**: Twilio webhook
+- **Facebook Messenger**: Meta Webhooks — full Cyber Chaperone menu on Messenger
 
 ## Artifacts
 
@@ -34,6 +35,7 @@ This is the single source of truth. Everything happens here.
 - **Situation Room**: `https://cyber-chaperone-r--ryfsny.replit.app/`
 - **Website**: `https://cyber-chaperone-r--ryfsny.replit.app/website/`
 - **Twilio webhook**: `POST https://cyber-chaperone-r--ryfsny.replit.app/api/webhook/twilio`
+- **Facebook webhook**: `POST https://cyber-chaperone-r--ryfsny.replit.app/api/webhook/facebook`
 
 ## ⚠️ PUBLISH BLOCKER (as of 2026-05-11 night)
 
@@ -48,6 +50,8 @@ This is the single source of truth. Everything happens here.
 |---|---|
 | `GET /api/healthz` | Health check (used by Replit startup probe) |
 | `POST /api/webhook/twilio` | Twilio WhatsApp inbound messages |
+| `GET /api/webhook/facebook` | Meta webhook verification |
+| `POST /api/webhook/facebook` | Facebook Messenger — full Cyber Chaperone menu |
 | `POST /api/auth/login` | Operator login |
 | `GET /api/auth/me` | Session check |
 | `POST /api/register` | Member self-registration |

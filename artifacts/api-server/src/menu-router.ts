@@ -46,6 +46,8 @@ export interface MenuContext {
   label: string;
   messageSid: string | null;
   log: { info: (obj: unknown, msg?: string) => void; error: (obj: unknown, msg?: string) => void };
+  /** Platform override: when set, all outbound replies go through this instead of Twilio */
+  sendReply?: (body: string) => Promise<void>;
 }
 
 export interface MenuResult {
@@ -206,9 +208,22 @@ function nearbyCoverageText(count: number): string {
   return `There is a strong eblockwatch presence active in your area.`;
 }
 
+// ── Platform-agnostic reply registry ─────────────────────────────────────────
+// Maps a `from` identifier to a platform-specific send function for the duration
+// of one handleMenuRouter call. Allows Facebook Messenger (or any future channel)
+// to receive all outbound messages without touching the 90+ sendWhatsApp call sites.
+
+const _replyOverrides = new Map<string, (body: string) => Promise<void>>();
+
 // ── Twilio ────────────────────────────────────────────────────────────────────
 
 async function sendWhatsApp(from: string, to: string, body: string): Promise<void> {
+  // Check for platform override (e.g. Facebook Messenger) registered for this sender
+  const override = _replyOverrides.get(from);
+  if (override) {
+    try { await override(body); } catch { /* never block */ }
+    return;
+  }
   try {
     const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
     await client.messages.create({ from: to, to: from, body });
@@ -2236,6 +2251,14 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   const name = member?.displayName ?? from;
   const trimmed = body.trim();
 
+  // ── PLATFORM REPLY OVERRIDE ───────────────────────────────────────────────
+  // Register an alternate send function (e.g. Facebook Messenger) so every
+  // sendWhatsApp call in any handler is transparently redirected.
+  if (ctx.sendReply) {
+    _replyOverrides.set(from, ctx.sendReply);
+  }
+
+  try {
   // ── DIAGNOSTIC LOGGING ────────────────────────────────────────────────────
   log.info(
     {
@@ -2483,4 +2506,9 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   // 9. Pass through to existing webhook trip-start parser and follow-up classifier
   log.info({ from, currentFlow: state.currentFlow }, "Menu router: passing through to existing handlers");
   return { handled: false };
+
+  } finally {
+    // Always clean up the platform override so it never leaks across requests
+    _replyOverrides.delete(from);
+  }
 }

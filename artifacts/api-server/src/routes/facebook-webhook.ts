@@ -1,17 +1,88 @@
 import { Router, type Request, type Response } from "express";
 import crypto from "crypto";
-import { db, messagesTable } from "@workspace/db";
+import { db, messagesTable, membersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { sendFacebookMessage, getFacebookUserName } from "../facebook-service.js";
+import { handleMenuRouter, type MenuContext, type MemberInfo } from "../menu-router.js";
 
 const router: Router = Router();
 
-const VERIFY_TOKEN = process.env["FACEBOOK_VERIFY_TOKEN"] ?? "";
-const APP_SECRET   = process.env["FACEBOOK_APP_SECRET"] ?? "";
-const PAGE_ID      = process.env["FACEBOOK_PAGE_ID"] ?? "page";
+const APP_SECRET = process.env["FACEBOOK_APP_SECRET"] ?? "";
+const PAGE_ID    = process.env["FACEBOOK_PAGE_ID"] ?? "page";
+
+// ── Member lookup by fb:psid ──────────────────────────────────────────────────
+
+async function lookupFacebookMember(psid: string, displayName: string | null): Promise<MemberInfo | null> {
+  const fbKey = `fb:${psid}`;
+  try {
+    const [member] = await db
+      .select()
+      .from(membersTable)
+      .where(eq(membersTable.whatsappNumber, fbKey))
+      .limit(1);
+    if (member) {
+      return {
+        displayName: member.displayName,
+        role: member.role,
+        memberStatus: member.memberStatus,
+        membershipTier: member.membershipTier ?? null,
+        isKnown: member.memberStatus === "verified" || member.memberStatus === "active",
+      };
+    }
+  } catch {
+    // DB may not have table yet — fall through
+  }
+  // Not in DB — return a guest-level context using their FB display name
+  if (displayName) {
+    return {
+      displayName,
+      role: null,
+      memberStatus: "unverified",
+      membershipTier: null,
+      isKnown: false,
+    };
+  }
+  return null;
+}
+
+// ── Auto-create member record for first-time Facebook contacts ────────────────
+
+async function ensureFacebookMemberRecord(psid: string, displayName: string | null): Promise<void> {
+  const fbKey = `fb:${psid}`;
+  try {
+    const [existing] = await db
+      .select({ id: membersTable.id })
+      .from(membersTable)
+      .where(eq(membersTable.whatsappNumber, fbKey))
+      .limit(1);
+    if (existing) return;
+
+    const name = displayName ?? "Facebook User";
+    const parts = name.split(" ");
+    const firstName = parts[0] ?? name;
+    const lastName  = parts.slice(1).join(" ") || null;
+
+    await db.insert(membersTable).values({
+      firstName,
+      lastName:      lastName ?? firstName,
+      displayName:   name,
+      whatsappNumber: fbKey,
+      memberStatus:  "unverified",
+      membershipTier: null,
+      role:          null,
+      sourceBatch:   "facebook",
+      importStatus:  "auto",
+    });
+  } catch {
+    // Non-critical — member card is nice-to-have
+  }
+}
 
 // ── GET /api/webhook/facebook ─────────────────────────────────────────────────
 // Meta sends a GET to verify the webhook endpoint during setup.
-// We must echo back hub.challenge when hub.verify_token matches.
+
+const VERIFY_TOKEN = process.env["FACEBOOK_VERIFY_TOKEN"] ?? "";
+
 router.get("/webhook/facebook", (req: Request, res: Response): void => {
   const mode      = req.query["hub.mode"] as string | undefined;
   const token     = req.query["hub.verify_token"] as string | undefined;
@@ -28,7 +99,7 @@ router.get("/webhook/facebook", (req: Request, res: Response): void => {
 });
 
 // ── POST /api/webhook/facebook ────────────────────────────────────────────────
-// Receives incoming Messenger events from Meta.
+
 router.post("/webhook/facebook", async (req: Request, res: Response): Promise<void> => {
   // ── Signature verification ────────────────────────────────────────────────
   if (APP_SECRET) {
@@ -38,18 +109,15 @@ router.post("/webhook/facebook", async (req: Request, res: Response): Promise<vo
       res.sendStatus(403);
       return;
     }
-    const bodyStr = JSON.stringify(req.body);
+    const bodyStr  = JSON.stringify(req.body);
     const expected = "sha256=" + crypto
       .createHmac("sha256", APP_SECRET)
       .update(bodyStr)
       .digest("hex");
 
     let valid = false;
-    try {
-      valid = crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
-    } catch {
-      valid = false;
-    }
+    try { valid = crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected)); }
+    catch { valid = false; }
 
     if (!valid) {
       req.log.warn("Facebook webhook: invalid signature");
@@ -65,26 +133,25 @@ router.post("/webhook/facebook", async (req: Request, res: Response): Promise<vo
 
   for (const entry of (req.body.entry ?? []) as Array<{ messaging?: unknown[] }>) {
     for (const rawEvent of (entry.messaging ?? []) as Array<{
-      sender: { id: string };
+      sender:   { id: string };
       message?: { text?: string; mid?: string; is_echo?: boolean };
     }>) {
       // Skip echo events (messages sent by the page itself)
       if (rawEvent.message?.is_echo) continue;
       if (!rawEvent.message) continue;
 
-      const psid      = rawEvent.sender.id;
-      const text      = rawEvent.message.text ?? "";
-      const mid       = rawEvent.message.mid ?? null;
-      const fromNumber = `fb:${psid}`;
-      const toNumber   = `fb:${PAGE_ID}`;
+      const psid        = rawEvent.sender.id;
+      const text        = (rawEvent.message.text ?? "").trim();
+      const mid         = rawEvent.message.mid ?? null;
+      const fromNumber  = `fb:${psid}`;
+      const toNumber    = `fb:${PAGE_ID}`;
 
       // Fetch sender's display name from Meta
       const senderName = await getFacebookUserName(psid);
-      const firstName  = senderName?.split(" ")[0] ?? null;
 
-      req.log.info({ psid, senderName, mid: mid ? "[redacted]" : null }, "Facebook Messenger message received");
+      req.log.info({ psid, senderName, hasText: !!text }, "Facebook Messenger message received");
 
-      // Store inbound message
+      // Store inbound message (the menu-router will also store the reply)
       try {
         await db.insert(messagesTable).values({
           fromNumber,
@@ -94,23 +161,52 @@ router.post("/webhook/facebook", async (req: Request, res: Response): Promise<vo
           direction:  "inbound",
         });
       } catch (err) {
-        req.log.error({ err }, "Facebook: failed to store message");
+        req.log.error({ err }, "Facebook: failed to store inbound message");
       }
 
-      // Auto-reply — directs them to WhatsApp for trip monitoring
-      if (text.trim()) {
-        const greeting = firstName ? `Hi ${firstName}` : "Hi there";
-        await sendFacebookMessage(psid, [
-          `${greeting} 👋 — this is Cyber Chaperone by eblockwatch.`,
-          ``,
-          `Your message has been received. Andre can see it in the Situation Room and will reply here shortly.`,
-          ``,
-          `To activate trip monitoring right now, WhatsApp us on +27 82 561 1065 — just send "Hi" to get started.`,
-          ``,
-          `Stay safe. 🛡️`,
-          `— Cyber Chaperone`,
-        ].join("\n"));
+      // Non-text messages (stickers, images, etc.) — acknowledge and return
+      if (!text) {
+        await sendFacebookMessage(psid, "👋 Got your message. To use Cyber Chaperone, please send text. Reply *Hi* or *Menu* to get started.");
+        continue;
       }
+
+      // Auto-create a member record so first-time contacts appear in the Members list
+      await ensureFacebookMemberRecord(psid, senderName);
+
+      // Look up member record (by fb:psid)
+      const member = await lookupFacebookMember(psid, senderName);
+
+      // Build a platform-aware outbound sender so the menu router replies to Messenger
+      const sendReply = async (body: string): Promise<void> => {
+        // Store the outbound reply in the messages table
+        try {
+          await db.insert(messagesTable).values({
+            fromNumber: toNumber,
+            toNumber:   fromNumber,
+            body,
+            messageSid: null,
+            direction:  "outbound",
+          });
+        } catch { /* non-critical */ }
+        await sendFacebookMessage(psid, body);
+      };
+
+      // Build context and hand off to the full menu router
+      const ctx: MenuContext = {
+        body:       text,
+        from:       fromNumber,
+        to:         toNumber,
+        member,
+        latitude:   "",
+        longitude:  "",
+        address:    "",
+        label:      "",
+        messageSid: mid,
+        log:        req.log,
+        sendReply,
+      };
+
+      await handleMenuRouter(ctx);
     }
   }
 });
