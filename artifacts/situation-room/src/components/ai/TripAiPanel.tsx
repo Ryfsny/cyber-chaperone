@@ -21,7 +21,10 @@ export function TripAiPanel({ tripId, tripStatus }: TripAiPanelProps) {
   const generateSummary = async () => {
     setSummaryLoading(true);
     try {
-      const res = await fetch(`${base}/api/ai/trips/${tripId}/summary`, { method: "POST" });
+      const res = await fetch(`${base}/api/ai/trips/${tripId}/summary`, {
+        method: "POST",
+        credentials: "include",
+      });
       const data = (await res.json()) as { summary?: string; error?: string };
       setSummary(data.summary ?? data.error ?? "Unable to generate summary.");
     } catch {
@@ -35,7 +38,10 @@ export function TripAiPanel({ tripId, tripStatus }: TripAiPanelProps) {
     setDraftLoading(true);
     setDraft(null);
     try {
-      const res = await fetch(`${base}/api/ai/trips/${tripId}/reply-draft`, { method: "POST" });
+      const res = await fetch(`${base}/api/ai/trips/${tripId}/reply-draft`, {
+        method: "POST",
+        credentials: "include",
+      });
       const data = (await res.json()) as { draft?: string; error?: string };
       setDraft(data.draft ?? data.error ?? "Unable to generate draft.");
     } catch {
@@ -50,6 +56,11 @@ export function TripAiPanel({ tripId, tripStatus }: TripAiPanelProps) {
     await navigator.clipboard.writeText(draft);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const useDraft = () => {
+    if (!draft) return;
+    if (onSendReply) onSendReply(draft);
   };
 
   return (
@@ -108,16 +119,26 @@ export function TripAiPanel({ tripId, tripStatus }: TripAiPanelProps) {
               <p className="text-sm font-sans leading-relaxed text-foreground bg-background border border-border px-3 py-2">
                 {draft}
               </p>
-              <button
-                onClick={() => void copyDraft()}
-                className={cn(
-                  "flex items-center gap-1.5 text-xs uppercase tracking-widest font-bold transition-colors",
-                  copied ? "text-green-600" : "text-muted-foreground hover:text-foreground",
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => void copyDraft()}
+                  className={cn(
+                    "flex items-center gap-1.5 text-xs uppercase tracking-widest font-bold transition-colors",
+                    copied ? "text-green-500" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  {copied ? "Copied" : "Copy"}
+                </button>
+                {onSendReply && (
+                  <button
+                    onClick={useDraft}
+                    className="flex items-center gap-1.5 text-xs uppercase tracking-widest font-bold text-primary hover:text-primary/80 transition-colors"
+                  >
+                    Use draft
+                  </button>
                 )}
-              >
-                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                {copied ? "Copied" : "Copy to clipboard"}
-              </button>
+              </div>
             </div>
           ) : (
             <p className="text-xs text-muted-foreground font-sans">

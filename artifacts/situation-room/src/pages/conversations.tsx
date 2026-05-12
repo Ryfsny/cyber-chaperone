@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef, useMemo } from "react";
-import { MessageSquare, Send, Loader2, CheckCircle2, Search, ChevronRight, ArrowLeft } from "lucide-react";
+import {
+  MessageSquare, Send, Loader2, CheckCircle2, Search, ArrowLeft,
+  Phone, AlertTriangle, Sparkles, ChevronRight,
+} from "lucide-react";
 import { Link } from "wouter";
 import { format, isToday, isYesterday } from "date-fns";
 import { Input } from "@/components/ui/input";
@@ -69,10 +72,17 @@ function msgTime(iso: string) {
   return format(d, "d MMM, HH:mm");
 }
 
+function isOutbound(msg: Message): boolean {
+  if (msg.direction) return msg.direction === "outbound";
+  // Fallback for old messages without direction: if toNumber starts with whatsapp: and isn't the from, it's outbound
+  return msg.toNumber?.startsWith("whatsapp:") && msg.fromNumber === msg.toNumber ? false : msg.toNumber?.startsWith("whatsapp:+1") ?? false;
+}
+
 export default function Conversations() {
   const [activeNumber, setActiveNumber] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [reply, setReply] = useState("");
+  const [draftLoading, setDraftLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -85,7 +95,9 @@ export default function Conversations() {
   const { data: thread, isLoading: loadingThread } = useQuery<ThreadResponse>({
     queryKey: ["thread", activeNumber],
     queryFn: () =>
-      fetch(`${BASE}/api/conversations/${encodeURIComponent(activeNumber!)}`, { credentials: "include" }).then((r) => r.json()),
+      fetch(`${BASE}/api/conversations/${encodeURIComponent(activeNumber!)}`, { credentials: "include" }).then((r) =>
+        r.json(),
+      ),
     enabled: !!activeNumber,
     refetchInterval: 6_000,
   });
@@ -117,7 +129,29 @@ export default function Conversations() {
     }
   }
 
-  // Auto-scroll to bottom when thread changes
+  async function draftWithAI() {
+    if (!thread?.messages.length) return;
+    setDraftLoading(true);
+    try {
+      const lastInbound = [...thread.messages].reverse().find((m) => !isOutbound(m));
+      const memberName = thread.member?.displayName ?? activeNumber ?? "the member";
+      const lastMsg = lastInbound?.body ?? thread.messages[thread.messages.length - 1]?.body ?? "";
+      const prompt = `Draft a short, professional WhatsApp reply to ${memberName} who sent: "${lastMsg}". Reply in 1-2 sentences. Be calm and helpful. Return only the message text, no quotes or labels.`;
+      const res = await fetch(`${BASE}/api/ai/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ message: prompt }),
+      });
+      const data = (await res.json()) as { reply?: string; error?: string };
+      if (data.reply) setReply(data.reply);
+    } catch {
+      // silently fail
+    } finally {
+      setDraftLoading(false);
+    }
+  }
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [thread?.messages]);
@@ -126,21 +160,29 @@ export default function Conversations() {
     const q = search.toLowerCase();
     if (!q) return convos;
     return convos.filter(
-      (c) => c.displayName.toLowerCase().includes(q) || c.number.includes(q) || c.lastMessage.toLowerCase().includes(q)
+      (c) => c.displayName.toLowerCase().includes(q) || c.number.includes(q) || c.lastMessage.toLowerCase().includes(q),
     );
   }, [convos, search]);
+
+  const activeConvo = convos.find((c) => c.number === activeNumber);
 
   return (
     <div className="flex h-full overflow-hidden">
       {/* ── Left: conversation list ─────────────────────────── */}
       <div className="w-72 shrink-0 border-r border-border flex flex-col bg-card">
         <div className="h-14 flex items-center gap-2 px-4 border-b border-border shrink-0">
-          <Link href="/" className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors text-[10px] uppercase tracking-widest shrink-0">
+          <Link
+            href="/"
+            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors text-[10px] uppercase tracking-widest shrink-0"
+          >
             <ArrowLeft className="w-3 h-3" /> Home
           </Link>
           <div className="h-3 w-px bg-border shrink-0 mx-1" />
           <MessageSquare className="w-4 h-4 text-primary shrink-0" />
           <h1 className="text-xs font-bold uppercase tracking-widest text-foreground">Conversations</h1>
+          {convos.length > 0 && (
+            <span className="ml-auto text-[10px] text-muted-foreground">{convos.length}</span>
+          )}
         </div>
 
         <div className="p-3 border-b border-border shrink-0">
@@ -165,6 +207,7 @@ export default function Conversations() {
           ) : (
             filtered.map((c) => {
               const active = activeNumber === c.number;
+              const isOut = c.lastDirection === "outbound";
               return (
                 <button
                   key={c.number}
@@ -173,10 +216,11 @@ export default function Conversations() {
                     active ? "bg-primary/15 border-l-2 border-l-primary" : "hover:bg-secondary/40"
                   }`}
                 >
-                  {/* Avatar */}
-                  <div className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-xs font-bold mt-0.5 ${
-                    active ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
-                  }`}>
+                  <div
+                    className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-xs font-bold mt-0.5 ${
+                      active ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
+                    }`}
+                  >
                     {c.displayName.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -185,13 +229,15 @@ export default function Conversations() {
                       <span className="text-[10px] text-muted-foreground shrink-0">{msgTime(c.lastAt)}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      {c.lastDirection === "outbound" && (
-                        <CheckCircle2 className="w-3 h-3 text-muted-foreground shrink-0" />
-                      )}
-                      <p className="text-[11px] text-muted-foreground truncate leading-snug">{c.lastMessage}</p>
+                      {isOut && <CheckCircle2 className="w-3 h-3 text-muted-foreground shrink-0" />}
+                      <p className="text-[11px] text-muted-foreground truncate leading-snug">
+                        {isOut ? "You: " : ""}{c.lastMessage}
+                      </p>
                     </div>
                     {c.memberStatus && (
-                      <span className={`mt-1 inline-block text-[9px] px-1.5 rounded border ${statusColors[c.memberStatus] ?? statusColors.inactive}`}>
+                      <span
+                        className={`mt-1 inline-block text-[9px] px-1.5 rounded border ${statusColors[c.memberStatus] ?? statusColors.inactive}`}
+                      >
                         {c.memberStatus}
                       </span>
                     )}
@@ -212,8 +258,8 @@ export default function Conversations() {
       ) : (
         <div className="flex-1 flex flex-col min-w-0">
           {/* Thread header */}
-          <div className="h-14 px-5 flex items-center gap-3 border-b border-border shrink-0 bg-card">
-            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+          <div className="px-5 py-3 flex items-center gap-3 border-b border-border shrink-0 bg-card">
+            <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary shrink-0">
               {(thread?.member?.displayName ?? activeNumber).charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
@@ -223,20 +269,45 @@ export default function Conversations() {
               <div className="text-[10px] text-muted-foreground mt-0.5 font-mono">
                 {activeNumber.replace("whatsapp:", "")}
               </div>
+              {/* ICE contact */}
+              {thread?.member?.iceContactName && (
+                <div className="flex items-center gap-1 mt-1">
+                  <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                  <span className="text-[10px] text-amber-400">
+                    ICE: {thread.member.iceContactName}
+                    {thread.member.iceContactPhone ? ` · ${thread.member.iceContactPhone}` : ""}
+                  </span>
+                </div>
+              )}
             </div>
-            {thread?.member?.memberStatus && (
-              <Badge variant="outline" className={`text-[10px] ${statusColors[thread.member.memberStatus] ?? statusColors.inactive}`}>
-                {thread.member.memberStatus}
-              </Badge>
-            )}
-            {thread?.member && (
-              <a
-                href={`../members`}
-                className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 uppercase tracking-wider transition-colors"
-              >
-                Profile <ChevronRight className="w-3 h-3" />
-              </a>
-            )}
+            <div className="flex items-center gap-3 shrink-0">
+              {thread?.member?.memberStatus && (
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] ${statusColors[thread.member.memberStatus] ?? statusColors.inactive}`}
+                >
+                  {thread.member.memberStatus}
+                </Badge>
+              )}
+              {thread?.member?.iceContactPhone && (
+                <a
+                  href={`tel:${thread.member.iceContactPhone}`}
+                  className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 uppercase tracking-wider transition-colors"
+                  title={`Call ICE: ${thread.member.iceContactName}`}
+                >
+                  <Phone className="w-3 h-3" />
+                  ICE
+                </a>
+              )}
+              {thread?.member && (
+                <Link
+                  href={`/members/${thread.member.id}`}
+                  className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 uppercase tracking-wider transition-colors"
+                >
+                  Profile <ChevronRight className="w-3 h-3" />
+                </Link>
+              )}
+            </div>
           </div>
 
           {/* Message bubbles */}
@@ -249,18 +320,22 @@ export default function Conversations() {
               <div className="text-xs text-muted-foreground text-center py-8">No messages yet</div>
             ) : (
               thread.messages.map((msg) => {
-                const isOut = msg.direction === "outbound";
+                const out = isOutbound(msg);
                 return (
-                  <div key={msg.id} className={`flex ${isOut ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[72%] rounded-lg px-4 py-2.5 ${
-                      isOut
-                        ? "bg-[#005c4b] text-[#e9edef] rounded-br-sm"
-                        : "bg-[#202c33] text-[#e9edef] rounded-bl-sm"
-                    }`}>
+                  <div key={msg.id} className={`flex ${out ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[72%] rounded-lg px-4 py-2.5 ${
+                        out
+                          ? "bg-[#005c4b] text-[#e9edef] rounded-br-sm"
+                          : "bg-[#202c33] text-[#e9edef] rounded-bl-sm"
+                      }`}
+                    >
                       <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.body}</p>
-                      <div className={`text-[10px] mt-1 flex items-center gap-1 ${isOut ? "justify-end text-[#8696a0]" : "text-[#8696a0]"}`}>
+                      <div
+                        className={`text-[10px] mt-1 flex items-center gap-1 ${out ? "justify-end text-[#8696a0]" : "text-[#8696a0]"}`}
+                      >
                         {msgTime(msg.receivedAt)}
-                        {isOut && <CheckCircle2 className="w-3 h-3" />}
+                        {out && <CheckCircle2 className="w-3 h-3" />}
                       </div>
                     </div>
                   </div>
@@ -281,6 +356,14 @@ export default function Conversations() {
                 {qr}
               </button>
             ))}
+            <button
+              onClick={() => void draftWithAI()}
+              disabled={draftLoading || !thread?.messages.length}
+              className="text-[11px] px-3 py-1.5 rounded-full border border-primary/40 text-primary hover:bg-primary/10 transition-colors bg-primary/5 whitespace-nowrap flex items-center gap-1.5 disabled:opacity-40 ml-auto"
+            >
+              {draftLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              AI Draft
+            </button>
           </div>
 
           {/* Reply box */}
@@ -299,9 +382,7 @@ export default function Conversations() {
               disabled={!reply.trim() || sendMutation.isPending}
               className="shrink-0 w-10 h-10 bg-[#00a884] hover:bg-[#00a884]/90 rounded-full"
             >
-              {sendMutation.isPending
-                ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <Send className="w-4 h-4" />}
+              {sendMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </Button>
           </div>
         </div>
