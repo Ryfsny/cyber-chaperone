@@ -886,6 +886,10 @@ importers:
         version: 25.3.5
 
   scripts:
+    dependencies:
+      nodemailer:
+        specifier: ^8.0.7
+        version: 8.0.7
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
