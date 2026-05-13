@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from "react";
-import { Shield, Lock } from "lucide-react";
+import { Shield, Lock, User } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function LoginPage() {
   const { login, loginPending, loginError } = useAuth();
+  const [mode, setMode] = useState<"operator" | "admin">("operator");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
   const [forgotStatus, setForgotStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
@@ -11,12 +13,10 @@ export default function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLocalError(null);
-    if (!password) {
-      setLocalError("Please enter the operator password.");
-      return;
-    }
+    if (!password) { setLocalError("Please enter your password."); return; }
+    if (mode === "admin" && !username) { setLocalError("Please enter your username."); return; }
     try {
-      await login(password);
+      await login(mode === "admin" ? username.trim().toLowerCase() : undefined, password);
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : "Login failed.");
     }
@@ -38,24 +38,55 @@ export default function LoginPage() {
     <div className="min-h-screen bg-background flex items-center justify-center font-mono">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8 gap-4">
-          <img
-            src="/eblockwatch-logo.png"
-            alt="eblockwatch"
-            className="h-10 w-auto object-contain"
-          />
+          <img src="/eblockwatch-logo.png" alt="eblockwatch" className="h-10 w-auto object-contain" />
           <div className="flex items-center gap-2 text-foreground text-sm font-extrabold uppercase tracking-widest">
             <Shield className="w-4 h-4" />
             Situation Room
           </div>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="bg-card border border-border p-6 space-y-4"
-        >
+        {/* Mode toggle */}
+        <div className="flex mb-4 border border-border">
+          <button
+            type="button"
+            onClick={() => { setMode("operator"); setLocalError(null); }}
+            className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold transition-colors ${mode === "operator" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            National Operator
+          </button>
+          <button
+            type="button"
+            onClick={() => { setMode("admin"); setLocalError(null); }}
+            className={`flex-1 py-2 text-xs uppercase tracking-widest font-bold transition-colors ${mode === "admin" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Community Admin
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="bg-card border border-border p-6 space-y-4">
+          {mode === "admin" && (
+            <div>
+              <label className="block text-xs uppercase tracking-widest text-foreground font-bold mb-2">
+                Username
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoFocus
+                  className="w-full bg-background border border-border text-foreground text-sm pl-9 pr-3 py-2 focus:outline-none focus:border-primary transition-colors"
+                  placeholder="your.username"
+                  autoComplete="username"
+                />
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs uppercase tracking-widest text-foreground font-bold mb-2">
-              Operator Password
+              {mode === "operator" ? "Operator Password" : "Password"}
             </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -63,9 +94,10 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                autoFocus
+                autoFocus={mode === "operator"}
                 className="w-full bg-background border border-border text-foreground text-sm pl-9 pr-3 py-2 focus:outline-none focus:border-primary transition-colors"
                 placeholder="••••••••"
+                autoComplete="current-password"
               />
             </div>
           </div>
@@ -86,7 +118,7 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-4 text-center space-y-2">
-          {forgotStatus === "idle" && (
+          {mode === "operator" && forgotStatus === "idle" && (
             <button
               onClick={handleForgotPassword}
               className="text-xs text-muted-foreground hover:text-primary underline underline-offset-2 transition-colors"
@@ -94,18 +126,10 @@ export default function LoginPage() {
               Forgot password? Email it to me
             </button>
           )}
-          {forgotStatus === "sending" && (
-            <p className="text-xs text-muted-foreground">Sending…</p>
-          )}
-          {forgotStatus === "sent" && (
-            <p className="text-xs text-green-500">Password sent to your Gmail ✓</p>
-          )}
-          {forgotStatus === "error" && (
-            <p className="text-xs text-destructive">Could not send email. Try again.</p>
-          )}
-          <p className="text-xs text-muted-foreground">
-            Restricted access. Operators only.
-          </p>
+          {forgotStatus === "sending" && <p className="text-xs text-muted-foreground">Sending…</p>}
+          {forgotStatus === "sent" && <p className="text-xs text-green-500">Password sent to your Gmail ✓</p>}
+          {forgotStatus === "error" && <p className="text-xs text-destructive">Could not send email. Try again.</p>}
+          <p className="text-xs text-muted-foreground">Restricted access. Authorised users only.</p>
         </div>
       </div>
     </div>

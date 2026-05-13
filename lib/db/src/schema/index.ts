@@ -5,3 +5,5 @@ export * from "./conversation-states";
 export * from "./responders";
 export * from "./case-participants";
 export * from "./case-logs";
+export * from "./operator-admins";
+export * from "./broadcast-queue";

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, membersTable, tripsTable, messagesTable } from "@workspace/db";
 import { insertMemberSchema } from "@workspace/db";
 import { ilike, or, sql, asc, eq, desc } from "drizzle-orm";
+import { isNationalAdmin, getAdminScope } from "../middleware/require-auth.js";
 import twilio from "twilio";
 import nodemailer from "nodemailer";
 import { sendFacebookMessage } from "../facebook-service.js";
@@ -25,8 +26,18 @@ router.get("/members", async (req, res): Promise<void> => {
   const status = String(req.query.status ?? "").trim();
   const tier = String(req.query.tier ?? "").trim();
 
+  const nationalAdmin = isNationalAdmin(req);
+  const scope = getAdminScope(req);
+
   type WhereClause = ReturnType<typeof ilike> | ReturnType<typeof or> | ReturnType<typeof eq>;
   const conditions: WhereClause[] = [];
+
+  // ── Geo-scope enforcement: non-national admins can only see their area ────────
+  if (scope) {
+    if (scope.province) conditions.push(ilike(membersTable.province, scope.province));
+    if (scope.city)     conditions.push(ilike(membersTable.city, `%${scope.city}%`));
+    if (scope.suburb)   conditions.push(ilike(membersTable.suburb, `%${scope.suburb}%`));
+  }
 
   if (search) {
     const like = `%${search}%`;
@@ -35,18 +46,25 @@ router.get("/members", async (req, res): Promise<void> => {
         ilike(membersTable.displayName, like),
         ilike(membersTable.firstName, like),
         ilike(membersTable.lastName, like),
-        ilike(membersTable.mobile, like),
-        ilike(membersTable.email, like),
         ilike(membersTable.suburb, like),
         ilike(membersTable.city, like),
         ilike(membersTable.homeAddress, like),
         ilike(membersTable.whatsappNumber, like),
+        // Only include email/mobile in search for national admins
+        ...(nationalAdmin ? [
+          ilike(membersTable.mobile, like),
+          ilike(membersTable.email, like),
+        ] : []),
       )!
     );
   }
-  if (province) conditions.push(ilike(membersTable.province, province));
-  if (city)     conditions.push(ilike(membersTable.city, `%${city}%`));
-  if (suburb)   conditions.push(ilike(membersTable.suburb, `%${suburb}%`));
+  // Query filters — only allow province/city/suburb override for national admins
+  // (sub-national admins are already locked to their scope above)
+  if (nationalAdmin) {
+    if (province) conditions.push(ilike(membersTable.province, province));
+    if (city)     conditions.push(ilike(membersTable.city, `%${city}%`));
+    if (suburb)   conditions.push(ilike(membersTable.suburb, `%${suburb}%`));
+  }
   if (source === "none") {
     conditions.push(sql`source_batch IS NULL` as unknown as ReturnType<typeof eq>);
   } else if (source) {
@@ -75,8 +93,14 @@ router.get("/members", async (req, res): Promise<void> => {
   ]);
 
   const total = Number(countResult[0]?.count ?? 0);
+
+  // ── Strip sensitive fields for sub-national admins ────────────────────────────
+  const safeMembers = nationalAdmin
+    ? members
+    : members.map(({ email: _e, mobile: _m, ...rest }) => rest);
+
   res.json({
-    data: members,
+    data: safeMembers,
     pagination: { page, limit, total, pages: Math.ceil(total / limit) },
   });
 });

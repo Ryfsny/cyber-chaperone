@@ -15,6 +15,8 @@ import MemberProfile from "@/pages/member-profile";
 import Broadcast from "@/pages/broadcast";
 import OperatorBroadcast from "@/pages/operator-broadcast";
 import Conversations from "@/pages/conversations";
+import AdminManagement from "@/pages/admin-management";
+import BroadcastApprovals from "@/pages/broadcast-approvals";
 import { Layout } from "@/components/layout/layout";
 import { AuthGuard } from "@/components/auth-guard";
 
@@ -35,6 +37,8 @@ function Router() {
         <Route path="/broadcast" component={Broadcast} />
         <Route path="/operator/broadcast" component={OperatorBroadcast} />
         <Route path="/conversations" component={Conversations} />
+        <Route path="/admin/admins" component={AdminManagement} />
+        <Route path="/admin/approvals" component={BroadcastApprovals} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

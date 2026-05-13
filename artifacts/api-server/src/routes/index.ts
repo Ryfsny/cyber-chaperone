@@ -17,6 +17,8 @@ import arnieChatRouter from "./arnie-chat";
 import memberPortalRouter from "./member-portal";
 import paystackRouter from "./paystack";
 import paystackAdminRouter from "./paystack-admin";
+import operatorAdminsRouter from "./operator-admins";
+import broadcastQueueRouter from "./broadcast-queue";
 import { requireAuth } from "../middleware/require-auth";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -49,5 +51,7 @@ router.use(caseRouter);
 router.use(broadcastRouter);
 router.use(conversationsRouter);
 router.use(paystackAdminRouter);  // Paystack sync + status (operator only)
+router.use(operatorAdminsRouter); // Admin management (national only)
+router.use(broadcastQueueRouter); // Broadcast approval queue
 
 export default router;
