@@ -1,6 +1,9 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
-import { Mail, MessageSquare, Phone, CheckSquare, Square, Send, Search, RefreshCw } from "lucide-react";
+import {
+  Mail, MessageSquare, Phone, CheckSquare, Square,
+  Send, Search, RefreshCw, MapPin, X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +19,9 @@ interface Member {
   memberStatus: string;
   email: string | null;
   mobile: string | null;
+  province: string | null;
+  city: string | null;
+  suburb: string | null;
 }
 
 interface ChannelResult {
@@ -54,8 +60,55 @@ function statusIcon(s: "sent" | "failed" | "skipped") {
   return "—";
 }
 
+function distinct(arr: (string | null | undefined)[]): string[] {
+  return [...new Set(arr.filter((v): v is string => !!v?.trim()))].sort();
+}
+
+/** Native select styled to match the dark theme */
+function GeoSelect({
+  value,
+  onChange,
+  options,
+  placeholder,
+  disabled,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder: string;
+  disabled?: boolean;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled || options.length === 0}
+      className={cn(
+        "flex-1 min-w-0 h-8 rounded-sm border border-border bg-background px-2 text-xs text-foreground",
+        "focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary",
+        "disabled:opacity-40 disabled:cursor-not-allowed",
+        value ? "text-foreground" : "text-muted-foreground",
+      )}
+    >
+      <option value="">{disabled || options.length === 0 ? "—" : placeholder}</option>
+      {options.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export default function OperatorBroadcast() {
   const [search, setSearch] = useState("");
+
+  // ── Geographic filters ─────────────────────────────────────────────────────
+  const [geoProvince, setGeoProvince] = useState("");
+  const [geoCity, setGeoCity] = useState("");
+  const [geoSuburb, setGeoSuburb] = useState("");
+
+  // ── Compose / send state ───────────────────────────────────────────────────
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [message, setMessage] = useState("");
   const [channels, setChannels] = useState({ email: true, sms: false, whatsapp: false });
@@ -71,18 +124,61 @@ export default function OperatorBroadcast() {
     },
   });
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return members;
-    const q = search.toLowerCase();
-    return members.filter(
-      (m) =>
-        m.displayName.toLowerCase().includes(q) ||
-        (m.email ?? "").toLowerCase().includes(q) ||
-        (m.mobile ?? "").includes(q) ||
-        m.whatsappNumber.includes(q)
-    );
-  }, [members, search]);
+  // ── Derive cascading options from the full member set ──────────────────────
+  const provinces = useMemo(() => distinct(members.map((m) => m.province)), [members]);
 
+  const cities = useMemo(() => {
+    const pool = geoProvince ? members.filter((m) => m.province === geoProvince) : members;
+    return distinct(pool.map((m) => m.city));
+  }, [members, geoProvince]);
+
+  const suburbs = useMemo(() => {
+    let pool = members;
+    if (geoProvince) pool = pool.filter((m) => m.province === geoProvince);
+    if (geoCity)     pool = pool.filter((m) => m.city === geoCity);
+    return distinct(pool.map((m) => m.suburb));
+  }, [members, geoProvince, geoCity]);
+
+  // ── Members after geo + text search ───────────────────────────────────────
+  const filtered = useMemo(() => {
+    let pool = members;
+    if (geoProvince) pool = pool.filter((m) => m.province === geoProvince);
+    if (geoCity)     pool = pool.filter((m) => m.city === geoCity);
+    if (geoSuburb)   pool = pool.filter((m) => m.suburb === geoSuburb);
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      pool = pool.filter(
+        (m) =>
+          m.displayName.toLowerCase().includes(q) ||
+          (m.email ?? "").toLowerCase().includes(q) ||
+          (m.mobile ?? "").includes(q) ||
+          m.whatsappNumber.includes(q),
+      );
+    }
+    return pool;
+  }, [members, geoProvince, geoCity, geoSuburb, search]);
+
+  const geoActive = !!(geoProvince || geoCity || geoSuburb);
+
+  function clearGeo() {
+    setGeoProvince("");
+    setGeoCity("");
+    setGeoSuburb("");
+  }
+
+  function handleProvinceChange(v: string) {
+    setGeoProvince(v);
+    setGeoCity("");
+    setGeoSuburb("");
+  }
+
+  function handleCityChange(v: string) {
+    setGeoCity(v);
+    setGeoSuburb("");
+  }
+
+  // ── Checkbox helpers ───────────────────────────────────────────────────────
   const allFilteredSelected = filtered.length > 0 && filtered.every((m) => selected.has(m.id));
 
   function toggleMember(id: number) {
@@ -114,6 +210,7 @@ export default function OperatorBroadcast() {
     setChannels((prev) => ({ ...prev, [ch]: !prev[ch] }));
   }
 
+  // ── Send ──────────────────────────────────────────────────────────────────
   const mutation = useMutation<SendResponse, Error, void>({
     mutationFn: async () => {
       const res = await fetch(`${BASE}/api/broadcast/multi`, {
@@ -131,14 +228,8 @@ export default function OperatorBroadcast() {
       }
       return res.json();
     },
-    onSuccess: (data) => {
-      setSendResult(data);
-      setSendError(null);
-    },
-    onError: (err) => {
-      setSendError(err.message);
-      setSendResult(null);
-    },
+    onSuccess: (data) => { setSendResult(data); setSendError(null); },
+    onError: (err) => { setSendError(err.message); setSendResult(null); },
   });
 
   const canSend =
@@ -147,9 +238,13 @@ export default function OperatorBroadcast() {
     (channels.email || channels.sms || channels.whatsapp) &&
     !mutation.isPending;
 
+  // ── Location label for header breadcrumb ──────────────────────────────────
+  const geoLabel = [geoProvince, geoCity, geoSuburb].filter(Boolean).join(" › ") || "All Members";
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Header */}
+
+      {/* ── Page header ── */}
       <div className="shrink-0 px-4 py-3 border-b border-border bg-card flex items-center gap-3">
         <Send className="w-4 h-4 text-primary shrink-0" />
         <div>
@@ -172,18 +267,88 @@ export default function OperatorBroadcast() {
 
       <div className="flex-1 overflow-auto p-4 space-y-5">
 
+        {/* ── Geographic drill-down ── */}
+        <section>
+          <div className="flex items-center gap-2 mb-2">
+            <MapPin className="w-3 h-3 text-primary shrink-0" />
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
+              Geographic Filter
+            </span>
+            {geoActive && (
+              <button
+                onClick={clearGeo}
+                className="ml-auto flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-3 h-3" /> Clear
+              </button>
+            )}
+          </div>
+
+          {/* Breadcrumb */}
+          <div className="text-[10px] text-primary font-mono mb-2 min-h-[14px]">
+            {geoLabel}
+          </div>
+
+          {/* Cascading selects */}
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="text-[9px] uppercase tracking-wider text-muted-foreground/70 block mb-1">
+                Province
+              </label>
+              <GeoSelect
+                value={geoProvince}
+                onChange={handleProvinceChange}
+                options={provinces}
+                placeholder="All provinces"
+              />
+            </div>
+            <div>
+              <label className="text-[9px] uppercase tracking-wider text-muted-foreground/70 block mb-1">
+                City / Town
+              </label>
+              <GeoSelect
+                value={geoCity}
+                onChange={handleCityChange}
+                options={cities}
+                placeholder="All cities"
+                disabled={!geoProvince}
+              />
+            </div>
+            <div>
+              <label className="text-[9px] uppercase tracking-wider text-muted-foreground/70 block mb-1">
+                Suburb
+              </label>
+              <GeoSelect
+                value={geoSuburb}
+                onChange={setGeoSuburb}
+                options={suburbs}
+                placeholder="All suburbs"
+                disabled={!geoCity}
+              />
+            </div>
+          </div>
+
+          {provinces.length === 0 && !isLoading && (
+            <p className="text-[10px] text-muted-foreground/60 mt-2 italic">
+              No location data on members yet — fill in Province / City / Suburb in each member profile to enable geographic targeting.
+            </p>
+          )}
+        </section>
+
         {/* ── Member list ── */}
         <section>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
-              Members
+              {isLoading
+                ? "Loading…"
+                : `Showing ${filtered.length} of ${members.length} member${members.length !== 1 ? "s" : ""}`}
             </span>
             {selected.size > 0 && (
               <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
                 {selected.size} selected
               </Badge>
             )}
-            <div className="ml-auto flex gap-2">
+            <div className="ml-auto flex gap-3">
               <button
                 onClick={allFilteredSelected ? deselectAll : selectAll}
                 className="text-[10px] uppercase tracking-wider text-primary hover:text-primary/80 font-bold transition-colors"
@@ -199,7 +364,7 @@ export default function OperatorBroadcast() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search members…"
+              placeholder="Search by name, email or phone…"
               className="pl-8 h-8 text-xs bg-background border-border"
             />
           </div>
@@ -209,18 +374,21 @@ export default function OperatorBroadcast() {
             {isLoading ? (
               <div className="p-6 text-center text-muted-foreground text-xs">Loading members…</div>
             ) : filtered.length === 0 ? (
-              <div className="p-6 text-center text-muted-foreground text-xs">No members found</div>
+              <div className="p-6 text-center text-muted-foreground text-xs">
+                No members match the current filters
+              </div>
             ) : (
-              <div className="divide-y divide-border max-h-64 overflow-y-auto">
+              <div className="divide-y divide-border max-h-72 overflow-y-auto">
                 {filtered.map((m) => {
                   const isSelected = selected.has(m.id);
+                  const locationParts = [m.suburb, m.city, m.province].filter(Boolean);
                   return (
                     <button
                       key={m.id}
                       onClick={() => toggleMember(m.id)}
                       className={cn(
                         "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors",
-                        isSelected ? "bg-primary/10" : "hover:bg-secondary/50"
+                        isSelected ? "bg-primary/10" : "hover:bg-secondary/50",
                       )}
                     >
                       <span className={cn("shrink-0", isSelected ? "text-primary" : "text-muted-foreground")}>
@@ -233,15 +401,17 @@ export default function OperatorBroadcast() {
                             variant="outline"
                             className={cn(
                               "text-[9px] px-1 py-0 h-3.5 shrink-0 uppercase",
-                              m.memberStatus === "verified" ? "border-green-600/50 text-green-500" :
-                              m.memberStatus === "active" ? "border-blue-600/50 text-blue-400" :
-                              "border-border text-muted-foreground"
+                              m.memberStatus === "verified"
+                                ? "border-green-600/50 text-green-500"
+                                : m.memberStatus === "active"
+                                ? "border-blue-600/50 text-blue-400"
+                                : "border-border text-muted-foreground",
                             )}
                           >
                             {m.memberStatus}
                           </Badge>
                         </div>
-                        <div className="flex items-center gap-3 mt-0.5">
+                        <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                           {m.email && (
                             <span className="text-[10px] text-muted-foreground flex items-center gap-1 truncate">
                               <Mail className="w-2.5 h-2.5 shrink-0" /> {m.email}
@@ -252,7 +422,13 @@ export default function OperatorBroadcast() {
                               <Phone className="w-2.5 h-2.5" /> {m.mobile}
                             </span>
                           )}
-                          {!m.email && !m.mobile && (
+                          {locationParts.length > 0 && (
+                            <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1 shrink-0">
+                              <MapPin className="w-2.5 h-2.5" />
+                              {locationParts.join(", ")}
+                            </span>
+                          )}
+                          {!m.email && !m.mobile && locationParts.length === 0 && (
                             <span className="text-[10px] text-muted-foreground/50 italic">
                               {m.whatsappNumber}
                             </span>
@@ -306,7 +482,7 @@ export default function OperatorBroadcast() {
                     "flex items-center gap-2 px-4 py-2 rounded-sm border text-xs font-bold uppercase tracking-wider transition-colors",
                     on
                       ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                      : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30",
                   )}
                 >
                   <Icon className="w-3.5 h-3.5" />
@@ -341,7 +517,10 @@ export default function OperatorBroadcast() {
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                Send to {selected.size > 0 ? `${selected.size} Member${selected.size !== 1 ? "s" : ""}` : "Selected Members"}
+                Send to{" "}
+                {selected.size > 0
+                  ? `${selected.size} Member${selected.size !== 1 ? "s" : ""}`
+                  : "Selected Members"}
               </>
             )}
           </Button>
@@ -370,6 +549,9 @@ export default function OperatorBroadcast() {
             <div className="bg-green-950/30 border border-green-800/40 rounded-sm p-4 mb-3">
               <p className="text-green-400 text-xs font-bold uppercase tracking-wider mb-1">
                 Sent to {sendResult.total} member{sendResult.total !== 1 ? "s" : ""}
+                {geoActive && (
+                  <span className="text-green-400/70 font-normal ml-2">· {geoLabel}</span>
+                )}
               </p>
               <div className="flex flex-wrap gap-4 mt-1">
                 {channels.email && (
@@ -424,6 +606,7 @@ export default function OperatorBroadcast() {
             </div>
           </section>
         )}
+
       </div>
     </div>
   );
