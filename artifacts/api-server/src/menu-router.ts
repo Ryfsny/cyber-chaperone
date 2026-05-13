@@ -2,6 +2,7 @@ import { db, membersTable, tripsTable, messagesTable, conversationStatesTable, r
 import { and, eq, ne, desc } from "drizzle-orm";
 import twilio from "twilio";
 import { enrichTripWithRoute, calculateRouteInfo, reverseGeocodeCoords, reverseGeocodeStreetAddress, minutesToSastTime, type RouteInfo } from "./route-service.js";
+import { calculateGoogleMapsRoute } from "./google-maps-service.js";
 import { withMenu } from "./message-utils.js";
 import { sendOperatorEmail, type EmailCategory } from "./email-service.js";
 
@@ -86,7 +87,7 @@ const STEP_REG_PROVINCE = "REG_PROVINCE";
 // ── Keyword detectors ─────────────────────────────────────────────────────────
 
 const MAIN_MENU_TRIGGER = /^(hi|hello|menu|main menu|start|0)$/i;
-const GLOBAL_MENU_OVERRIDE = /^(hi|hello|menu|main menu|start|0|join)$/i;
+const GLOBAL_MENU_OVERRIDE = /^(hi|hello|hey|hallo|menu|main menu|start|0|join)$/i;
 const JOIN_PREFIX = /^join\s+/i;
 const CC_KEYWORDS = /\b(cyber chaperone|travel|trip|start trip)\b/i;
 const AMBIGUOUS_DEST_PATTERN =
@@ -251,6 +252,38 @@ async function sendOperatorMirror(twilioNumber: string, body: string, emailCateg
   }
 }
 
+// ── Emergency alert — always fires directly to founder ────────────────────────
+// Unlike sendOperatorMirror (gated by OPERATOR_MIRROR_MODE), this always sends
+// to +27825611065 regardless of environment configuration.
+const FOUNDER_WHATSAPP = "whatsapp:+27825611065";
+
+async function sendEmergencyAlert(
+  twilioNumber: string,
+  memberName: string,
+  memberPhone: string,
+): Promise<void> {
+  const e164 = memberPhone.replace("whatsapp:+", "");
+  const msg = [
+    `🚨 EMERGENCY — ${memberName}`,
+    `📞 ${memberPhone.replace("whatsapp:", "")}`,
+    `RESPOND NOW`,
+    `👉 wa.me/${e164}`,
+  ].join("\n");
+
+  // Always direct-send to founder (skip if the member IS the founder)
+  if (memberPhone !== FOUNDER_WHATSAPP) {
+    try {
+      const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+      await client.messages.create({ from: twilioNumber, to: FOUNDER_WHATSAPP, body: msg });
+    } catch {
+      // Best-effort
+    }
+  }
+
+  // Also fire the standard operator mirror (sends email + conditional WhatsApp to OPERATOR_WHATSAPP_NUMBER)
+  await sendOperatorMirror(twilioNumber, msg, "red-alert");
+}
+
 // ── Conversation state ────────────────────────────────────────────────────────
 
 async function getConvState(whatsappNumber: string): Promise<ConvState> {
@@ -339,6 +372,7 @@ async function createTrip(
   messageSid: string | null,
   log: MenuContext["log"],
   routeInfo?: RouteInfo | null,
+  checkpointTowns?: string[],
 ): Promise<void> {
   const title = `${startLocation} → ${destination}`;
   const effectiveEta = eta ?? routeInfo?.etaTime ?? null;
@@ -396,14 +430,23 @@ async function createTrip(
 
   const name = member?.displayName ?? from;
 
-  const normEta = effectiveEta ? normaliseEta(effectiveEta) : null;
-  const nextCheckin = normEta ? etaMinusOneHour(normEta) : null;
-  const checkinLine = nextCheckin ? ` Your next check-in is at ${nextCheckin}.` : "";
+  // Build checkpoint line: prefer Google Maps towns, fall back to OSRM labels
+  const effectiveTowns =
+    (checkpointTowns && checkpointTowns.length > 0)
+      ? checkpointTowns
+      : (routeInfo?.checkpoints ?? [])
+          .filter((cp) => cp.label !== "PRE_ARRIVAL" && cp.label !== "First checkpoint" && cp.label !== "Second checkpoint")
+          .map((cp) => cp.label);
+
+  const cpLine =
+    effectiveTowns.length > 0
+      ? `\n\nWe will check in with you at ${effectiveTowns.join(", ")}.`
+      : "";
 
   await sendWhatsApp(
     from,
     to,
-    `✅ Your trip is active. Trip ID: ${newTrip.id}.${checkinLine} Reply STOP at any time to end your trip.`,
+    `Your trip is now active.${cpLine} Reply ARRIVED when you reach ${destination}.\n\nReply 0 for Main Menu.`,
   );
 
   await sendWhatsApp(from, to, mainMenuText(name, member));
@@ -791,22 +834,22 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
     member?.membershipTier ?? null,
   );
   return [
-    `Hi ${name} 👋 I'm AI Arnie — Andre's digital safety sidekick at eblockwatch.`,
+    `Hi ${name}, I'm AI Arnie, Andre Snyman's digital wingman. We are here to make you safer.`,
     ``,
     statusLine,
-    `We are here to keep you and your family safer. What can I help you with today?`,
+    ``,
+    `Please choose an option:`,
     ``,
     `1. What is eblockwatch?`,
-    `2. Membership options`,
+    `2. Membership Options`,
     `3. Activate my membership`,
     `4. Update my profile`,
-    `5. Travel with Cyber Chaperone 🛡️`,
-    `6. eblockshop — safer products for you`,
-    `7. Speak to a human`,
+    `5. Travel with Cyber Chaperone`,
+    `6. eblockshop`,
+    `7. Request contact from a human`,
     ``,
-    `🚨 URGENT? Reply 10 — we will get a human on it right away.`,
-    ``,
-    `Reply with a number to choose.`,
+    `EMERGENCY? Reply 10.`,
+    `Reply 0 to return to this menu.`,
   ].join("\n");
 }
 
@@ -1507,16 +1550,19 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
       return;
     }
 
-    // Calculate route synchronously so ETA and checkpoints appear in confirmation
-    const routeInfo = await calculateRouteInfo(
-      startLocation,
-      destination,
-      startLat && startLon ? { lat: startLat, lon: startLon } : undefined,
-    );
+    // Fetch Google Maps checkpoints + OSRM route in parallel
+    const [gmapResult, routeInfo] = await Promise.all([
+      calculateGoogleMapsRoute(startLocation, destination),
+      calculateRouteInfo(
+        startLocation,
+        destination,
+        startLat && startLon ? { lat: startLat, lon: startLon } : undefined,
+      ),
+    ]);
 
-    const eta = routeInfo?.etaTime ?? null;
-    log.info({ from, pendingData: pending, eta, routeAvailable: !!routeInfo }, "Trip flow: departure confirmed (leaving now) — creating trip");
-    await createTrip(from, to, member, startLocation, destination, eta, body, messageSid, log, routeInfo);
+    const eta = gmapResult?.etaTime ?? routeInfo?.etaTime ?? null;
+    log.info({ from, pendingData: pending, eta, routeAvailable: !!routeInfo, gmapCheckpoints: gmapResult?.checkpointTowns.length ?? 0 }, "Trip flow: departure confirmed (leaving now) — creating trip");
+    await createTrip(from, to, member, startLocation, destination, eta, body, messageSid, log, routeInfo, gmapResult?.checkpointTowns);
     return;
   }
 
@@ -1537,14 +1583,17 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
       return;
     }
 
-    const routeInfo = await calculateRouteInfo(
-      startLocation,
-      destination,
-      startLat && startLon ? { lat: startLat, lon: startLon } : undefined,
-    );
+    const [gmapResult2, routeInfo] = await Promise.all([
+      calculateGoogleMapsRoute(startLocation, destination),
+      calculateRouteInfo(
+        startLocation,
+        destination,
+        startLat && startLon ? { lat: startLat, lon: startLon } : undefined,
+      ),
+    ]);
 
-    log.info({ from, pendingData: pending, statedEta, routeAvailable: !!routeInfo }, "Trip flow: departure time set — creating trip");
-    await createTrip(from, to, member, startLocation, destination, statedEta, body, messageSid, log, routeInfo);
+    log.info({ from, pendingData: pending, statedEta, routeAvailable: !!routeInfo, gmapCheckpoints: gmapResult2?.checkpointTowns.length ?? 0 }, "Trip flow: departure time set — creating trip");
+    await createTrip(from, to, member, startLocation, destination, statedEta, body, messageSid, log, routeInfo, gmapResult2?.checkpointTowns);
     return;
   }
 
@@ -1671,29 +1720,8 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
       await db.update(tripsTable).set({ status: "red", nextAction: "Immediate human review." }).where(eq(tripsTable.id, activeTrip.id));
     }
     await resetConvState(from);
-    await sendWhatsApp(from, to, [
-      `${name}, we are on it. 🆘`,
-      ``,
-      `Andre has been notified and the Situation Room is on alert. You are not alone.`,
-      ``,
-      `Please reply with one number:`,
-      ``,
-      `1. 🚨 I am in danger`,
-      `2. 🚗 I have broken down`,
-      `3. I am lost`,
-      `4. Medical issue`,
-      `5. Call me`,
-      ``,
-      `Reply 0 for Main Menu.`,
-    ].join("\n"));
-    await sendOperatorMirror(to, [
-      `🚨 CYBER CHAPERONE — IMMEDIATE HUMAN REVIEW`,
-      `Member: ${name}`,
-      `Known member: ${member?.isKnown ? "YES" : "NO"}`,
-      activeTrip ? `Trip: ${activeTrip.title} (ID: ${activeTrip.id})` : `Trip: None`,
-      `Status: RED`,
-      `Next action: Call member immediately.`,
-    ].join("\n"));
+    await sendWhatsApp(from, to, `We have flagged this as urgent. A human support response is being escalated now. If you can, send your location pin 📍 and a short message telling us what is wrong.`);
+    await sendEmergencyAlert(to, name, from);
     return true;
   }
 
@@ -2215,29 +2243,8 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
       await db.update(tripsTable).set({ status: "red", nextAction: "Immediate human review." }).where(eq(tripsTable.id, activeTrip.id));
     }
     await resetConvState(from);
-    await sendWhatsApp(from, to, [
-      `${name}, we are on it. 🆘`,
-      ``,
-      `Andre has been notified and the Situation Room is on alert. You are not alone.`,
-      ``,
-      `Please reply with one number:`,
-      ``,
-      `1. 🚨 I am in danger`,
-      `2. 🚗 I have broken down`,
-      `3. I am lost`,
-      `4. Medical issue`,
-      `5. Call me`,
-      ``,
-      `Reply 0 for Main Menu.`,
-    ].join("\n"));
-    await sendOperatorMirror(to, [
-      `🚨 CYBER CHAPERONE — IMMEDIATE HUMAN REVIEW`,
-      `Member: ${name}`,
-      `Known member: ${member?.isKnown ? "YES" : "NO"}`,
-      activeTrip ? `Trip: ${activeTrip.title} (ID: ${activeTrip.id})` : `Trip: None`,
-      `Status: RED`,
-      `Next action: Call member immediately.`,
-    ].join("\n"));
+    await sendWhatsApp(from, to, `We have flagged this as urgent. A human support response is being escalated now. If you can, send your location pin 📍 and a short message telling us what is wrong.`);
+    await sendEmergencyAlert(to, name, from);
     return true;
   }
 
@@ -2299,6 +2306,21 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     await sendWhatsApp(from, to, mainMenuText(name, member));
     await saveMessage(from, to, body, messageSid, null);
     log.info({ from, body: trimmed, handler: "GLOBAL_MENU_OVERRIDE" }, "menu-router: MENU_OVERRIDE triggered");
+    return { handled: true };
+  }
+
+  // GLOBAL EMERGENCY "10" — fires before distress, flow routing, and all other handlers.
+  // Any message that is exactly "10" triggers the FLOW 11 emergency sequence.
+  if (/^10$/.test(trimmed)) {
+    const activeTrip = await findActiveTrip(from);
+    await saveMessage(from, to, body, messageSid, activeTrip?.id ?? null);
+    if (activeTrip) {
+      await db.update(tripsTable).set({ status: "red", nextAction: "Immediate human review." }).where(eq(tripsTable.id, activeTrip.id));
+    }
+    await resetConvState(from);
+    await sendWhatsApp(from, to, `We have flagged this as urgent. A human support response is being escalated now. If you can, send your location pin 📍 and a short message telling us what is wrong.`);
+    await sendEmergencyAlert(to, name, from);
+    log.info({ from, handler: "GLOBAL_EMERGENCY_10" }, "menu-router: global emergency 10 triggered");
     return { handled: true };
   }
 

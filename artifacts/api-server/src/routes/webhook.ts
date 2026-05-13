@@ -459,7 +459,7 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
         await sendReply(
           from,
           to,
-          withMenu("I don't yet have your member profile linked to this WhatsApp number. Please reply with your name, surname, and registered eblockwatch cellphone number so we can connect your trip to your profile."),
+          "Hi! To use Cyber Chaperone, please register first. Reply 3 to activate your membership or visit cyber-chaperone-r--ryfsny.replit.app/website",
         );
 
         await sendOperatorMirror(
@@ -595,6 +595,63 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
         res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
         return;
       }
+    }
+
+    // ── Operator command channel — +27825611065 bypass ───────────────────────
+    // When Andre's number messages the bot, respond with live system status
+    // and operator commands instead of the regular AI Arnie member flow.
+    const OPERATOR_DIRECT = "whatsapp:+27825611065";
+    if (from === OPERATOR_DIRECT) {
+      const [activeTrips, memberCount] = await Promise.all([
+        db
+          .select({
+            id: tripsTable.id,
+            title: tripsTable.title,
+            status: tripsTable.status,
+            travelerName: tripsTable.travelerName,
+          })
+          .from(tripsTable)
+          .where(ne(tripsTable.status, "completed"))
+          .orderBy(desc(tripsTable.createdAt))
+          .limit(8),
+        db.select({ count: count() }).from(membersTable),
+      ]);
+
+      const cmd = body.trim().toUpperCase();
+      const closeMatch = cmd.match(/^CLOSE\s+(\d+)$/);
+
+      if (closeMatch) {
+        const tripId = parseInt(closeMatch[1], 10);
+        await db
+          .update(tripsTable)
+          .set({ status: "completed", nextAction: "Closed by operator command." })
+          .where(eq(tripsTable.id, tripId));
+        await sendReply(from, to, `✅ Trip #${tripId} marked complete.`);
+      } else {
+        const tripLines =
+          activeTrips.length > 0
+            ? activeTrips
+                .map((t) => `• [${t.status.toUpperCase()}] #${t.id} ${t.travelerName} — ${t.title}`)
+                .join("\n")
+            : "No active trips.";
+        const total = memberCount[0]?.count ?? 0;
+        await sendReply(from, to, [
+          `🛡️ CYBER CHAPERONE — LIVE STATUS`,
+          ``,
+          `Active trips: ${activeTrips.length}`,
+          `Total members: ${total}`,
+          ``,
+          tripLines,
+          ``,
+          `Commands:`,
+          `CLOSE [id] — close a trip`,
+          `(Any other message refreshes status)`,
+        ].join("\n"));
+      }
+
+      res.set("Content-Type", "text/xml");
+      res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+      return;
     }
 
     // ── Menu router — stateful conversation flows ─────────────────────────────
