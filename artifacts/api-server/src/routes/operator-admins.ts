@@ -5,6 +5,9 @@
  * PATCH /api/operator-admins/:id    — update an admin
  * DELETE /api/operator-admins/:id   — delete an admin
  * POST /api/operator-admins/:id/reset-password — change password
+ *
+ * NOTE: operator_admins table may not exist in production until the production DB
+ * is unfrozen. All handlers gracefully return empty/error responses rather than crashing.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import bcrypt from "bcryptjs";
@@ -22,23 +25,35 @@ function nationalOnly(req: Request, res: Response): boolean {
   return true;
 }
 
+function isMissingTable(err: unknown): boolean {
+  return String(err).includes("relation") || String(err).includes("does not exist") || String(err).includes("42P01");
+}
+
 const VALID_ROLES = ["national", "provincial", "city", "suburb", "street"] as const;
 
 router.get("/operator-admins", async (req: Request, res: Response): Promise<void> => {
   if (!nationalOnly(req, res)) return;
-  const admins = await db.select({
-    id: operatorAdminsTable.id,
-    username: operatorAdminsTable.username,
-    displayName: operatorAdminsTable.displayName,
-    role: operatorAdminsTable.role,
-    province: operatorAdminsTable.province,
-    city: operatorAdminsTable.city,
-    suburb: operatorAdminsTable.suburb,
-    street: operatorAdminsTable.street,
-    email: operatorAdminsTable.email,
-    createdAt: operatorAdminsTable.createdAt,
-  }).from(operatorAdminsTable);
-  res.json(admins);
+  try {
+    const admins = await db.select({
+      id: operatorAdminsTable.id,
+      username: operatorAdminsTable.username,
+      displayName: operatorAdminsTable.displayName,
+      role: operatorAdminsTable.role,
+      province: operatorAdminsTable.province,
+      city: operatorAdminsTable.city,
+      suburb: operatorAdminsTable.suburb,
+      street: operatorAdminsTable.street,
+      email: operatorAdminsTable.email,
+      createdAt: operatorAdminsTable.createdAt,
+    }).from(operatorAdminsTable);
+    res.json(admins);
+  } catch (err) {
+    if (isMissingTable(err)) {
+      res.json([]); // Tables not yet in production — return empty list
+    } else {
+      res.status(500).json({ error: String(err) });
+    }
+  }
 });
 
 router.post("/operator-admins", async (req: Request, res: Response): Promise<void> => {
@@ -88,7 +103,9 @@ router.post("/operator-admins", async (req: Request, res: Response): Promise<voi
     });
     res.status(201).json(admin);
   } catch (err) {
-    if (String(err).includes("unique")) {
+    if (isMissingTable(err)) {
+      res.status(503).json({ error: "Admin table not yet available in production. Please contact Replit support to unfreeze the production DB." });
+    } else if (String(err).includes("unique")) {
       res.status(409).json({ error: "Username already exists." });
     } else {
       res.status(500).json({ error: String(err) });
@@ -121,18 +138,26 @@ router.patch("/operator-admins/:id", async (req: Request, res: Response): Promis
   if (street !== undefined)   updates.street = street?.trim() || null;
   if (email !== undefined)    updates.email = email?.trim() || null;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [updated] = await db.update(operatorAdminsTable).set(updates as any).where(eq(operatorAdminsTable.id, id)).returning({
-    id: operatorAdminsTable.id,
-    username: operatorAdminsTable.username,
-    displayName: operatorAdminsTable.displayName,
-    role: operatorAdminsTable.role,
-    province: operatorAdminsTable.province,
-    city: operatorAdminsTable.city,
-    suburb: operatorAdminsTable.suburb,
-  });
-  if (!updated) { res.status(404).json({ error: "Admin not found." }); return; }
-  res.json(updated);
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [updated] = await db.update(operatorAdminsTable).set(updates as any).where(eq(operatorAdminsTable.id, id)).returning({
+      id: operatorAdminsTable.id,
+      username: operatorAdminsTable.username,
+      displayName: operatorAdminsTable.displayName,
+      role: operatorAdminsTable.role,
+      province: operatorAdminsTable.province,
+      city: operatorAdminsTable.city,
+      suburb: operatorAdminsTable.suburb,
+    });
+    if (!updated) { res.status(404).json({ error: "Admin not found." }); return; }
+    res.json(updated);
+  } catch (err) {
+    if (isMissingTable(err)) {
+      res.status(503).json({ error: "Admin table not yet available in production." });
+    } else {
+      res.status(500).json({ error: String(err) });
+    }
+  }
 });
 
 router.post("/operator-admins/:id/reset-password", async (req: Request, res: Response): Promise<void> => {
@@ -146,21 +171,37 @@ router.post("/operator-admins/:id/reset-password", async (req: Request, res: Res
     return;
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
-  const [updated] = await db.update(operatorAdminsTable)
-    .set({ passwordHash, updatedAt: new Date() })
-    .where(eq(operatorAdminsTable.id, id))
-    .returning({ id: operatorAdminsTable.id });
-  if (!updated) { res.status(404).json({ error: "Admin not found." }); return; }
-  res.json({ ok: true });
+  try {
+    const passwordHash = await bcrypt.hash(password, 12);
+    const [updated] = await db.update(operatorAdminsTable)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(operatorAdminsTable.id, id))
+      .returning({ id: operatorAdminsTable.id });
+    if (!updated) { res.status(404).json({ error: "Admin not found." }); return; }
+    res.json({ ok: true });
+  } catch (err) {
+    if (isMissingTable(err)) {
+      res.status(503).json({ error: "Admin table not yet available in production." });
+    } else {
+      res.status(500).json({ error: String(err) });
+    }
+  }
 });
 
 router.delete("/operator-admins/:id", async (req: Request, res: Response): Promise<void> => {
   if (!nationalOnly(req, res)) return;
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  await db.delete(operatorAdminsTable).where(eq(operatorAdminsTable.id, id));
-  res.json({ ok: true });
+  try {
+    await db.delete(operatorAdminsTable).where(eq(operatorAdminsTable.id, id));
+    res.json({ ok: true });
+  } catch (err) {
+    if (isMissingTable(err)) {
+      res.status(503).json({ error: "Admin table not yet available in production." });
+    } else {
+      res.status(500).json({ error: String(err) });
+    }
+  }
 });
 
 export default router;

@@ -5,6 +5,10 @@
  * GET    /api/broadcast-queue          — list queue items (national sees all; others see own)
  * PATCH  /api/broadcast-queue/:id/approve — national approves and triggers send
  * PATCH  /api/broadcast-queue/:id/reject  — national rejects with reason
+ *
+ * NOTE: broadcast_queue table may not exist in production until the production DB
+ * is unfrozen and Replit's schema migration is allowed to run. All handlers
+ * gracefully return empty/error responses rather than crashing.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, broadcastQueueTable, membersTable } from "@workspace/db";
@@ -18,6 +22,10 @@ const router: IRouter = Router();
 const GMAIL_USER = process.env["GMAIL_USER"] ?? "";
 const GMAIL_PASS = process.env["GMAIL_APP_PASSWORD"] ?? "";
 const OPERATOR_WA = process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+14155238886";
+
+function isMissingTable(err: unknown): boolean {
+  return String(err).includes("relation") || String(err).includes("does not exist") || String(err).includes("42P01");
+}
 
 // ── POST /api/broadcast-queue ─────────────────────────────────────────────────
 router.post("/broadcast-queue", async (req: Request, res: Response): Promise<void> => {
@@ -34,7 +42,6 @@ router.post("/broadcast-queue", async (req: Request, res: Response): Promise<voi
   const adminDisplayName = req.session.adminDisplayName ?? "National Admin";
   const scope = getAdminScope(req);
 
-  // Build scope label
   const scopeParts: string[] = [];
   if (scope?.province) scopeParts.push(scope.province);
   if (scope?.city) scopeParts.push(scope.city);
@@ -42,62 +49,74 @@ router.post("/broadcast-queue", async (req: Request, res: Response): Promise<voi
   if (scope?.street) scopeParts.push(scope.street);
   const scopeLabel = scopeParts.length > 0 ? scopeParts.join(" > ") : "National";
 
-  // Count prospective recipients
-  const conditions: ReturnType<typeof ilike>[] = [];
-  if (scope?.province) conditions.push(ilike(membersTable.province, scope.province));
-  if (scope?.city)     conditions.push(ilike(membersTable.city, `%${scope.city}%`));
-  if (scope?.suburb)   conditions.push(ilike(membersTable.suburb, `%${scope.suburb}%`));
+  try {
+    const conditions: ReturnType<typeof ilike>[] = [];
+    if (scope?.province) conditions.push(ilike(membersTable.province, scope.province));
+    if (scope?.city)     conditions.push(ilike(membersTable.city, `%${scope.city}%`));
+    if (scope?.suburb)   conditions.push(ilike(membersTable.suburb, `%${scope.suburb}%`));
 
-  const countWhere = conditions.length > 0
-    ? conditions.reduce((a, b) => sql`${a} AND ${b}` as unknown as ReturnType<typeof ilike>)
-    : undefined;
+    const countWhere = conditions.length > 0
+      ? conditions.reduce((a, b) => sql`${a} AND ${b}` as unknown as ReturnType<typeof ilike>)
+      : undefined;
 
-  const [countRes] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(membersTable)
-    .where(countWhere as Parameters<typeof db.select>[0] | undefined);
-  const recipientCount = Number(countRes?.n ?? 0);
+    const [countRes] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(membersTable)
+      .where(countWhere as Parameters<typeof db.select>[0] | undefined);
+    const recipientCount = Number(countRes?.n ?? 0);
 
-  // National admins send immediately (no queue)
-  if (isNationalAdmin(req)) {
-    await sendBroadcast({
-      province: null, city: null, suburb: null,
+    if (isNationalAdmin(req)) {
+      await sendBroadcast({
+        province: null, city: null, suburb: null,
+        subject: subject ?? "eblockwatch Update",
+        message: message.trim(),
+        channels,
+      });
+      res.json({ ok: true, sent: true, recipientCount });
+      return;
+    }
+
+    const [item] = await db.insert(broadcastQueueTable).values({
+      submittedBy: adminId,
+      submitterName: adminDisplayName,
+      scope: scopeLabel,
+      province: scope?.province ?? null,
+      city: scope?.city ?? null,
+      suburb: scope?.suburb ?? null,
       subject: subject ?? "eblockwatch Update",
       message: message.trim(),
-      channels,
-    });
-    res.json({ ok: true, sent: true, recipientCount });
-    return;
+      channels: channels as unknown as typeof broadcastQueueTable.$inferInsert["channels"],
+      recipientCount,
+      status: "pending",
+    }).returning();
+
+    res.status(201).json({ ok: true, queued: true, item });
+  } catch (err) {
+    if (isMissingTable(err)) {
+      res.status(503).json({ error: "Approval queue not yet available in this environment. Please contact the national admin." });
+    } else {
+      res.status(500).json({ error: String(err) });
+    }
   }
-
-  const [item] = await db.insert(broadcastQueueTable).values({
-    submittedBy: adminId,
-    submitterName: adminDisplayName,
-    scope: scopeLabel,
-    province: scope?.province ?? null,
-    city: scope?.city ?? null,
-    suburb: scope?.suburb ?? null,
-    subject: subject ?? "eblockwatch Update",
-    message: message.trim(),
-    channels: channels as unknown as typeof broadcastQueueTable.$inferInsert["channels"],
-    recipientCount,
-    status: "pending",
-  }).returning();
-
-  res.status(201).json({ ok: true, queued: true, item });
 });
 
 // ── GET /api/broadcast-queue ──────────────────────────────────────────────────
 router.get("/broadcast-queue", async (req: Request, res: Response): Promise<void> => {
   const adminId = req.session.adminId ?? 0;
-
-  const items = isNationalAdmin(req)
-    ? await db.select().from(broadcastQueueTable).orderBy(desc(broadcastQueueTable.createdAt)).limit(100)
-    : await db.select().from(broadcastQueueTable)
-        .where(eq(broadcastQueueTable.submittedBy, adminId))
-        .orderBy(desc(broadcastQueueTable.createdAt)).limit(50);
-
-  res.json(items);
+  try {
+    const items = isNationalAdmin(req)
+      ? await db.select().from(broadcastQueueTable).orderBy(desc(broadcastQueueTable.createdAt)).limit(100)
+      : await db.select().from(broadcastQueueTable)
+          .where(eq(broadcastQueueTable.submittedBy, adminId))
+          .orderBy(desc(broadcastQueueTable.createdAt)).limit(50);
+    res.json(items);
+  } catch (err) {
+    if (isMissingTable(err)) {
+      res.json([]); // Gracefully return empty queue until tables are migrated
+    } else {
+      res.status(500).json({ error: String(err) });
+    }
+  }
 });
 
 // ── PATCH /api/broadcast-queue/:id/approve ────────────────────────────────────
@@ -106,38 +125,43 @@ router.patch("/broadcast-queue/:id/approve", async (req: Request, res: Response)
     res.status(403).json({ error: "National admin access required." });
     return;
   }
-
-  const id = parseInt(req.params.id, 10);
-  const [item] = await db.select().from(broadcastQueueTable).where(eq(broadcastQueueTable.id, id));
-  if (!item) { res.status(404).json({ error: "Not found" }); return; }
-  if (item.status !== "pending") { res.status(409).json({ error: `Already ${item.status}` }); return; }
-
-  // Mark approved
-  await db.update(broadcastQueueTable).set({
-    status: "approved",
-    approvedBy: req.session.adminId ?? 0,
-    approvedAt: new Date(),
-    updatedAt: new Date(),
-  }).where(eq(broadcastQueueTable.id, id));
-
-  // Send
   try {
-    const channels = item.channels as string[];
-    await sendBroadcast({
-      province: item.province,
-      city: item.city,
-      suburb: item.suburb,
-      subject: item.subject,
-      message: item.message,
-      channels,
-    });
-    await db.update(broadcastQueueTable).set({ status: "sent", sentAt: new Date(), updatedAt: new Date() })
-      .where(eq(broadcastQueueTable.id, id));
-    res.json({ ok: true, sent: true });
+    const id = parseInt(req.params.id, 10);
+    const [item] = await db.select().from(broadcastQueueTable).where(eq(broadcastQueueTable.id, id));
+    if (!item) { res.status(404).json({ error: "Not found" }); return; }
+    if (item.status !== "pending") { res.status(409).json({ error: `Already ${item.status}` }); return; }
+
+    await db.update(broadcastQueueTable).set({
+      status: "approved",
+      approvedBy: req.session.adminId ?? 0,
+      approvedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(broadcastQueueTable.id, id));
+
+    try {
+      const channels = item.channels as string[];
+      await sendBroadcast({
+        province: item.province,
+        city: item.city,
+        suburb: item.suburb,
+        subject: item.subject,
+        message: item.message,
+        channels,
+      });
+      await db.update(broadcastQueueTable).set({ status: "sent", sentAt: new Date(), updatedAt: new Date() })
+        .where(eq(broadcastQueueTable.id, id));
+      res.json({ ok: true, sent: true });
+    } catch (sendErr) {
+      await db.update(broadcastQueueTable).set({ status: "approved", updatedAt: new Date() })
+        .where(eq(broadcastQueueTable.id, id));
+      res.status(500).json({ error: `Send failed: ${String(sendErr)}` });
+    }
   } catch (err) {
-    await db.update(broadcastQueueTable).set({ status: "approved", updatedAt: new Date() })
-      .where(eq(broadcastQueueTable.id, id));
-    res.status(500).json({ error: `Send failed: ${String(err)}` });
+    if (isMissingTable(err)) {
+      res.status(503).json({ error: "Queue table not yet available in production." });
+    } else {
+      res.status(500).json({ error: String(err) });
+    }
   }
 });
 
@@ -147,21 +171,28 @@ router.patch("/broadcast-queue/:id/reject", async (req: Request, res: Response):
     res.status(403).json({ error: "National admin access required." });
     return;
   }
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { reason } = req.body as { reason?: string };
 
-  const id = parseInt(req.params.id, 10);
-  const { reason } = req.body as { reason?: string };
+    const [item] = await db.select().from(broadcastQueueTable).where(eq(broadcastQueueTable.id, id));
+    if (!item) { res.status(404).json({ error: "Not found" }); return; }
+    if (item.status !== "pending") { res.status(409).json({ error: `Already ${item.status}` }); return; }
 
-  const [item] = await db.select().from(broadcastQueueTable).where(eq(broadcastQueueTable.id, id));
-  if (!item) { res.status(404).json({ error: "Not found" }); return; }
-  if (item.status !== "pending") { res.status(409).json({ error: `Already ${item.status}` }); return; }
+    await db.update(broadcastQueueTable).set({
+      status: "rejected",
+      rejectedReason: reason?.trim() ?? null,
+      updatedAt: new Date(),
+    }).where(eq(broadcastQueueTable.id, id));
 
-  await db.update(broadcastQueueTable).set({
-    status: "rejected",
-    rejectedReason: reason?.trim() ?? null,
-    updatedAt: new Date(),
-  }).where(eq(broadcastQueueTable.id, id));
-
-  res.json({ ok: true });
+    res.json({ ok: true });
+  } catch (err) {
+    if (isMissingTable(err)) {
+      res.status(503).json({ error: "Queue table not yet available in production." });
+    } else {
+      res.status(500).json({ error: String(err) });
+    }
+  }
 });
 
 // ── Internal: send a broadcast to a scoped set of members ────────────────────
