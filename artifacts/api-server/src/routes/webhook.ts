@@ -360,20 +360,24 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
     }
   }
 
-  let body = req.body?.Body ?? "";
-  const from = normaliseFrom(req.body?.From ?? "");
-  const to = req.body?.To ?? "";
-  const messageSid = req.body?.MessageSid ?? null;
+  // Twilio sends form-encoded data — fields use Title Case (Body, From, To).
+  // Defensive: also check lowercase variants in case of proxy rewriting.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rb = req.body as Record<string, any>;
+  let body: string = (rb["Body"] ?? rb["body"] ?? "").toString().trim();
+  const from = normaliseFrom((rb["From"] ?? rb["from"] ?? "").toString());
+  const to: string = (rb["To"] ?? rb["to"] ?? "").toString();
+  const messageSid: string | null = rb["MessageSid"] ?? rb["messageSid"] ?? null;
 
-  const latitude: string = req.body?.Latitude ?? "";
-  const longitude: string = req.body?.Longitude ?? "";
-  const address: string = req.body?.Address ?? "";
-  const label: string = req.body?.Label ?? "";
+  const latitude: string = (rb["Latitude"] ?? rb["latitude"] ?? "").toString();
+  const longitude: string = (rb["Longitude"] ?? rb["longitude"] ?? "").toString();
+  const address: string = (rb["Address"] ?? rb["address"] ?? "").toString();
+  const label: string = (rb["Label"] ?? rb["label"] ?? "").toString();
 
   // ── Voice note transcription ──────────────────────────────────────────────
-  const numMedia = Number(req.body?.NumMedia ?? "0");
-  const mediaUrl: string = req.body?.MediaUrl0 ?? "";
-  const mediaContentType: string = req.body?.MediaContentType0 ?? "";
+  const numMedia = Number(rb["NumMedia"] ?? rb["numMedia"] ?? "0");
+  const mediaUrl: string = (rb["MediaUrl0"] ?? rb["mediaUrl0"] ?? "").toString();
+  const mediaContentType: string = (rb["MediaContentType0"] ?? rb["mediaContentType0"] ?? "").toString();
   let voiceTranscribed = false;
 
   if (body === "" && isVoiceNote(numMedia, mediaContentType) && mediaUrl) {
@@ -400,6 +404,11 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
   {
     const senderDigits = from.replace("whatsapp:+", "").replace("whatsapp:", "");
     if (senderDigits === "27825611065") {
+      // Diagnostic: log every field Twilio sent so we can debug body extraction
+      const rbKeys = Object.fromEntries(
+        Object.entries(rb).map(([k, v]) => [k, String(v ?? "").slice(0, 120)])
+      );
+      req.log.info({ rbKeys, bodyResolved: body.slice(0, 120) }, "operator-ai: raw request fields");
       req.log.info({ from, body: body.slice(0, 80) }, "operator-ai: routing to Claude — bypassing all member logic");
 
       // Save Andre's message to DB
