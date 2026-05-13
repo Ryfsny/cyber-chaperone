@@ -21,6 +21,11 @@ const anthropic = new Anthropic({
   apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY ?? "dummy",
 });
 
+const MODEL = "claude-sonnet-4-6";
+const TIMEOUT_MS = 25_000;
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1_000;
+
 // ── System prompt ──────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT =
@@ -29,49 +34,77 @@ const SYSTEM_PROMPT =
   "Members use WhatsApp to check in on trips. The Situation Room monitors trips. " +
   "Andre is the boss/operator. Be concise — WhatsApp replies must be under 1000 characters. " +
   "Current system: Replit backend at cyber-chaperone-r--ryfsny.replit.app, " +
-  "Twilio WhatsApp sandbox +14155238886, members in database.";
+  "Twilio WhatsApp, members in database.";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
 /**
  * Call Claude with Andre's message and return the reply text.
  * Fetches the last 10 operator conversation turns for context.
+ * Retries up to MAX_RETRIES times on failure with a 1-second delay.
  */
 export async function callOperatorClaude(
   userMessage: string,
   operatorPhone: string,
 ): Promise<string> {
-  // Guard: empty body (e.g. voice note before transcription, read receipt)
-  const trimmed = userMessage.trim();
+  // Guard: empty body (e.g. sticker, image with no caption, delivery receipt)
+  const trimmed = (userMessage ?? "").trim();
   if (!trimmed) {
-    return "Message was empty — please try again.";
+    return "Got your message but it was blank — please resend.";
   }
 
-  try {
-    // Build conversation history from recent operator messages
-    const history = await buildHistory(operatorPhone);
+  // Build conversation history (empty array on DB error — safe fallback)
+  const history = await buildHistory(operatorPhone);
 
-    const messages: Array<{ role: "user" | "assistant"; content: string }> = [
-      ...history,
-      { role: "user", content: trimmed },
-    ];
+  const messages: Array<{ role: "user" | "assistant"; content: string }> = [
+    ...history,
+    { role: "user", content: trimmed },
+  ];
 
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 512,
-      system: SYSTEM_PROMPT,
-      messages,
-    });
+  let lastError: unknown;
 
-    const block = response.content[0];
-    const text = block.type === "text" ? block.text.trim() : "(no response)";
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await sleep(RETRY_DELAY_MS);
+    }
 
-    // Truncate to WhatsApp-safe length
-    return text.length > 950 ? text.slice(0, 947) + "…" : text;
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return `AI unavailable: ${msg.slice(0, 200)}`;
+    try {
+      const response = await anthropic.messages.create(
+        {
+          model: MODEL,
+          max_tokens: 8192,
+          system: SYSTEM_PROMPT,
+          messages,
+        },
+        { timeout: TIMEOUT_MS },
+      );
+
+      const block = response.content[0];
+      const text = block?.type === "text" ? block.text.trim() : "(no response)";
+
+      // Truncate to WhatsApp-safe length
+      return text.length > 950 ? text.slice(0, 947) + "…" : text;
+    } catch (err: unknown) {
+      lastError = err;
+      // Do not retry on client-side validation errors (4xx) — they won't fix themselves
+      if (err instanceof Anthropic.APIError && err.status >= 400 && err.status < 500) {
+        break;
+      }
+    }
   }
+
+  // All attempts exhausted — return a friendly message, never a raw error
+  const detail =
+    lastError instanceof Error ? lastError.message.slice(0, 120) : String(lastError).slice(0, 120);
+  // Log for debugging but don't surface the raw error to Andre's phone
+  console.error("[operator-ai] Claude failed after retries:", detail);
+  return "Claude is temporarily unavailable — try again in a moment.";
 }
 
 // ── Conversation history ───────────────────────────────────────────────────────
@@ -80,9 +113,8 @@ async function buildHistory(
   operatorPhone: string,
 ): Promise<Array<{ role: "user" | "assistant"; content: string }>> {
   try {
-    // Fetch recent messages sent by or to the operator that are operator-type
     const rows = await db
-      .select({ body: messagesTable.body, direction: messagesTable.direction, fromNumber: messagesTable.fromNumber })
+      .select({ body: messagesTable.body, direction: messagesTable.direction })
       .from(messagesTable)
       .where(
         or(
@@ -93,7 +125,7 @@ async function buildHistory(
       .orderBy(desc(messagesTable.id))
       .limit(10);
 
-    // Reverse so oldest first, filter empty bodies, then map to Claude message format
+    // Reverse to chronological order, drop any empty-body rows
     return rows
       .reverse()
       .filter((row) => row.body && row.body.trim().length > 0)
