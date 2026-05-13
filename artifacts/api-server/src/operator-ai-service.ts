@@ -41,13 +41,19 @@ export async function callOperatorClaude(
   userMessage: string,
   operatorPhone: string,
 ): Promise<string> {
+  // Guard: empty body (e.g. voice note before transcription, read receipt)
+  const trimmed = userMessage.trim();
+  if (!trimmed) {
+    return "Message was empty — please try again.";
+  }
+
   try {
     // Build conversation history from recent operator messages
     const history = await buildHistory(operatorPhone);
 
     const messages: Array<{ role: "user" | "assistant"; content: string }> = [
       ...history,
-      { role: "user", content: userMessage },
+      { role: "user", content: trimmed },
     ];
 
     const response = await anthropic.messages.create({
@@ -87,12 +93,13 @@ async function buildHistory(
       .orderBy(desc(messagesTable.id))
       .limit(10);
 
-    // Reverse so oldest first, then map to Claude message format
+    // Reverse so oldest first, filter empty bodies, then map to Claude message format
     return rows
       .reverse()
+      .filter((row) => row.body && row.body.trim().length > 0)
       .map((row) => ({
         role: row.direction === "operator-reply" ? ("assistant" as const) : ("user" as const),
-        content: row.body,
+        content: row.body.trim(),
       }));
   } catch {
     return [];
