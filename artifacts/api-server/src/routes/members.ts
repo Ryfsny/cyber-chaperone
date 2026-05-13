@@ -15,11 +15,12 @@ const router: IRouter = Router();
 // ── GET /api/members — paginated + searchable ─────────────────────────────────
 router.get("/members", async (req, res): Promise<void> => {
   const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
-  const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10)));
+  const limit = Math.min(1000, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10)));
   const offset = (page - 1) * limit;
   const search = String(req.query.search ?? "").trim();
   const province = String(req.query.province ?? "").trim();
   const city = String(req.query.city ?? "").trim();
+  const suburb = String(req.query.suburb ?? "").trim();
   const source = String(req.query.source ?? "").trim();
   const status = String(req.query.status ?? "").trim();
   const tier = String(req.query.tier ?? "").trim();
@@ -44,7 +45,8 @@ router.get("/members", async (req, res): Promise<void> => {
     );
   }
   if (province) conditions.push(ilike(membersTable.province, province));
-  if (city) conditions.push(ilike(membersTable.city, `%${city}%`));
+  if (city)     conditions.push(ilike(membersTable.city, `%${city}%`));
+  if (suburb)   conditions.push(ilike(membersTable.suburb, `%${suburb}%`));
   if (source === "none") {
     conditions.push(sql`source_batch IS NULL` as unknown as ReturnType<typeof eq>);
   } else if (source) {

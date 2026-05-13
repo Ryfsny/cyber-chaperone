@@ -456,6 +456,55 @@ router.post("/broadcast/sms", async (req: Request, res: Response): Promise<void>
   res.json({ ok: true, queued: false, sent: results.filter((r) => r.status === "sent").length, failed: results.filter((r) => r.status === "failed").length, total: results.length, results });
 });
 
+// ── GET /api/broadcast/geo-facets ────────────────────────────────────────────
+// Returns distinct province / city / suburb values that actually have members.
+// Cascade: ?province=X narrows cities; ?province=X&city=Y narrows suburbs.
+router.get("/broadcast/geo-facets", async (req: Request, res: Response): Promise<void> => {
+  const province = String(req.query.province ?? "").trim();
+  const city     = String(req.query.city ?? "").trim();
+
+  function notBlank(col: typeof membersTable.province) {
+    return sql`${col} IS NOT NULL AND trim(${col}) != ''`;
+  }
+
+  const [provinces, cities, suburbs] = await Promise.all([
+    // All distinct provinces (no filter)
+    db
+      .selectDistinct({ val: membersTable.province })
+      .from(membersTable)
+      .where(notBlank(membersTable.province) as ReturnType<typeof eq>)
+      .orderBy(membersTable.province),
+
+    // Cities: filter by province if provided
+    province
+      ? db
+          .selectDistinct({ val: membersTable.city })
+          .from(membersTable)
+          .where(
+            sql`${notBlank(membersTable.city)} AND lower(province) = lower(${province})` as ReturnType<typeof eq>
+          )
+          .orderBy(membersTable.city)
+      : Promise.resolve([]),
+
+    // Suburbs: filter by province+city if both provided
+    province && city
+      ? db
+          .selectDistinct({ val: membersTable.suburb })
+          .from(membersTable)
+          .where(
+            sql`${notBlank(membersTable.suburb)} AND lower(province) = lower(${province}) AND lower(city) = lower(${city})` as ReturnType<typeof eq>
+          )
+          .orderBy(membersTable.suburb)
+      : Promise.resolve([]),
+  ]);
+
+  res.json({
+    provinces: provinces.map((r) => r.val).filter(Boolean),
+    cities:    cities.map((r) => r.val).filter(Boolean),
+    suburbs:   suburbs.map((r) => r.val).filter(Boolean),
+  });
+});
+
 // ── POST /api/broadcast/multi (multi-channel, exact member IDs) ───────────────
 router.post("/broadcast/multi", async (req: Request, res: Response): Promise<void> => {
   const { memberIds, message, channels } = req.body as {
