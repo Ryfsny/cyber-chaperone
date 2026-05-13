@@ -8,6 +8,7 @@ import { withMenu } from "../message-utils.js";
 import { sendOperatorEmail, type EmailCategory } from "../email-service.js";
 import { reverseGeocodeStreetAddress } from "../route-service.js";
 import { isVoiceNote, downloadTwilioMedia, transcribeVoiceNote } from "../voice-service.js";
+import { callOperatorClaude } from "../operator-ai-service.js";
 
 const router: IRouter = Router();
 
@@ -597,57 +598,41 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
       }
     }
 
-    // ── Operator command channel — +27825611065 bypass ───────────────────────
-    // When Andre's number messages the bot, respond with live system status
-    // and operator commands instead of the regular AI Arnie member flow.
+    // ── Operator AI channel — +27825611065 bypass ────────────────────────────
+    // When Andre's number messages the bot, route directly to Claude (Anthropic)
+    // instead of the regular AI Arnie member flow.
+    // This block runs FIRST — before any member logic.
     const OPERATOR_DIRECT = "whatsapp:+27825611065";
     if (from === OPERATOR_DIRECT) {
-      const [activeTrips, memberCount] = await Promise.all([
-        db
-          .select({
-            id: tripsTable.id,
-            title: tripsTable.title,
-            status: tripsTable.status,
-            travelerName: tripsTable.travelerName,
-          })
-          .from(tripsTable)
-          .where(ne(tripsTable.status, "completed"))
-          .orderBy(desc(tripsTable.createdAt))
-          .limit(8),
-        db.select({ count: count() }).from(membersTable),
-      ]);
+      req.log.info({ from, body: body.slice(0, 80) }, "operator-ai: routing to Claude");
 
-      const cmd = body.trim().toUpperCase();
-      const closeMatch = cmd.match(/^CLOSE\s+(\d+)$/);
+      // 1. Persist operator's incoming message
+      await db.insert(messagesTable).values({
+        fromNumber: from,
+        toNumber: to,
+        body,
+        messageSid,
+        tripId: null,
+        direction: "operator",
+      }).catch(() => {});
 
-      if (closeMatch) {
-        const tripId = parseInt(closeMatch[1], 10);
-        await db
-          .update(tripsTable)
-          .set({ status: "completed", nextAction: "Closed by operator command." })
-          .where(eq(tripsTable.id, tripId));
-        await sendReply(from, to, `✅ Trip #${tripId} marked complete.`);
-      } else {
-        const tripLines =
-          activeTrips.length > 0
-            ? activeTrips
-                .map((t) => `• [${t.status.toUpperCase()}] #${t.id} ${t.travelerName} — ${t.title}`)
-                .join("\n")
-            : "No active trips.";
-        const total = memberCount[0]?.count ?? 0;
-        await sendReply(from, to, [
-          `🛡️ CYBER CHAPERONE — LIVE STATUS`,
-          ``,
-          `Active trips: ${activeTrips.length}`,
-          `Total members: ${total}`,
-          ``,
-          tripLines,
-          ``,
-          `Commands:`,
-          `CLOSE [id] — close a trip`,
-          `(Any other message refreshes status)`,
-        ].join("\n"));
-      }
+      // 2. Call Claude
+      const claudeReply = await callOperatorClaude(body, from);
+
+      // 3. Send Claude's reply back to Andre via Twilio
+      await sendReply(from, to, claudeReply);
+
+      // 4. Persist Claude's reply so it becomes part of future conversation history
+      await db.insert(messagesTable).values({
+        fromNumber: to,
+        toNumber: from,
+        body: claudeReply,
+        messageSid: null,
+        tripId: null,
+        direction: "operator-reply",
+      }).catch(() => {});
+
+      req.log.info({ from, replyLength: claudeReply.length }, "operator-ai: Claude reply sent");
 
       res.set("Content-Type", "text/xml");
       res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
