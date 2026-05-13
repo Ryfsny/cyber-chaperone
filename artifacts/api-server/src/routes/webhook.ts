@@ -339,6 +339,26 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
     return;
   }
 
+  // ── Twilio signature verification ────────────────────────────────────────────
+  // Enabled when TWILIO_WEBHOOK_URL is set to the full production webhook URL,
+  // e.g. https://cyber-chaperone-r--ryfsny.replit.app/api/webhook/twilio
+  const _twilioWebhookUrl = process.env.TWILIO_WEBHOOK_URL ?? "";
+  const _twilioAuthToken = process.env.TWILIO_AUTH_TOKEN ?? "";
+  if (_twilioWebhookUrl && _twilioAuthToken) {
+    const _sig = (req.headers["x-twilio-signature"] as string) ?? "";
+    const _valid = twilio.validateRequest(
+      _twilioAuthToken,
+      _sig,
+      _twilioWebhookUrl,
+      req.body as Record<string, string>,
+    );
+    if (!_valid) {
+      req.log.warn({ sig: _sig.slice(0, 8) }, "Twilio signature check FAILED — request rejected");
+      res.status(403).send("Forbidden");
+      return;
+    }
+  }
+
   let body = req.body?.Body ?? "";
   const from = normaliseFrom(req.body?.From ?? "");
   const to = req.body?.To ?? "";

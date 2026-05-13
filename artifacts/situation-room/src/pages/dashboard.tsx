@@ -187,6 +187,142 @@ function TripCard({ trip }: { trip: Trip }) {
   );
 }
 
+// ── Live Trips table helpers ──────────────────────────────────────
+
+function minutesAgo(dt: string | null | undefined): number {
+  if (!dt) return Infinity;
+  return (Date.now() - new Date(dt).getTime()) / 60_000;
+}
+
+function fmtAgo(min: number): string {
+  if (!isFinite(min)) return "—";
+  if (min < 1) return "just now";
+  if (min < 60) return `${Math.floor(min)}m ago`;
+  const h = Math.floor(min / 60);
+  const m = Math.floor(min % 60);
+  return m > 0 ? `${h}h ${m}m ago` : `${h}h ago`;
+}
+
+function tripCheckinRef(trip: Trip): string {
+  return (trip.lastMemberCheckinTime as string | null) ?? trip.updatedAt;
+}
+
+function isOverdue(trip: Trip): boolean {
+  return minutesAgo(tripCheckinRef(trip)) >= 120;
+}
+
+function LiveTripsTable({ trips, isLoading }: { trips: Trip[]; isLoading: boolean }) {
+  const active = [...trips]
+    .filter((t) => t.status !== "completed")
+    .sort((a, b) => {
+      const aOver = isOverdue(a) ? 0 : 1;
+      const bOver = isOverdue(b) ? 0 : 1;
+      if (aOver !== bOver) return aOver - bOver;
+      const ord: Record<string, number> = { red: 0, amber: 1, green: 2 };
+      return (ord[a.status] ?? 3) - (ord[b.status] ?? 3);
+    });
+
+  const DOT: Record<string, string> = {
+    red: "#ef4444", amber: "#f59e0b", green: "#22c55e",
+  };
+
+  return (
+    <div className="flex-1 overflow-auto">
+      {/* Column header */}
+      <div className="sticky top-0 z-10 grid grid-cols-[20px_1fr_1fr_120px_40px] gap-3 px-4 py-2 bg-card border-b border-border text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
+        <span />
+        <span>Traveler</span>
+        <span>Route</span>
+        <span className="text-right">Last check-in</span>
+        <span className="text-right">Msgs</span>
+      </div>
+
+      {isLoading ? (
+        <div className="p-4 space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-14 bg-card border border-border animate-pulse" />
+          ))}
+        </div>
+      ) : active.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-32 text-muted-foreground/40">
+          <CheckCircle2 className="w-6 h-6 mb-2" />
+          <p className="text-xs uppercase tracking-widest">No active trips</p>
+        </div>
+      ) : (
+        <div>
+          {active.map((trip) => {
+            const overdue = isOverdue(trip);
+            const ref = tripCheckinRef(trip);
+            const min = minutesAgo(ref);
+            const dot = DOT[trip.status] ?? "#6b7280";
+
+            return (
+              <Link key={trip.id} href={`/trips/${trip.id}`} className="block group">
+                <div
+                  className={cn(
+                    "grid grid-cols-[20px_1fr_1fr_120px_40px] gap-3 items-center px-4 py-3 border-b border-border transition-colors group-hover:bg-secondary",
+                    overdue ? "bg-red-500/8" : "bg-card",
+                  )}
+                >
+                  {/* Status dot */}
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ background: dot, boxShadow: overdue ? `0 0 6px ${dot}` : "none" }}
+                  />
+
+                  {/* Traveler name + phone */}
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-foreground group-hover:text-primary truncate">
+                      {trip.travelerName}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground font-mono">
+                      {trip.travelerPhone.replace("whatsapp:", "")}
+                    </div>
+                  </div>
+
+                  {/* Route title */}
+                  <div className="min-w-0">
+                    <div className="text-xs text-foreground truncate">{trip.title}</div>
+                    {trip.originalMemberEta && (
+                      <div className="text-[10px] text-muted-foreground">
+                        ETA {trip.originalMemberEta}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Check-in time */}
+                  <div
+                    className={cn(
+                      "text-right shrink-0",
+                      overdue ? "text-red-400" : "text-muted-foreground",
+                    )}
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      <Clock className="w-3 h-3" />
+                      <span className="text-xs font-mono">{fmtAgo(min)}</span>
+                    </div>
+                    {overdue && (
+                      <div className="text-[10px] uppercase tracking-wider text-red-400 font-bold animate-pulse">
+                        OVERDUE
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Message count */}
+                  <div className="flex items-center justify-end gap-1 text-muted-foreground text-xs shrink-0">
+                    <MessageSquare className="w-3 h-3" />
+                    {trip.messageCount}
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Dashboard ────────────────────────────────────────────────────
 export default function Dashboard() {
   // Map refs
@@ -209,9 +345,14 @@ export default function Dashboard() {
   const [radiusCenter, setRadiusCenter] = useState<{ lat: number; lon: number } | null>(null);
   const [membersInRadius, setMembersInRadius] = useState<MapMember[]>([]);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [view, setView] = useState<"board" | "list">("board");
 
-  // Data fetching
-  const { data: trips = [], isLoading: tripsLoading } = useListTrips();
+  // Data fetching — auto-refresh every 30 s
+  const { data: trips = [], isLoading: tripsLoading, refetch: refetchTrips } = useListTrips();
+  useEffect(() => {
+    const id = setInterval(() => { void refetchTrips(); }, 30_000);
+    return () => clearInterval(id);
+  }, [refetchTrips]);
   const { data: allMembers = [] } = useQuery<MapMember[]>({
     queryKey: ["/api/members/map"],
     queryFn: () =>
@@ -473,27 +614,66 @@ export default function Dashboard() {
           <h1 className="text-sm uppercase tracking-widest font-bold text-foreground">Situation Room</h1>
           <p className="text-[10px] text-muted-foreground mt-0.5">
             {activeTrips.length} active trip{activeTrips.length !== 1 ? "s" : ""}
-            {" · "}
-            <span className="text-orange-400">
-              {displayedMembers.length.toLocaleString()} member{displayedMembers.length !== 1 ? "s" : ""}{hasFilter ? " in view" : " on map"}
-            </span>
+            {view === "board" && (
+              <>
+                {" · "}
+                <span className="text-orange-400">
+                  {displayedMembers.length.toLocaleString()} member{displayedMembers.length !== 1 ? "s" : ""}{hasFilter ? " in view" : " on map"}
+                </span>
+              </>
+            )}
           </p>
         </div>
-        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />Green</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500" />Amber</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500" />Red</span>
-          <span className="flex items-center gap-1 ml-1 border-l border-border pl-3"><span className="inline-block w-2.5 h-2.5 rounded-full bg-orange-500 opacity-80" />Members</span>
+        <div className="flex items-center gap-3">
+          {/* View toggle */}
+          <div className="flex border border-border rounded-sm overflow-hidden text-[10px] uppercase tracking-wider">
+            <button
+              onClick={() => setView("board")}
+              className={cn(
+                "px-3 py-1.5 transition-colors",
+                view === "board"
+                  ? "bg-primary text-primary-foreground font-bold"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary",
+              )}
+            >
+              Board
+            </button>
+            <button
+              onClick={() => setView("list")}
+              className={cn(
+                "px-3 py-1.5 border-l border-border transition-colors",
+                view === "list"
+                  ? "bg-primary text-primary-foreground font-bold"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary",
+              )}
+            >
+              Live Trips
+            </button>
+          </div>
+          {/* Legend — board only */}
+          {view === "board" && (
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />Green</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500" />Amber</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500" />Red</span>
+              <span className="flex items-center gap-1 border-l border-border pl-3"><span className="inline-block w-2.5 h-2.5 rounded-full bg-orange-500 opacity-80" />Members</span>
+            </div>
+          )}
         </div>
       </header>
 
-      {/* ── Map ────────────────────────────────────────────────── */}
-      <div className="shrink-0 relative" style={{ height: "50vh" }}>
+      {/* ── Map — board view only (always rendered for leaflet lifecycle) ── */}
+      <div className={view === "board" ? "shrink-0 relative" : "hidden"} style={{ height: "50vh" }}>
         <div ref={mapDivRef} className="absolute inset-0" />
       </div>
 
-      {/* ── Filter toolbar ──────────────────────────────────────── */}
-      <div className="shrink-0 border-b border-t border-border bg-card px-4 py-2.5 flex items-center gap-2.5 flex-wrap">
+      {/* ── Live Trips list — list view only ────────────────────── */}
+      {view === "list" && (
+        <LiveTripsTable trips={trips} isLoading={tripsLoading} />
+      )}
+
+      {/* ── Filter toolbar — board view only ────────────────────── */}
+      {view === "board" && <div className="shrink-0 border-b border-t border-border bg-card px-4 py-2.5 flex items-center gap-2.5 flex-wrap">
 
         {/* Hierarchical location dropdowns */}
         <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -579,37 +759,39 @@ export default function Dashboard() {
             <X className="w-3 h-3" /> Clear
           </button>
         )}
-      </div>
+      </div>}
 
-      {/* ── Status board (kanban) ───────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* ── Status board (kanban) — board view only ─────────────── */}
+      {view === "board" && (
+        <div className="flex-1 flex flex-col overflow-hidden">
 
-        {/* 3-column kanban */}
-        <div className="flex-1 flex overflow-hidden">
-          <KanbanColumn status="red"   trips={redTrips}   isLoading={tripsLoading} />
-          <KanbanColumn status="amber" trips={amberTrips} isLoading={tripsLoading} />
-          <KanbanColumn status="green" trips={greenTrips} isLoading={tripsLoading} />
-        </div>
-
-        {/* Completed strip */}
-        {completedTrips.length > 0 && (
-          <div className="shrink-0 border-t border-border">
-            <button
-              onClick={() => setShowCompleted((v) => !v)}
-              className="w-full px-6 py-2 text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-secondary flex items-center justify-between transition-colors"
-            >
-              <span>Completed — {completedTrips.length}</span>
-              <ChevronDown className={`w-3 h-3 transition-transform ${showCompleted ? "rotate-180" : ""}`} />
-            </button>
-            {showCompleted && (
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 p-3 max-h-72 overflow-y-auto border-t border-border">
-                {completedTrips.map((trip) => <TripCard key={trip.id} trip={trip} />)}
-              </div>
-            )}
+          {/* 3-column kanban */}
+          <div className="flex-1 flex overflow-hidden">
+            <KanbanColumn status="red"   trips={redTrips}   isLoading={tripsLoading} />
+            <KanbanColumn status="amber" trips={amberTrips} isLoading={tripsLoading} />
+            <KanbanColumn status="green" trips={greenTrips} isLoading={tripsLoading} />
           </div>
-        )}
 
-      </div>
+          {/* Completed strip */}
+          {completedTrips.length > 0 && (
+            <div className="shrink-0 border-t border-border">
+              <button
+                onClick={() => setShowCompleted((v) => !v)}
+                className="w-full px-6 py-2 text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-secondary flex items-center justify-between transition-colors"
+              >
+                <span>Completed — {completedTrips.length}</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${showCompleted ? "rotate-180" : ""}`} />
+              </button>
+              {showCompleted && (
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 p-3 max-h-72 overflow-y-auto border-t border-border">
+                  {completedTrips.map((trip) => <TripCard key={trip.id} trip={trip} />)}
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+      )}
     </div>
   );
 }
