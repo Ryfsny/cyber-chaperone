@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import express, { Router, type IRouter } from "express";
 import { db, messagesTable, tripsTable, membersTable, caseParticipantsTable, caseLogsTable } from "@workspace/db";
 import { and, eq, ne, desc, count } from "drizzle-orm";
 import twilio from "twilio";
@@ -328,7 +328,15 @@ function memberNoteLine(member: MemberInfo | null, phone: string): string {
 
 // ── Webhook handler ───────────────────────────────────────────────────────────
 
-router.post("/webhook/twilio", async (req, res): Promise<void> => {
+// Per-route urlencoded parser with type:()=>true bypasses Content-Type checking.
+// This is the definitive fix for the Replit proxy stripping/rewriting Content-Type,
+// which causes express.urlencoded() (global) to skip parsing and leave req.body empty.
+// If the body was already parsed by the global middleware, body-parser's internal
+// req._body flag causes this middleware to skip safely — no double-parse risk.
+router.post(
+  "/webhook/twilio",
+  express.urlencoded({ extended: true, type: () => true }),
+  async (req, res): Promise<void> => {
   // ── Ignore Twilio status callbacks (outbound delivery notifications) ────────
   // Status callbacks POST MessageStatus / SmsStatus fields. They are NOT
   // inbound messages — processing them as such causes false distress alerts.

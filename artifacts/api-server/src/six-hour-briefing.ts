@@ -1,5 +1,5 @@
 import { db, membersTable, tripsTable, messagesTable } from "@workspace/db";
-import { sql, gte, ne } from "drizzle-orm";
+import { sql, gte, ne, eq, and, or } from "drizzle-orm";
 import { sendRawEmail } from "./email-service.js";
 import type { Logger } from "pino";
 
@@ -75,7 +75,9 @@ async function sendBriefing(log: Logger): Promise<void> {
     const sixHoursAgo = new Date(Date.now() - 1 * 60 * 60 * 1000);
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
-    const [memberCountRows, activeTrips, recentMessages] = await Promise.all([
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const [memberCountRows, activeTrips, recentMessages, operatorSent, operatorReplied] = await Promise.all([
       db.select({ count: sql<number>`count(*)::int` }).from(membersTable),
       db
         .select()
@@ -86,10 +88,32 @@ async function sendBriefing(log: Logger): Promise<void> {
         .select({ count: sql<number>`count(*)::int` })
         .from(messagesTable)
         .where(gte(messagesTable.receivedAt, sixHoursAgo)),
+      // Operator channel health: messages FROM Andre in last 24h
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(messagesTable)
+        .where(and(eq(messagesTable.direction, "operator"), gte(messagesTable.receivedAt, twentyFourHoursAgo))),
+      // Operator channel health: Claude replies TO Andre in last 24h
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(messagesTable)
+        .where(and(eq(messagesTable.direction, "operator-reply"), gte(messagesTable.receivedAt, twentyFourHoursAgo))),
     ]);
 
     const totalMembers = Number(memberCountRows[0]?.count ?? 0);
     const totalMessages = Number(recentMessages[0]?.count ?? 0);
+
+    // ── RUNBOOK cross-check data ───────────────────────────────────────────────
+    const opSentCount = Number(operatorSent[0]?.count ?? 0);
+    const opReplyCount = Number(operatorReplied[0]?.count ?? 0);
+    const anthropicBaseUrlSet = !!process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL;
+    const anthropicApiKeySet = !!process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
+    const channelBroken = opSentCount > 0 && opReplyCount === 0;
+    const runbookAlerts: string[] = [];
+    if (!anthropicBaseUrlSet) runbookAlerts.push("AI_INTEGRATIONS_ANTHROPIC_BASE_URL not set — operator AI channel will fail");
+    if (!anthropicApiKeySet) runbookAlerts.push("AI_INTEGRATIONS_ANTHROPIC_API_KEY not set — operator AI channel will fail");
+    if (channelBroken) runbookAlerts.push(`Operator sent ${opSentCount} message(s) in last 24h but received 0 Claude replies — channel may be broken`);
+    const runbookOk = runbookAlerts.length === 0;
 
     // Overdue = active trip with last checkin > 2 h ago (or created > 2 h ago with no checkin)
     const overdueTrips = activeTrips.filter((t) => {
@@ -132,6 +156,13 @@ async function sendBriefing(log: Logger): Promise<void> {
     }
 
     textLines.push(
+      `RUNBOOK ALERTS — OPERATOR AI CHANNEL`,
+      runbookOk
+        ? `  ✓ All 5 cross-checks pass — channel healthy`
+        : runbookAlerts.map(a => `  ✗ ${a}`).join("\n"),
+      `  Operator msgs (24h): ${opSentCount}  Claude replies (24h): ${opReplyCount}`,
+      `  AI env vars: BASE_URL=${anthropicBaseUrlSet ? "SET" : "MISSING"}  API_KEY=${anthropicApiKeySet ? "SET" : "MISSING"}`,
+      ``,
       `MEMBERS`,
       `  Total registered: ${totalMembers.toLocaleString()}`,
       ``,
@@ -225,6 +256,31 @@ async function sendBriefing(log: Logger): Promise<void> {
     </table>
 
     ${overdueBlockHtml}
+
+    <!-- RUNBOOK ALERTS -->
+    <h2 style="color:#1a1f2e;font-size:14px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;margin:0 0 12px;padding-bottom:8px;border-bottom:2px solid ${runbookOk ? "#22c55e" : "#ef4444"};">
+      Operator AI Channel ${runbookOk ? "✓ Healthy" : "⚠ ALERT"}
+    </h2>
+    <div style="background:${runbookOk ? "#f0fdf4" : "#fef2f2"};border:1px solid ${runbookOk ? "#bbf7d0" : "#fca5a5"};border-radius:4px;padding:16px 20px;margin-bottom:24px;">
+      ${runbookOk
+        ? `<div style="color:#16a34a;font-size:13px;font-weight:bold;">All 5 cross-checks pass — channel healthy</div>`
+        : runbookAlerts.map(a => `<div style="color:#dc2626;font-size:13px;font-weight:bold;margin-bottom:4px;">✗ ${escHtml(a)}</div>`).join("")
+      }
+      <table style="width:100%;border-collapse:collapse;margin-top:12px;">
+        <tr>
+          <td style="padding:4px 0;font-size:11px;color:#6b7280;text-transform:uppercase;width:180px;">Operator msgs (24h)</td>
+          <td style="padding:4px 0;font-size:13px;font-family:monospace;font-weight:bold;">${opSentCount}</td>
+          <td style="padding:4px 0;font-size:11px;color:#6b7280;text-transform:uppercase;width:180px;">Claude replies (24h)</td>
+          <td style="padding:4px 0;font-size:13px;font-family:monospace;font-weight:bold;">${opReplyCount}</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 0;font-size:11px;color:#6b7280;text-transform:uppercase;">ANTHROPIC_BASE_URL</td>
+          <td style="padding:4px 0;font-size:13px;font-weight:bold;color:${anthropicBaseUrlSet ? "#16a34a" : "#dc2626"};">${anthropicBaseUrlSet ? "SET ✓" : "MISSING ✗"}</td>
+          <td style="padding:4px 0;font-size:11px;color:#6b7280;text-transform:uppercase;">ANTHROPIC_API_KEY</td>
+          <td style="padding:4px 0;font-size:13px;font-weight:bold;color:${anthropicApiKeySet ? "#16a34a" : "#dc2626"};">${anthropicApiKeySet ? "SET ✓" : "MISSING ✗"}</td>
+        </tr>
+      </table>
+    </div>
 
     <!-- Stats row -->
     <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
