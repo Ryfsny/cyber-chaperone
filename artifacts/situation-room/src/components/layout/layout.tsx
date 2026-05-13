@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import {
   Plus, Shield, Bot, Users, BookUser,
   LogOut, Megaphone, MessagesSquare, Menu, X,
-  LayoutDashboard, Map, ScrollText,
+  LayoutDashboard, Map, ScrollText, Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
@@ -33,6 +33,12 @@ const navItems = [
     label: "Broadcast",
     sub: "Send message to all members",
     icon: Megaphone,
+  },
+  {
+    href: "/operator/broadcast",
+    label: "Direct Send",
+    sub: "Pick members · Email/SMS/WhatsApp",
+    icon: Send,
   },
   {
     href: "/radar",

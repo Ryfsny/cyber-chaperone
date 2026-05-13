@@ -456,4 +456,126 @@ router.post("/broadcast/sms", async (req: Request, res: Response): Promise<void>
   res.json({ ok: true, queued: false, sent: results.filter((r) => r.status === "sent").length, failed: results.filter((r) => r.status === "failed").length, total: results.length, results });
 });
 
+// ── POST /api/broadcast/multi (multi-channel, exact member IDs) ───────────────
+router.post("/broadcast/multi", async (req: Request, res: Response): Promise<void> => {
+  const { memberIds, message, channels } = req.body as {
+    memberIds?: number[];
+    message?: string;
+    channels?: { email?: boolean; sms?: boolean; whatsapp?: boolean };
+  };
+
+  if (!message?.trim()) { res.status(400).json({ error: "message is required." }); return; }
+  if (!memberIds?.length) { res.status(400).json({ error: "memberIds is required." }); return; }
+  if (!channels || (!channels.email && !channels.sms && !channels.whatsapp)) {
+    res.status(400).json({ error: "At least one channel must be selected." }); return;
+  }
+
+  const rows = await db
+    .select({
+      id: membersTable.id,
+      firstName: membersTable.firstName,
+      displayName: membersTable.displayName,
+      email: membersTable.email,
+      mobile: membersTable.mobile,
+      whatsappNumber: membersTable.whatsappNumber,
+    })
+    .from(membersTable)
+    .where(inArray(membersTable.id, memberIds));
+
+  if (rows.length === 0) { res.json({ ok: true, results: [] }); return; }
+
+  const gmailUser = process.env["GMAIL_USER"] ?? "";
+  const gmailPass = process.env["GMAIL_APP_PASSWORD"] ?? "";
+  const twilioSid   = process.env["TWILIO_ACCOUNT_SID"];
+  const twilioToken = process.env["TWILIO_AUTH_TOKEN"];
+  const waFrom  = process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+14155238886";
+  const smsFrom = process.env["TWILIO_SMS_NUMBER"] ?? "";
+
+  const emailT = channels.email && gmailUser && gmailPass
+    ? nodemailer.createTransport({ service: "gmail", auth: { user: gmailUser, pass: gmailPass } })
+    : null;
+  const twilioClient = (channels.sms || channels.whatsapp) && twilioSid && twilioToken
+    ? twilio(twilioSid, twilioToken)
+    : null;
+
+  interface ChannelResult { status: "sent" | "failed" | "skipped"; error?: string }
+  interface MemberResult { id: number; name: string; email?: ChannelResult; sms?: ChannelResult; whatsapp?: ChannelResult }
+
+  const results: MemberResult[] = [];
+
+  for (const m of rows) {
+    const firstName = m.firstName ?? m.displayName;
+    const body = message.trim().replace(/\{name\}/gi, firstName);
+    const result: MemberResult = { id: m.id, name: m.displayName };
+
+    if (channels.email) {
+      if (!emailT) {
+        result.email = { status: "skipped", error: "Gmail not configured" };
+      } else if (!m.email?.trim()) {
+        result.email = { status: "skipped", error: "No email address" };
+      } else {
+        try {
+          await emailT.sendMail({
+            from: `"Andre Snyman | eblockwatch" <${gmailUser}>`,
+            to: m.email.trim(),
+            subject: "Message from eblockwatch",
+            text: body,
+            html: buildEmailHtml(firstName, "Message from eblockwatch", body),
+          });
+          result.email = { status: "sent" };
+        } catch (err) {
+          result.email = { status: "failed", error: String(err) };
+        }
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    }
+
+    if (channels.sms) {
+      if (!twilioClient || !smsFrom) {
+        result.sms = { status: "skipped", error: "SMS not configured" };
+      } else if (!m.mobile?.trim()) {
+        result.sms = { status: "skipped", error: "No mobile number" };
+      } else {
+        try {
+          await twilioClient.messages.create({ from: smsFrom, to: normalisePhone(m.mobile.trim()), body });
+          result.sms = { status: "sent" };
+        } catch (err) {
+          result.sms = { status: "failed", error: String(err) };
+        }
+        await new Promise((r) => setTimeout(r, 80));
+      }
+    }
+
+    if (channels.whatsapp) {
+      if (!twilioClient) {
+        result.whatsapp = { status: "skipped", error: "WhatsApp not configured" };
+      } else if (!m.whatsappNumber?.trim()) {
+        result.whatsapp = { status: "skipped", error: "No WhatsApp number" };
+      } else {
+        try {
+          await twilioClient.messages.create({ from: waFrom, to: m.whatsappNumber.trim(), body });
+          result.whatsapp = { status: "sent" };
+        } catch (err) {
+          result.whatsapp = { status: "failed", error: String(err) };
+        }
+        await new Promise((r) => setTimeout(r, 80));
+      }
+    }
+
+    results.push(result);
+  }
+
+  const count = (ch: "email" | "sms" | "whatsapp", s: "sent" | "failed") =>
+    results.filter((r) => r[ch]?.status === s).length;
+
+  res.json({
+    ok: true,
+    total: results.length,
+    emailSent: count("email", "sent"),
+    smsSent: count("sms", "sent"),
+    whatsappSent: count("whatsapp", "sent"),
+    results,
+  });
+});
+
 export default router;
