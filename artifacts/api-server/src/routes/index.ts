@@ -17,7 +17,6 @@ import arnieChatRouter from "./arnie-chat";
 import memberPortalRouter from "./member-portal";
 import paystackRouter from "./paystack";
 import paystackAdminRouter from "./paystack-admin";
-import adminImportRouter from "./admin-import";
 import { requireAuth } from "../middleware/require-auth";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -34,7 +33,6 @@ router.use(registerRouter);      // Member self-registration
 router.use(arnieChatRouter);
 router.use(memberPortalRouter);  // Member portal (JWT-based, self-auth)
 router.use(paystackRouter);      // Paystack webhook + payment-link only
-router.use(adminImportRouter);   // TEMPORARY — prod data migration (remove after use)
 
 router.get("/flow-diagram", (_req, res) => {
   res.sendFile(path.resolve(__dirname, "flow-diagram.html"));

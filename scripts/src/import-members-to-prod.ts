@@ -15,7 +15,7 @@ import pg from "pg";
 
 const PROD_URL = process.env["PROD_URL"] ?? "https://cyber-chaperone-r--ryfsny.replit.app";
 const ENDPOINT = `${PROD_URL}/api/admin/import-members`;
-const BATCH_SIZE = 200;
+const BATCH_SIZE = 50;
 
 const OPERATOR_PASSWORD = process.env["OPERATOR_PASSWORD"];
 if (!OPERATOR_PASSWORD) {
@@ -40,9 +40,9 @@ async function main() {
   const total = parseInt(countRes.rows[0].total, 10);
   console.log(`Total members in dev: ${total.toLocaleString()}`);
 
-  let offset = 0;
+  let offset = parseInt(process.env["START_OFFSET"] ?? "14300", 10);
   let totalInserted = 0;
-  let batchNum = 0;
+  let batchNum = Math.floor(offset / BATCH_SIZE);
 
   while (offset < total) {
     batchNum++;
