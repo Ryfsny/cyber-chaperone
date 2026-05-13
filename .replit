@@ -54,8 +54,17 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-OPERATOR_WHATSAPP_NUMBER = "whatsapp:+27825611065"
+
+[userenv.development]
+FACEBOOK_PAGE_ID = "702172440242622"
 OPERATOR_MIRROR_MODE = "all"
+OPERATOR_WHATSAPP_NUMBER = "whatsapp:+27825611065"
 TWILIO_WHATSAPP_NUMBER = "whatsapp:+14155238886"
 FACEBOOK_VERIFY_TOKEN = "ebw-cyber-chaperone-fb-2026"
+
+[userenv.production]
 FACEBOOK_PAGE_ID = "702172440242622"
+OPERATOR_MIRROR_MODE = "all"
+OPERATOR_WHATSAPP_NUMBER = "whatsapp:+27825611065"
+TWILIO_WHATSAPP_NUMBER = "whatsapp:+14155238886"
+FACEBOOK_VERIFY_TOKEN = "ebw-cyber-chaperone-fb-2026"

@@ -395,6 +395,46 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
     "Incoming WhatsApp message",
   );
 
+  // ── OPERATOR AI CHANNEL — must be the very first branch after from/body ──
+  // Strip whatsapp: prefix and + so we match regardless of Twilio formatting.
+  {
+    const senderDigits = from.replace("whatsapp:+", "").replace("whatsapp:", "");
+    if (senderDigits === "27825611065") {
+      req.log.info({ from, body: body.slice(0, 80) }, "operator-ai: routing to Claude — bypassing all member logic");
+
+      // Save Andre's message to DB
+      await db.insert(messagesTable).values({
+        fromNumber: from,
+        toNumber: to,
+        body,
+        messageSid,
+        tripId: null,
+        direction: "operator",
+      }).catch(() => {});
+
+      // Call Claude
+      const claudeReply = await callOperatorClaude(body, from);
+
+      // Send Claude's reply back to Andre via Twilio
+      await sendReply(from, to, claudeReply);
+
+      // Save Claude's reply for conversation history
+      await db.insert(messagesTable).values({
+        fromNumber: to,
+        toNumber: from,
+        body: claudeReply,
+        messageSid: null,
+        tripId: null,
+        direction: "operator-reply",
+      }).catch(() => {});
+
+      req.log.info({ from, replyLength: claudeReply.length }, "operator-ai: Claude reply sent");
+      res.set("Content-Type", "text/xml");
+      res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+      return;
+    }
+  }
+
   try {
     // ── Member lookup — runs on every inbound message ───────────────────────
     const member = await lookupMember(from);
@@ -596,47 +636,6 @@ router.post("/webhook/twilio", async (req, res): Promise<void> => {
         res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
         return;
       }
-    }
-
-    // ── Operator AI channel — +27825611065 bypass ────────────────────────────
-    // When Andre's number messages the bot, route directly to Claude (Anthropic)
-    // instead of the regular AI Arnie member flow.
-    // This block runs FIRST — before any member logic.
-    const OPERATOR_DIRECT = "whatsapp:+27825611065";
-    if (from === OPERATOR_DIRECT) {
-      req.log.info({ from, body: body.slice(0, 80) }, "operator-ai: routing to Claude");
-
-      // 1. Persist operator's incoming message
-      await db.insert(messagesTable).values({
-        fromNumber: from,
-        toNumber: to,
-        body,
-        messageSid,
-        tripId: null,
-        direction: "operator",
-      }).catch(() => {});
-
-      // 2. Call Claude
-      const claudeReply = await callOperatorClaude(body, from);
-
-      // 3. Send Claude's reply back to Andre via Twilio
-      await sendReply(from, to, claudeReply);
-
-      // 4. Persist Claude's reply so it becomes part of future conversation history
-      await db.insert(messagesTable).values({
-        fromNumber: to,
-        toNumber: from,
-        body: claudeReply,
-        messageSid: null,
-        tripId: null,
-        direction: "operator-reply",
-      }).catch(() => {});
-
-      req.log.info({ from, replyLength: claudeReply.length }, "operator-ai: Claude reply sent");
-
-      res.set("Content-Type", "text/xml");
-      res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
-      return;
     }
 
     // ── Menu router — stateful conversation flows ─────────────────────────────
