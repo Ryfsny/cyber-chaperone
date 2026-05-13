@@ -130,6 +130,31 @@ export async function sendOperatorEmail(
   }
 }
 
+/**
+ * Send a fully custom email (bypasses the alert-prefix system).
+ * Used by scheduled briefings and other non-alert emails.
+ */
+export async function sendRawEmail(
+  subject: string,
+  html: string,
+  text: string,
+  to?: string,
+): Promise<void> {
+  const t = getTransporter();
+  if (!t) return;
+  try {
+    await t.sendMail({
+      from: `"Cyber Chaperone" <${GMAIL_USER}>`,
+      to: to ?? OPERATOR_EMAIL,
+      subject,
+      text,
+      html,
+    });
+  } catch {
+    // best-effort — never crash the server
+  }
+}
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
