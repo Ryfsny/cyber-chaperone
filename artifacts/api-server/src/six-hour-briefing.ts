@@ -10,7 +10,7 @@ const TWILIO_WEBHOOK_URL = "https://cyber-chaperone-r--ryfsny.replit.app/api/web
 // ── Scheduler ─────────────────────────────────────────────────────────────────
 
 export function startSixHourBriefing(log: Logger): void {
-  const INTERVAL_MS = 6 * 60 * 60 * 1000;
+  const INTERVAL_MS = 1 * 60 * 60 * 1000;
 
   // Send first briefing 30 s after boot so the operator knows it's working
   setTimeout(() => {
@@ -22,7 +22,7 @@ export function startSixHourBriefing(log: Logger): void {
     void sendBriefing(log);
   }, INTERVAL_MS);
 
-  log.info({ intervalHours: 6 }, "6-hour briefing scheduler started");
+  log.info({ intervalHours: 1 }, "Hourly briefing scheduler started");
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ function statusDot(status: string): string {
 
 async function sendBriefing(log: Logger): Promise<void> {
   try {
-    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    const sixHoursAgo = new Date(Date.now() - 1 * 60 * 60 * 1000);
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
     const [memberCountRows, activeTrips, recentMessages] = await Promise.all([
@@ -98,11 +98,11 @@ async function sendBriefing(log: Logger): Promise<void> {
     });
 
     const sastNow = nowSast();
-    const subject = `CYBER CHAPERONE — 6-Hour Briefing | ${sastNow} SAST | Start Here`;
+    const subject = `CYBER CHAPERONE — Hourly Briefing | ${sastNow} SAST | Start Here`;
 
     // ── Plain-text version ────────────────────────────────────────────────────
     const textLines: string[] = [
-      `CYBER CHAPERONE — 6-HOUR BRIEFING`,
+      `CYBER CHAPERONE — HOURLY BRIEFING`,
       `${sastNow} SAST`,
       `${"═".repeat(60)}`,
       ``,
@@ -135,7 +135,7 @@ async function sendBriefing(log: Logger): Promise<void> {
       `MEMBERS`,
       `  Total registered: ${totalMembers.toLocaleString()}`,
       ``,
-      `WHATSAPP ACTIVITY (last 6 hours)`,
+      `WHATSAPP ACTIVITY (last 1 hour)`,
       `  Messages received: ${totalMessages}`,
       ``,
       `${"─".repeat(60)}`,
@@ -195,7 +195,7 @@ async function sendBriefing(log: Logger): Promise<void> {
 
   <!-- Briefing bar -->
   <div style="background:#1e40af;padding:12px 36px;">
-    <div style="color:#ffffff;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">📋 6-HOUR OPERATIONAL BRIEFING</div>
+    <div style="color:#ffffff;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">📋 HOURLY OPERATIONAL BRIEFING</div>
     <div style="color:#bfdbfe;font-size:13px;margin-top:3px;">Auto-generated status report — forward to Claude to restore session context</div>
   </div>
 
@@ -238,7 +238,7 @@ async function sendBriefing(log: Logger): Promise<void> {
         </td>
         <td style="width:50%;padding:0 0 0 8px;vertical-align:top;">
           <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;padding:16px 20px;">
-            <div style="color:#1e40af;font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Messages (6h)</div>
+            <div style="color:#1e40af;font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Messages (1h)</div>
             <div style="color:#1a1f2e;font-size:28px;font-weight:bold;font-family:monospace;">${totalMessages}</div>
             <div style="color:#6b7280;font-size:11px;margin-top:4px;">inbound WhatsApp messages</div>
           </div>
