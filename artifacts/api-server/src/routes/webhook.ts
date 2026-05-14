@@ -434,6 +434,12 @@ router.post(
   {
     const senderDigits = from.replace("whatsapp:+", "").replace("whatsapp:", "");
     if (senderDigits === "27825611065") {
+      // TEST: prefix — let Andre experience the member flow for testing
+      if (/^test:\s*/i.test(body.trim())) {
+        body = body.replace(/^test:\s*/i, "").trim();
+        req.log.info({ from, body }, "operator-ai: TEST mode — routing to member menu");
+        // Fall through — body is now the stripped message, handled by member logic below
+      } else {
       // Diagnostic: log every field Twilio sent so we can debug body extraction
       const rbKeys = Object.fromEntries(
         Object.entries(rb).map(([k, v]) => [k, String(v ?? "").slice(0, 120)])
@@ -471,6 +477,7 @@ router.post(
       res.set("Content-Type", "text/xml");
       res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
       return;
+      } // closes else (not TEST mode)
     }
   }
 
