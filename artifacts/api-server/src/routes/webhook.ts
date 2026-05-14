@@ -436,8 +436,8 @@ router.post(
     if (senderDigits === "27825611065") {
       const trimmedBody = body.trim();
 
-      // "BOSS" or "OPERATOR" → exit member mode, switch back to Claude
-      if (/^(boss|operator|operator mode)$/i.test(trimmedBody)) {
+      // "007" → boss mode (Claude AI)
+      if (/^007$/.test(trimmedBody)) {
         await db.delete(conversationStatesTable)
           .where(eq(conversationStatesTable.whatsappNumber, from))
           .catch(() => {});
@@ -447,8 +447,8 @@ router.post(
         return;
       }
 
-      // "MEMBER MODE" → enter member mode (sets a menu flow state, shows main menu)
-      if (/^(member mode|member|test mode)$/i.test(trimmedBody)) {
+      // "000" → member mode (real menu flow)
+      if (/^000$/.test(trimmedBody)) {
         await db
           .insert(conversationStatesTable)
           .values({ whatsappNumber: from, currentFlow: "MAIN_MENU", currentStep: null, pendingTripData: null })
