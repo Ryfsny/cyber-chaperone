@@ -22,6 +22,8 @@ interface BroadcastFilter {
   status?: string;
   sourceBatch?: string;
   province?: string;
+  city?: string;
+  suburb?: string;
   tier?: string;
   search?: string;
 }
@@ -59,6 +61,12 @@ function buildWhere(f: BroadcastFilter): DrizzleCondition | undefined {
   if (f.province)
     parts.push(ilike(membersTable.province, f.province) as unknown as DrizzleCondition);
 
+  if (f.city)
+    parts.push(ilike(membersTable.city, f.city) as unknown as DrizzleCondition);
+
+  if (f.suburb)
+    parts.push(ilike(membersTable.suburb, f.suburb) as unknown as DrizzleCondition);
+
   if (f.tier === "individual")
     parts.push(ilike(membersTable.membershipTier, "individual") as unknown as DrizzleCondition);
   else if (f.tier === "family")
@@ -73,6 +81,7 @@ function buildWhere(f: BroadcastFilter): DrizzleCondition | undefined {
       ilike(membersTable.email, like),
       ilike(membersTable.suburb, like),
       ilike(membersTable.city, like),
+      ilike(membersTable.homeAddress, like),
     ) as unknown as DrizzleCondition);
   }
 

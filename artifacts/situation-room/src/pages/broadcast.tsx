@@ -4,8 +4,9 @@ import {
   Send, MessageSquare, Loader2, CheckCircle2, XCircle,
   Users, Megaphone, FileText, Pencil, Radio,
   ArrowLeft, Mail, Phone, MessageCircle, AlertTriangle, Info,
-  Search, Filter, X, MapPin, ChevronDown, ChevronUp,
+  Search, Filter, X, MapPin, ChevronDown, ChevronUp, Building2,
 } from "lucide-react";
+import { citiesForProvince, suburbsForCity } from "@/lib/sa-geodata";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -61,6 +62,8 @@ type SendResult = SyncResult | AsyncResult;
 
 interface Filters {
   province: string;
+  city: string;
+  suburb: string;
   status: string;
   tier: string;
   search: string;
@@ -510,7 +513,7 @@ function MemberListPanel({ filters, channel }: { filters: Filters; channel: Chan
 
 export default function Broadcast() {
   const [channel,  setChannel]  = useState<Channel>("email");
-  const [filters,  setFilters]  = useState<Filters>({ province: "", status: "", tier: "", search: "" });
+  const [filters,  setFilters]  = useState<Filters>({ province: "", city: "", suburb: "", status: "", tier: "", search: "" });
   const [message,  setMessage]  = useState(EMAIL_TEMPLATES[0].body);
   const [subject,  setSubject]  = useState(EMAIL_TEMPLATES[0].subject);
   const [tmplId,   setTmplId]   = useState(EMAIL_TEMPLATES[0].id);
@@ -527,9 +530,9 @@ export default function Broadcast() {
 
   const geoStats = geoData?.provinces ?? [];
 
-  // Province click from map
+  // Province click from map — reset city/suburb when province changes
   const handleProvinceSelect = useCallback((p: string) => {
-    setFilters((f) => ({ ...f, province: p }));
+    setFilters((f) => ({ ...f, province: p, city: "", suburb: "" }));
     setSyncRes(null); setJobId(null); setJobDone(null);
   }, []);
 
@@ -557,6 +560,8 @@ export default function Broadcast() {
     setSyncRes(null); setJobId(null); setJobDone(null);
     const f: Record<string, string> = {};
     if (filters.province) f.province = filters.province;
+    if (filters.city)     f.city     = filters.city;
+    if (filters.suburb)   f.suburb   = filters.suburb;
     if (filters.status)   f.status   = filters.status;
     if (filters.tier)     f.tier     = filters.tier;
     if (filters.search)   f.search   = filters.search;
@@ -565,10 +570,10 @@ export default function Broadcast() {
     mutation.mutate(payload);
   }
 
-  function clearFilters() { setFilters({ province: "", status: "", tier: "", search: "" }); }
+  function clearFilters() { setFilters({ province: "", city: "", suburb: "", status: "", tier: "", search: "" }); }
 
   const templates = channel === "email" ? EMAIL_TEMPLATES : channel === "whatsapp" ? WA_TEMPLATES : SMS_TEMPLATES;
-  const hasFilters = !!(filters.province || filters.status || filters.tier || filters.search);
+  const hasFilters = !!(filters.province || filters.city || filters.suburb || filters.status || filters.tier || filters.search);
   const isBusy = mutation.isPending || (!!jobId && !jobDone);
   const canSend = !!message.trim() && (channel !== "email" || !!subject.trim());
   const { len: smsLen, parts: smsParts } = charInfo(message);
@@ -650,7 +655,7 @@ export default function Broadcast() {
                 </label>
                 <select
                   value={filters.province}
-                  onChange={(e) => { setFilters((f) => ({ ...f, province: e.target.value })); setSyncRes(null); setJobId(null); setJobDone(null); }}
+                  onChange={(e) => { setFilters((f) => ({ ...f, province: e.target.value, city: "", suburb: "" })); setSyncRes(null); setJobId(null); setJobDone(null); }}
                   className="w-full bg-secondary border border-border rounded-sm text-xs px-2 py-1.5 text-foreground"
                 >
                   <option value="">All provinces</option>
@@ -658,6 +663,42 @@ export default function Broadcast() {
                     const stat = geoStats.find((g) => normaliseProvince(g.province) === p.name);
                     return <option key={p.name} value={p.name}>{p.name} {stat ? `(${fmt(stat.total)})` : ""}</option>;
                   })}
+                </select>
+              </div>
+
+              {/* City dropdown — cascades from province */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1 mb-1.5">
+                  <Building2 className="w-3 h-3" /> City / Town
+                </label>
+                <select
+                  value={filters.city}
+                  onChange={(e) => { setFilters((f) => ({ ...f, city: e.target.value, suburb: "" })); setSyncRes(null); setJobId(null); setJobDone(null); }}
+                  className="w-full bg-secondary border border-border rounded-sm text-xs px-2 py-1.5 text-foreground"
+                  disabled={!filters.province}
+                >
+                  <option value="">{filters.province ? "All cities / towns" : "Select province first"}</option>
+                  {citiesForProvince(filters.province).map((c) => (
+                    <option key={c.name} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Suburb dropdown — cascades from city */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1 mb-1.5">
+                  <MapPin className="w-3 h-3" /> Suburb
+                </label>
+                <select
+                  value={filters.suburb}
+                  onChange={(e) => { setFilters((f) => ({ ...f, suburb: e.target.value })); setSyncRes(null); setJobId(null); setJobDone(null); }}
+                  className="w-full bg-secondary border border-border rounded-sm text-xs px-2 py-1.5 text-foreground"
+                  disabled={!filters.city}
+                >
+                  <option value="">{filters.city ? "All suburbs" : "Select city first"}</option>
+                  {suburbsForCity(filters.province, filters.city).map((s) => (
+                    <option key={s.name} value={s.name}>{s.name}</option>
+                  ))}
                 </select>
               </div>
 
@@ -692,14 +733,14 @@ export default function Broadcast() {
               {/* Name/email/area search */}
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 flex items-center gap-1">
-                  <Search className="w-3 h-3" /> Search by name / email / area
+                  <Search className="w-3 h-3" /> Search name / email / street
                 </label>
                 <div className="relative">
                   <Input
                     value={filters.search}
                     onChange={(e) => { setFilters((f) => ({ ...f, search: e.target.value })); setSyncRes(null); setJobId(null); setJobDone(null); }}
                     className="text-xs pr-7"
-                    placeholder="Smith, Sandton, gmail…"
+                    placeholder="Smith, College Road, gmail…"
                   />
                   {filters.search && (
                     <button onClick={() => setFilters((f) => ({ ...f, search: "" }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
