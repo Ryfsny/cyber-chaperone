@@ -1,5 +1,5 @@
 import { db, membersTable, tripsTable, messagesTable, conversationStatesTable, respondersTable } from "@workspace/db";
-import { and, eq, ne, desc } from "drizzle-orm";
+import { and, eq, ne, desc, or } from "drizzle-orm";
 import twilio from "twilio";
 import { enrichTripWithRoute, calculateRouteInfo, reverseGeocodeCoords, reverseGeocodeStreetAddress, minutesToSastTime, type RouteInfo } from "./route-service.js";
 import { calculateGoogleMapsRoute } from "./google-maps-service.js";
@@ -218,6 +218,17 @@ const _replyOverrides = new Map<string, (body: string) => Promise<void>>();
 
 // ── Twilio ────────────────────────────────────────────────────────────────────
 
+async function getMemberDeepLink(whatsappNumber: string): Promise<string> {
+  try {
+    const [row] = await db
+      .select({ memberToken: membersTable.memberToken })
+      .from(membersTable)
+      .where(or(eq(membersTable.whatsappNumber, whatsappNumber), eq(membersTable.whatsappNumber, whatsappNumber.replace(/^whatsapp:/, ""))));
+    if (row?.memberToken) return `\n\n🔗 my.eblockwatch.com/me?token=${row.memberToken}`;
+  } catch { /* best-effort */ }
+  return "";
+}
+
 async function sendWhatsApp(from: string, to: string, body: string): Promise<void> {
   // Check for platform override (e.g. Facebook Messenger) registered for this sender
   const override = _replyOverrides.get(from);
@@ -226,8 +237,9 @@ async function sendWhatsApp(from: string, to: string, body: string): Promise<voi
     return;
   }
   try {
+    const deepLink = await getMemberDeepLink(from);
     const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-    await client.messages.create({ from: to, to: from, body });
+    await client.messages.create({ from: to, to: from, body: body + deepLink });
   } catch {
     // Never break the webhook
   }

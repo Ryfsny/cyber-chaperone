@@ -25,6 +25,11 @@ interface Member {
   province: string | null;
   postalCode: string | null;
   country: string | null;
+  paystackSubscriptionCode: string | null;
+  paystackStatus: string | null;
+  paystackPlanCode: string | null;
+  paystackPaidAt: string | null;
+  hasPassword?: boolean;
   createdAt: string;
 }
 
@@ -51,11 +56,28 @@ function statusBadge(status: string) {
 }
 
 function tierLabel(tier: string | null): { label: string; icon: string } {
-  if (!tier) return { label: "Free Member", icon: "🆓" };
+  if (!tier) return { label: "Entry Plan", icon: "🆓" };
   const t = tier.toLowerCase();
   if (t.includes("family")) return { label: "Family Plan", icon: "🏠" };
   if (t.includes("single") || t.includes("individual")) return { label: "Individual Plan", icon: "👤" };
+  if (t.includes("entry") || t.includes("free")) return { label: "Entry Plan", icon: "🆓" };
   return { label: tier, icon: "📋" };
+}
+
+function formatDate(d: string | null): string {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-ZA", { year: "numeric", month: "long", day: "numeric" });
+}
+
+function paystackStatusBadge(status: string | null): { label: string; bg: string; color: string } {
+  const map: Record<string, { label: string; bg: string; color: string }> = {
+    active: { label: "Active", bg: "#dcfce7", color: "#166534" },
+    cancelled: { label: "Cancelled", bg: "#fef2f2", color: "#dc2626" },
+    non_renewing: { label: "Not renewing", bg: "#fffbeb", color: "#92400e" },
+    attention: { label: "Needs attention", bg: "#fef2f2", color: "#dc2626" },
+    completed: { label: "Completed", bg: "#f3f4f6", color: "#6b7280" },
+  };
+  return map[status ?? ""] ?? { label: status ?? "Unknown", bg: "#f3f4f6", color: "#6b7280" };
 }
 
 export default function MemberDashboard() {
@@ -65,6 +87,18 @@ export default function MemberDashboard() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
+  const [activeTab, setActiveTab] = useState<"profile" | "security" | "subscription">("profile");
+
+  // Password management
+  const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
+  const [pwMsg, setPwMsg] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+
+  // Unsubscribe
+  const [unsubConfirm, setUnsubConfirm] = useState(false);
+  const [unsubLoading, setUnsubLoading] = useState(false);
+  const [unsubMsg, setUnsubMsg] = useState("");
+
   const [form, setForm] = useState({
     firstName: "", lastName: "", displayName: "", notes: "",
     iceContactName: "", iceContactPhone: "",
@@ -101,24 +135,51 @@ export default function MemberDashboard() {
   }
 
   async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true); setSaveMsg("");
+    e.preventDefault(); setSaving(true); setSaveMsg("");
     try {
       const res = await fetch(`${BASE}/api/member-portal/me`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(form),
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        credentials: "include", body: JSON.stringify(form),
       });
       const data = await res.json() as { member: Member; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Save failed.");
-      setMember(data.member);
-      setEditing(false);
-      setSaveMsg("Details updated successfully.");
-      setTimeout(() => setSaveMsg(""), 4000);
-    } catch (err) {
-      setSaveMsg(err instanceof Error ? err.message : "Save failed.");
-    } finally { setSaving(false); }
+      setMember(data.member); setEditing(false);
+      setSaveMsg("Details updated."); setTimeout(() => setSaveMsg(""), 4000);
+    } catch (err) { setSaveMsg(err instanceof Error ? err.message : "Save failed."); }
+    finally { setSaving(false); }
+  }
+
+  async function handleSetPassword(e: React.FormEvent) {
+    e.preventDefault(); setPwMsg(""); setPwSaving(true);
+    if (pwForm.next !== pwForm.confirm) { setPwMsg("Passwords do not match."); setPwSaving(false); return; }
+    if (pwForm.next.length < 8) { setPwMsg("Password must be at least 8 characters."); setPwSaving(false); return; }
+    try {
+      const res = await fetch(`${BASE}/api/member-portal/set-password`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ password: pwForm.next, currentPassword: pwForm.current || undefined }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string; message?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed.");
+      setPwMsg("Password saved successfully."); setPwForm({ current: "", next: "", confirm: "" });
+      setMember(m => m ? { ...m, hasPassword: true } : m);
+    } catch (err) { setPwMsg(err instanceof Error ? err.message : "Failed."); }
+    finally { setPwSaving(false); }
+  }
+
+  async function handleCancelSubscription() {
+    setUnsubLoading(true); setUnsubMsg("");
+    try {
+      const res = await fetch(`${BASE}/api/member-portal/cancel-subscription`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+      });
+      const data = await res.json() as { ok?: boolean; error?: string; message?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to cancel.");
+      setUnsubMsg(data.message ?? "Subscription cancelled.");
+      setUnsubConfirm(false);
+      void fetchMe();
+    } catch (err) { setUnsubMsg(err instanceof Error ? err.message : "Failed."); }
+    finally { setUnsubLoading(false); }
   }
 
   async function handleLogout() {
@@ -135,8 +196,20 @@ export default function MemberDashboard() {
 
   const displayPhone = member.whatsappNumber.replace("whatsapp:", "");
   const isFamilyPlan = (member.membershipTier ?? "").toLowerCase().includes("family");
-  const isPaidPlan = !!(member.membershipTier && member.membershipTier !== "Entry Level");
+  const isPaidPlan = !!(member.membershipTier && !["entry", "free", "entry level"].includes(member.membershipTier.toLowerCase()));
   const { label: tierLabelStr, icon: tierIcon } = tierLabel(member.membershipTier);
+  const hasActiveSub = !!(member.paystackSubscriptionCode && member.paystackStatus === "active");
+
+  const tabStyle = (active: boolean): React.CSSProperties => ({
+    padding: "10px 18px", fontSize: "13px", fontWeight: active ? 700 : 500,
+    borderBottom: active ? "2px solid #1db954" : "2px solid transparent",
+    color: active ? "#1db954" : "#6b7280", background: "none", border: "none",
+    cursor: "pointer", whiteSpace: "nowrap",
+  });
+  const inputStyle: React.CSSProperties = {
+    border: "1px solid #d1d5db", borderRadius: "8px", padding: "9px 12px", fontSize: "14px",
+    color: "#111827", outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "'Open Sans', sans-serif",
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: "#f9fafb", fontFamily: "'Open Sans', sans-serif" }}>
@@ -147,14 +220,15 @@ export default function MemberDashboard() {
         </a>
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
           <span style={{ color: "#9ca3af", fontSize: "13px" }}>Hi, {member.firstName}</span>
-          <button
-            onClick={() => void handleLogout()}
-            style={{ background: "none", border: "1px solid #374151", color: "#9ca3af", borderRadius: "8px", padding: "7px 14px", fontSize: "13px", cursor: "pointer" }}
-          >Log Out</button>
+          <button onClick={() => void handleLogout()}
+            style={{ background: "none", border: "1px solid #374151", color: "#9ca3af", borderRadius: "8px", padding: "7px 14px", fontSize: "13px", cursor: "pointer" }}>
+            Log Out
+          </button>
         </div>
       </nav>
 
       <div style={{ maxWidth: "720px", margin: "0 auto", padding: "40px 20px" }}>
+
         {/* Hero card */}
         <div style={{ background: "#0d1117", borderRadius: "16px", padding: "28px 32px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "20px" }}>
           <div style={{ width: "60px", height: "60px", background: "#1db954", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px", flexShrink: 0 }}>
@@ -172,197 +246,280 @@ export default function MemberDashboard() {
           </div>
         </div>
 
-        {/* Save message */}
         {saveMsg && (
-          <div style={{
-            background: saveMsg.includes("success") ? "#dcfce7" : "#fef2f2",
-            border: `1px solid ${saveMsg.includes("success") ? "#86efac" : "#fecaca"}`,
-            color: saveMsg.includes("success") ? "#166534" : "#dc2626",
-            borderRadius: "10px", padding: "12px 16px", fontSize: "14px", marginBottom: "20px",
-          }}>{saveMsg}</div>
+          <div style={{ background: saveMsg.includes("updated") ? "#dcfce7" : "#fef2f2", border: `1px solid ${saveMsg.includes("updated") ? "#86efac" : "#fecaca"}`, color: saveMsg.includes("updated") ? "#166534" : "#dc2626", borderRadius: "10px", padding: "12px 16px", fontSize: "14px", marginBottom: "20px" }}>
+            {saveMsg}
+          </div>
         )}
 
-        {/* ── UPSELL SECTION ────────────────────────────────────────────── */}
+        {/* Upsell */}
         {!isPaidPlan && (
-          <div style={{
-            background: "linear-gradient(135deg, #0d1117 0%, #1a2332 100%)",
-            borderRadius: "14px", border: "2px solid #1db954",
-            padding: "24px 28px", marginBottom: "20px",
-          }}>
-            <div style={{ color: "#fff", fontWeight: 800, fontSize: "17px", fontFamily: "Montserrat, sans-serif", marginBottom: "6px" }}>
-              🛡️ Upgrade to Full Cyber Chaperone Protection
-            </div>
+          <div style={{ background: "linear-gradient(135deg, #0d1117 0%, #1a2332 100%)", borderRadius: "14px", border: "2px solid #1db954", padding: "24px 28px", marginBottom: "20px" }}>
+            <div style={{ color: "#fff", fontWeight: 800, fontSize: "17px", fontFamily: "Montserrat, sans-serif", marginBottom: "6px" }}>🛡️ Upgrade to Full Cyber Chaperone Protection</div>
             <p style={{ color: "#9ca3af", fontSize: "13px", marginBottom: "20px", lineHeight: 1.5 }}>
-              You're on the free plan. Upgrade to get real-time trip monitoring, ETA tracking, ICE escalation, and 24/7 operator coverage by Andre.
+              You're on the free plan. Upgrade to get real-time trip monitoring, ETA tracking, ICE escalation, and 24/7 operator coverage.
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <a href={`${BASE}/upgrade`}
-                style={{ display: "block", background: "#1db954", color: "#fff", borderRadius: "10px", padding: "16px", textDecoration: "none", textAlign: "center" }}>
+              <a href={`${BASE}/upgrade`} style={{ display: "block", background: "#1db954", color: "#fff", borderRadius: "10px", padding: "16px", textDecoration: "none", textAlign: "center" }}>
                 <div style={{ fontWeight: 800, fontSize: "20px", fontFamily: "Montserrat, sans-serif" }}>R150<span style={{ fontSize: "12px", fontWeight: 400 }}>/mo</span></div>
                 <div style={{ fontWeight: 700, fontSize: "13px", marginTop: "2px" }}>👤 Individual</div>
-                <div style={{ fontSize: "12px", opacity: 0.85, marginTop: "4px" }}>Just you, fully covered</div>
               </a>
-              <a href={`${BASE}/upgrade`}
-                style={{ display: "block", background: "#fff", color: "#0d1117", borderRadius: "10px", padding: "16px", textDecoration: "none", textAlign: "center" }}>
+              <a href={`${BASE}/upgrade`} style={{ display: "block", background: "#fff", color: "#0d1117", borderRadius: "10px", padding: "16px", textDecoration: "none", textAlign: "center" }}>
                 <div style={{ fontWeight: 800, fontSize: "20px", fontFamily: "Montserrat, sans-serif" }}>R250<span style={{ fontSize: "12px", fontWeight: 400 }}>/mo</span></div>
                 <div style={{ fontWeight: 700, fontSize: "13px", marginTop: "2px" }}>🏠 Family (up to 5)</div>
-                <div style={{ fontSize: "12px", opacity: 0.65, marginTop: "4px" }}>Everyone covered together</div>
               </a>
             </div>
           </div>
         )}
 
-        {isPaidPlan && !isFamilyPlan && (
-          <div style={{
-            background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "14px",
-            padding: "18px 22px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "16px",
-          }}>
-            <span style={{ fontSize: "24px", flexShrink: 0 }}>🏠</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: "14px", color: "#92400e" }}>Upgrade to Family Plan for R100 more</div>
-              <div style={{ fontSize: "12px", color: "#b45309", marginTop: "3px" }}>Cover up to 5 family members — each one is the other's ICE contact. R250/month total.</div>
-            </div>
-            <a href="https://paystack.shop/pay/family-cyber-chaperone" target="_blank" rel="noopener noreferrer"
-              style={{ background: "#d97706", color: "#fff", textDecoration: "none", borderRadius: "8px", padding: "8px 16px", fontSize: "13px", fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>
-              Upgrade →
-            </a>
-          </div>
-        )}
+        {/* Tab bar */}
+        <div style={{ background: "#fff", borderRadius: "14px 14px 0 0", border: "1px solid #e5e7eb", borderBottom: "none", display: "flex", overflowX: "auto" }}>
+          <button style={tabStyle(activeTab === "profile")} onClick={() => setActiveTab("profile")}>My Details</button>
+          <button style={tabStyle(activeTab === "subscription")} onClick={() => setActiveTab("subscription")}>Subscription</button>
+          <button style={tabStyle(activeTab === "security")} onClick={() => setActiveTab("security")}>Security</button>
+        </div>
 
-        {/* Profile card */}
-        <div style={{ background: "#fff", borderRadius: "14px", border: "1px solid #e5e7eb", overflow: "hidden", marginBottom: "20px" }}>
-          <div style={{ padding: "20px 24px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#111827", fontFamily: "Montserrat, sans-serif" }}>My Details</h2>
-            {!editing && (
-              <button onClick={() => setEditing(true)}
-                style={{ background: "#f3f4f6", border: "none", borderRadius: "8px", padding: "7px 14px", fontSize: "13px", color: "#374151", cursor: "pointer", fontWeight: 600 }}>
-                Edit
-              </button>
-            )}
-          </div>
+        {/* Tab content */}
+        <div style={{ background: "#fff", borderRadius: "0 0 14px 14px", border: "1px solid #e5e7eb", padding: "24px", marginBottom: "20px" }}>
 
-          <div style={{ padding: "24px" }}>
-            {editing ? (
-              <form onSubmit={(e) => void handleSave(e)}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
-                  <Field label="First Name" value={form.firstName} onChange={(v) => setForm(f => ({ ...f, firstName: v }))} />
-                  <Field label="Last Name" value={form.lastName} onChange={(v) => setForm(f => ({ ...f, lastName: v }))} />
-                </div>
-                <div style={{ marginBottom: "16px" }}>
-                  <Field label="Display Name" value={form.displayName} onChange={(v) => setForm(f => ({ ...f, displayName: v }))} />
-                </div>
-
-                {/* Contact info */}
-                <hr style={{ border: "none", borderTop: "1px solid #f3f4f6", margin: "20px 0" }} />
-                <div style={{ fontWeight: 700, fontSize: "13px", color: "#374151", marginBottom: "12px" }}>📬 Contact Information</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
-                  <Field label="Email Address" value={form.email} onChange={(v) => setForm(f => ({ ...f, email: v }))} placeholder="you@example.com" />
-                  <Field label="Mobile Number" value={form.mobile} onChange={(v) => setForm(f => ({ ...f, mobile: v }))} placeholder="+27 82 000 0000" />
-                </div>
-
-                {/* Address */}
-                <hr style={{ border: "none", borderTop: "1px solid #f3f4f6", margin: "20px 0" }} />
-                <div style={{ fontWeight: 700, fontSize: "13px", color: "#374151", marginBottom: "12px" }}>🏠 Home Address</div>
-                <div style={{ marginBottom: "14px" }}>
-                  <Field label="Street Address" value={form.homeAddress} onChange={(v) => setForm(f => ({ ...f, homeAddress: v }))} placeholder="12 Oak Avenue" />
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "14px" }}>
-                  <Field label="Suburb" value={form.suburb} onChange={(v) => setForm(f => ({ ...f, suburb: v }))} placeholder="Sandton" />
-                  <Field label="City" value={form.city} onChange={(v) => setForm(f => ({ ...f, city: v }))} placeholder="Johannesburg" />
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", marginBottom: "16px" }}>
-                  <Field label="Province" value={form.province} onChange={(v) => setForm(f => ({ ...f, province: v }))} placeholder="Gauteng" />
-                  <Field label="Postal Code" value={form.postalCode} onChange={(v) => setForm(f => ({ ...f, postalCode: v }))} placeholder="2196" />
-                  <Field label="Country" value={form.country} onChange={(v) => setForm(f => ({ ...f, country: v }))} placeholder="South Africa" />
-                </div>
-
-                {/* ICE contact — shown for individual plans (family members are each other's ICE) */}
-                {!isFamilyPlan && (
-                  <>
-                    <hr style={{ border: "none", borderTop: "1px solid #f3f4f6", margin: "20px 0" }} />
-                    <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "10px", padding: "12px 16px", marginBottom: "16px" }}>
-                      <div style={{ fontWeight: 700, fontSize: "13px", color: "#166534", marginBottom: "4px" }}>🆘 ICE Contact — In Case of Emergency</div>
-                      <div style={{ fontSize: "12px", color: "#4b7c55" }}>
-                        This person will be contacted by Andre if we can't reach you. For a family plan, your family members automatically become each other's ICE contacts.
-                      </div>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
-                      <Field label="ICE Contact Name" value={form.iceContactName} onChange={(v) => setForm(f => ({ ...f, iceContactName: v }))} placeholder="e.g. Johan Smit" />
-                      <Field label="ICE WhatsApp Number" value={form.iceContactPhone} onChange={(v) => setForm(f => ({ ...f, iceContactPhone: v }))} placeholder="+27 82 000 0000" />
-                    </div>
-                  </>
-                )}
-
-                {isFamilyPlan && (
-                  <>
-                    <hr style={{ border: "none", borderTop: "1px solid #f3f4f6", margin: "20px 0" }} />
-                    <div style={{ background: "#eff6ff", border: "1px solid #93c5fd", borderRadius: "10px", padding: "12px 16px", marginBottom: "16px" }}>
-                      <div style={{ fontWeight: 700, fontSize: "13px", color: "#1d4ed8", marginBottom: "4px" }}>🏠 Family Plan — ICE contacts are automatic</div>
-                      <div style={{ fontSize: "12px", color: "#3b5fc0" }}>
-                        Your family members on this plan are automatically set as each other's ICE contacts. No separate contact needed.
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                <div style={{ marginBottom: "20px" }}>
-                  <Field label="Notes (optional)" value={form.notes} onChange={(v) => setForm(f => ({ ...f, notes: v }))} placeholder="Any info for the operator…" textarea />
-                </div>
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <button type="submit" disabled={saving}
-                    style={{ background: "#1db954", color: "#fff", border: "none", borderRadius: "8px", padding: "10px 22px", fontSize: "14px", fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
-                    {saving ? "Saving…" : "Save Changes"}
+          {/* ── PROFILE TAB ─────────────────────────────────────────────── */}
+          {activeTab === "profile" && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+                <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#111827", fontFamily: "Montserrat, sans-serif" }}>My Details</h2>
+                {!editing && (
+                  <button onClick={() => setEditing(true)}
+                    style={{ background: "#f3f4f6", border: "none", borderRadius: "8px", padding: "7px 14px", fontSize: "13px", color: "#374151", cursor: "pointer", fontWeight: 600 }}>
+                    Edit
                   </button>
-                  <button type="button" onClick={() => setEditing(false)}
-                    style={{ background: "none", border: "1px solid #d1d5db", borderRadius: "8px", padding: "10px 22px", fontSize: "14px", color: "#6b7280", cursor: "pointer" }}>
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div style={{ display: "grid", gap: "14px" }}>
-                <InfoRow label="Full Name" value={`${member.firstName} ${member.lastName}`} />
-                <InfoRow label="Display Name" value={member.displayName} />
-                <InfoRow label="WhatsApp" value={displayPhone} />
-                {member.email && <InfoRow label="Email" value={member.email} />}
-                {member.mobile && <InfoRow label="Mobile" value={member.mobile} />}
-                <InfoRow label="Plan" value={`${tierIcon} ${tierLabelStr}`} />
-                {isFamilyPlan && member.familyGroupId && (
-                  <InfoRow label="Family Group" value={`Group #${member.familyGroupId} — family members are each other's ICE contacts`} />
-                )}
-                {!isFamilyPlan && (
-                  <>
-                    <hr style={{ border: "none", borderTop: "1px solid #f3f4f6" }} />
-                    <InfoRow label="ICE Contact" value={member.iceContactName ?? "—"} />
-                    <InfoRow label="ICE WhatsApp" value={member.iceContactPhone ? member.iceContactPhone.replace("whatsapp:", "") : "—"} />
-                  </>
-                )}
-                {(member.homeAddress || member.suburb || member.city) && (
-                  <>
-                    <hr style={{ border: "none", borderTop: "1px solid #f3f4f6" }} />
-                    {member.homeAddress && <InfoRow label="Address" value={member.homeAddress} />}
-                    {(member.suburb || member.city) && (
-                      <InfoRow label="Area" value={[member.suburb, member.city, member.province, member.postalCode].filter(Boolean).join(", ")} />
-                    )}
-                    {member.country && <InfoRow label="Country" value={member.country} />}
-                  </>
-                )}
-                {member.notes && (
-                  <>
-                    <hr style={{ border: "none", borderTop: "1px solid #f3f4f6" }} />
-                    <InfoRow label="Notes" value={member.notes} />
-                  </>
                 )}
               </div>
-            )}
-          </div>
+
+              {editing ? (
+                <form onSubmit={(e) => void handleSave(e)}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+                    <Field label="First Name" value={form.firstName} onChange={(v) => setForm(f => ({ ...f, firstName: v }))} />
+                    <Field label="Last Name" value={form.lastName} onChange={(v) => setForm(f => ({ ...f, lastName: v }))} />
+                  </div>
+                  <div style={{ marginBottom: "16px" }}>
+                    <Field label="Display Name" value={form.displayName} onChange={(v) => setForm(f => ({ ...f, displayName: v }))} />
+                  </div>
+                  <hr style={{ border: "none", borderTop: "1px solid #f3f4f6", margin: "20px 0" }} />
+                  <div style={{ fontWeight: 700, fontSize: "13px", color: "#374151", marginBottom: "12px" }}>📬 Contact Information</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+                    <Field label="Email Address" value={form.email} onChange={(v) => setForm(f => ({ ...f, email: v }))} placeholder="you@example.com" />
+                    <Field label="Cell Number" value={form.mobile} onChange={(v) => setForm(f => ({ ...f, mobile: v }))} placeholder="+27 82 000 0000" />
+                  </div>
+                  <hr style={{ border: "none", borderTop: "1px solid #f3f4f6", margin: "20px 0" }} />
+                  <div style={{ fontWeight: 700, fontSize: "13px", color: "#374151", marginBottom: "12px" }}>🏠 Home Address</div>
+                  <div style={{ marginBottom: "14px" }}>
+                    <Field label="Street Address" value={form.homeAddress} onChange={(v) => setForm(f => ({ ...f, homeAddress: v }))} placeholder="12 Oak Avenue" />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "14px" }}>
+                    <Field label="Suburb" value={form.suburb} onChange={(v) => setForm(f => ({ ...f, suburb: v }))} placeholder="Sandton" />
+                    <Field label="City" value={form.city} onChange={(v) => setForm(f => ({ ...f, city: v }))} placeholder="Johannesburg" />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+                    <Field label="Province" value={form.province} onChange={(v) => setForm(f => ({ ...f, province: v }))} placeholder="Gauteng" />
+                    <Field label="Postal Code" value={form.postalCode} onChange={(v) => setForm(f => ({ ...f, postalCode: v }))} placeholder="2196" />
+                    <Field label="Country" value={form.country} onChange={(v) => setForm(f => ({ ...f, country: v }))} placeholder="South Africa" />
+                  </div>
+                  {!isFamilyPlan && (
+                    <>
+                      <hr style={{ border: "none", borderTop: "1px solid #f3f4f6", margin: "20px 0" }} />
+                      <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "10px", padding: "12px 16px", marginBottom: "16px" }}>
+                        <div style={{ fontWeight: 700, fontSize: "13px", color: "#166534", marginBottom: "4px" }}>🆘 ICE Contact — In Case of Emergency</div>
+                        <div style={{ fontSize: "12px", color: "#4b7c55" }}>This person will be contacted if we can't reach you.</div>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+                        <Field label="ICE Contact Name" value={form.iceContactName} onChange={(v) => setForm(f => ({ ...f, iceContactName: v }))} placeholder="e.g. Johan Smit" />
+                        <Field label="ICE WhatsApp Number" value={form.iceContactPhone} onChange={(v) => setForm(f => ({ ...f, iceContactPhone: v }))} placeholder="+27 82 000 0000" />
+                      </div>
+                    </>
+                  )}
+                  <div style={{ marginBottom: "20px" }}>
+                    <Field label="Notes (optional)" value={form.notes} onChange={(v) => setForm(f => ({ ...f, notes: v }))} placeholder="Any info for the operator…" textarea />
+                  </div>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    <button type="submit" disabled={saving}
+                      style={{ background: "#1db954", color: "#fff", border: "none", borderRadius: "8px", padding: "10px 22px", fontSize: "14px", fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
+                      {saving ? "Saving…" : "Save Changes"}
+                    </button>
+                    <button type="button" onClick={() => setEditing(false)}
+                      style={{ background: "none", border: "1px solid #d1d5db", borderRadius: "8px", padding: "10px 22px", fontSize: "14px", color: "#6b7280", cursor: "pointer" }}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div style={{ display: "grid", gap: "14px" }}>
+                  <InfoRow label="Full Name" value={`${member.firstName} ${member.lastName}`} />
+                  <InfoRow label="Display Name" value={member.displayName} />
+                  <InfoRow label="WhatsApp" value={displayPhone} />
+                  {member.email && <InfoRow label="Email" value={member.email} />}
+                  {member.mobile && <InfoRow label="Cell" value={member.mobile} />}
+                  {!isFamilyPlan && (
+                    <>
+                      <hr style={{ border: "none", borderTop: "1px solid #f3f4f6" }} />
+                      <InfoRow label="ICE Contact" value={member.iceContactName ?? "—"} />
+                      <InfoRow label="ICE WhatsApp" value={member.iceContactPhone ? member.iceContactPhone.replace("whatsapp:", "") : "—"} />
+                    </>
+                  )}
+                  {isFamilyPlan && member.familyGroupId && (
+                    <>
+                      <hr style={{ border: "none", borderTop: "1px solid #f3f4f6" }} />
+                      <InfoRow label="Family Group" value={`Group #${member.familyGroupId} — members are each other's ICE contacts`} />
+                    </>
+                  )}
+                  {(member.homeAddress || member.suburb || member.city) && (
+                    <>
+                      <hr style={{ border: "none", borderTop: "1px solid #f3f4f6" }} />
+                      {member.homeAddress && <InfoRow label="Address" value={member.homeAddress} />}
+                      {(member.suburb || member.city) && (
+                        <InfoRow label="Area" value={[member.suburb, member.city, member.province, member.postalCode].filter(Boolean).join(", ")} />
+                      )}
+                    </>
+                  )}
+                  {member.notes && (
+                    <>
+                      <hr style={{ border: "none", borderTop: "1px solid #f3f4f6" }} />
+                      <InfoRow label="Notes" value={member.notes} />
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── SUBSCRIPTION TAB ─────────────────────────────────────────── */}
+          {activeTab === "subscription" && (
+            <>
+              <h2 style={{ margin: "0 0 20px", fontSize: "15px", fontWeight: 700, color: "#111827", fontFamily: "Montserrat, sans-serif" }}>Subscription & Billing</h2>
+
+              <div style={{ display: "grid", gap: "14px", marginBottom: "24px" }}>
+                <InfoRow label="Plan" value={`${tierIcon} ${tierLabelStr}`} />
+                <InfoRow label="Status" value={(() => { const b = paystackStatusBadge(member.paystackStatus); return b.label; })()} />
+                {member.paystackPaidAt && <InfoRow label="Last Payment" value={formatDate(member.paystackPaidAt)} />}
+                {member.paystackSubscriptionCode && <InfoRow label="Reference" value={member.paystackSubscriptionCode} />}
+              </div>
+
+              {/* Paystack status badge */}
+              {member.paystackStatus && (
+                <div style={{ marginBottom: "20px" }}>
+                  {(() => {
+                    const b = paystackStatusBadge(member.paystackStatus);
+                    return (
+                      <span style={{ background: b.bg, color: b.color, padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 700 }}>
+                        {b.label}
+                      </span>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Payment history notice */}
+              {!member.paystackSubscriptionCode && (
+                <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "16px", marginBottom: "20px", fontSize: "13px", color: "#6b7280" }}>
+                  No paid subscription on record. <a href={`${BASE}/upgrade`} style={{ color: "#1db954", fontWeight: 600, textDecoration: "none" }}>Upgrade your plan →</a>
+                </div>
+              )}
+
+              {/* Upgrade to family CTA */}
+              {isPaidPlan && !isFamilyPlan && (
+                <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "10px", padding: "16px 20px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "14px" }}>
+                  <span style={{ fontSize: "22px" }}>🏠</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: "14px", color: "#92400e" }}>Upgrade to Family Plan for R100 more</div>
+                    <div style={{ fontSize: "12px", color: "#b45309", marginTop: "3px" }}>Up to 5 family members — R250/month total.</div>
+                  </div>
+                  <a href="https://paystack.shop/pay/family-cyber-chaperone" target="_blank" rel="noopener noreferrer"
+                    style={{ background: "#d97706", color: "#fff", textDecoration: "none", borderRadius: "8px", padding: "8px 16px", fontSize: "13px", fontWeight: 700, whiteSpace: "nowrap" }}>
+                    Upgrade →
+                  </a>
+                </div>
+              )}
+
+              {/* Unsubscribe */}
+              {hasActiveSub && (
+                <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: "20px" }}>
+                  {unsubMsg && (
+                    <div style={{ background: unsubMsg.includes("cancelled") ? "#f0fdf4" : "#fef2f2", border: `1px solid ${unsubMsg.includes("cancelled") ? "#86efac" : "#fecaca"}`, borderRadius: "8px", padding: "10px 14px", fontSize: "13px", color: unsubMsg.includes("cancelled") ? "#166534" : "#dc2626", marginBottom: "14px" }}>
+                      {unsubMsg}
+                    </div>
+                  )}
+                  {!unsubConfirm ? (
+                    <button onClick={() => setUnsubConfirm(true)}
+                      style={{ background: "none", border: "1px solid #fecaca", color: "#dc2626", borderRadius: "8px", padding: "8px 16px", fontSize: "13px", cursor: "pointer", fontWeight: 600 }}>
+                      Cancel Subscription
+                    </button>
+                  ) : (
+                    <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", padding: "16px" }}>
+                      <p style={{ fontSize: "14px", color: "#dc2626", fontWeight: 600, margin: "0 0 8px" }}>Are you sure?</p>
+                      <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 16px" }}>
+                        You'll retain access until the end of the current billing period. This cannot be undone from the portal.
+                      </p>
+                      <div style={{ display: "flex", gap: "10px" }}>
+                        <button onClick={() => void handleCancelSubscription()} disabled={unsubLoading}
+                          style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: "8px", padding: "9px 18px", fontSize: "13px", fontWeight: 700, cursor: unsubLoading ? "not-allowed" : "pointer", opacity: unsubLoading ? 0.6 : 1 }}>
+                          {unsubLoading ? "Cancelling…" : "Yes, cancel my subscription"}
+                        </button>
+                        <button onClick={() => setUnsubConfirm(false)} disabled={unsubLoading}
+                          style={{ background: "none", border: "1px solid #d1d5db", borderRadius: "8px", padding: "9px 18px", fontSize: "13px", color: "#6b7280", cursor: "pointer" }}>
+                          Keep my subscription
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── SECURITY TAB ─────────────────────────────────────────────── */}
+          {activeTab === "security" && (
+            <>
+              <h2 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 700, color: "#111827", fontFamily: "Montserrat, sans-serif" }}>
+                {member.hasPassword ? "Change Password" : "Set a Password"}
+              </h2>
+              <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 20px" }}>
+                {member.hasPassword
+                  ? "You can log in with your WhatsApp number and this password as an alternative to the OTP code."
+                  : "Add a password so you can log in without waiting for a WhatsApp code."}
+              </p>
+
+              {pwMsg && (
+                <div style={{ background: pwMsg.includes("success") ? "#f0fdf4" : "#fef2f2", border: `1px solid ${pwMsg.includes("success") ? "#86efac" : "#fecaca"}`, borderRadius: "8px", padding: "10px 14px", fontSize: "13px", color: pwMsg.includes("success") ? "#166534" : "#dc2626", marginBottom: "16px" }}>
+                  {pwMsg}
+                </div>
+              )}
+
+              <form onSubmit={(e) => void handleSetPassword(e)}>
+                {member.hasPassword && (
+                  <div style={{ marginBottom: "14px" }}>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#6b7280", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Current Password</label>
+                    <input type="password" value={pwForm.current} onChange={(e) => setPwForm(f => ({ ...f, current: e.target.value }))} placeholder="Your current password" required style={inputStyle} />
+                  </div>
+                )}
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#6b7280", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>New Password</label>
+                  <input type="password" value={pwForm.next} onChange={(e) => setPwForm(f => ({ ...f, next: e.target.value }))} placeholder="At least 8 characters" required style={inputStyle} />
+                </div>
+                <div style={{ marginBottom: "20px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#6b7280", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Confirm Password</label>
+                  <input type="password" value={pwForm.confirm} onChange={(e) => setPwForm(f => ({ ...f, confirm: e.target.value }))} placeholder="Repeat your password" required style={inputStyle} />
+                </div>
+                <button type="submit" disabled={pwSaving}
+                  style={{ background: "#1db954", color: "#fff", border: "none", borderRadius: "8px", padding: "10px 22px", fontSize: "14px", fontWeight: 700, cursor: pwSaving ? "not-allowed" : "pointer", opacity: pwSaving ? 0.6 : 1 }}>
+                  {pwSaving ? "Saving…" : member.hasPassword ? "Update Password" : "Set Password"}
+                </button>
+              </form>
+            </>
+          )}
         </div>
 
         {/* Quick actions */}
         <div style={{ background: "#fff", borderRadius: "14px", border: "1px solid #e5e7eb", padding: "20px 24px" }}>
-          <h2 style={{ margin: "0 0 16px", fontSize: "15px", fontWeight: 700, color: "#111827", fontFamily: "Montserrat, sans-serif" }}>
-            Quick Actions
-          </h2>
+          <h2 style={{ margin: "0 0 16px", fontSize: "15px", fontWeight: 700, color: "#111827", fontFamily: "Montserrat, sans-serif" }}>Quick Actions</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <a href="https://wa.me/27825611065?text=Hi" target="_blank" rel="noopener noreferrer"
               style={{ display: "flex", alignItems: "center", gap: "12px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "10px", padding: "14px 16px", textDecoration: "none", color: "#166534" }}>
@@ -372,18 +529,9 @@ export default function MemberDashboard() {
                 <div style={{ fontSize: "12px", color: "#4b7c55" }}>Start a trip, check in, or get help — all via WhatsApp</div>
               </div>
             </a>
-            {!isFamilyPlan && (
-              <a href="https://paystack.shop/pay/family-cyber-chaperone" target="_blank" rel="noopener noreferrer"
-                style={{ display: "flex", alignItems: "center", gap: "12px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "10px", padding: "14px 16px", textDecoration: "none", color: "#92400e" }}>
-                <span style={{ fontSize: "18px" }}>🏠</span>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: "14px" }}>Add Your Family — R250/month</div>
-                  <div style={{ fontSize: "12px", color: "#b45309" }}>Up to 5 members, all covered, all each other's ICE contacts</div>
-                </div>
-              </a>
-            )}
           </div>
         </div>
+
       </div>
     </div>
   );
@@ -392,7 +540,7 @@ export default function MemberDashboard() {
 function Field({ label, value, onChange, placeholder = "", textarea = false }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string; textarea?: boolean;
 }) {
-  const shared = { border: "1px solid #d1d5db", borderRadius: "8px", padding: "9px 12px", fontSize: "14px", color: "#111827", outline: "none", width: "100%", boxSizing: "border-box" as const, fontFamily: "'Open Sans', sans-serif" };
+  const shared: React.CSSProperties = { border: "1px solid #d1d5db", borderRadius: "8px", padding: "9px 12px", fontSize: "14px", color: "#111827", outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "'Open Sans', sans-serif" };
   return (
     <div>
       <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#6b7280", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>{label}</label>

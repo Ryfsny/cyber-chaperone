@@ -1,7 +1,9 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import twilio from "twilio";
+import bcrypt from "bcryptjs";
 import { db, membersTable } from "@workspace/db";
 import { eq, or } from "drizzle-orm";
+import nodemailer from "nodemailer";
 
 const router: IRouter = Router();
 
@@ -13,25 +15,21 @@ const otpStore = new Map<string, OtpEntry>();
 interface CooldownEntry { lastRequestAt: number }
 const otpCooldown = new Map<string, CooldownEntry>();
 
-const OTP_TTL_MS = 10 * 60 * 1000;          // 10 minutes
-const OTP_COOLDOWN_MS = 60 * 1000;           // 60 seconds between OTP requests
-const OTP_MAX_ATTEMPTS = 5;                  // lock out after 5 wrong guesses
+const OTP_TTL_MS = 10 * 60 * 1000;
+const OTP_COOLDOWN_MS = 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
+const BCRYPT_ROUNDS = 12;
 
 function cleanExpired() {
   const now = Date.now();
-  for (const [k, v] of otpStore) {
-    if (v.expiresAt < now) otpStore.delete(k);
-  }
-  for (const [k, v] of otpCooldown) {
-    if (now - v.lastRequestAt > OTP_TTL_MS) otpCooldown.delete(k);
-  }
+  for (const [k, v] of otpStore) if (v.expiresAt < now) otpStore.delete(k);
+  for (const [k, v] of otpCooldown) if (now - v.lastRequestAt > OTP_TTL_MS) otpCooldown.delete(k);
 }
 
 function generateOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-/** Normalize SA WhatsApp number → +27XXXXXXXXX */
 function normalisePhone(raw: string): string {
   const digits = raw.replace(/\D/g, "");
   if (digits.startsWith("27") && digits.length === 11) return `+${digits}`;
@@ -40,12 +38,8 @@ function normalisePhone(raw: string): string {
   return `+${digits}`;
 }
 
-// ── Member auth guard middleware ───────────────────────────────────────────────
 function requireMemberAuth(req: Request, res: Response, next: NextFunction): void {
-  if (req.session.memberId) {
-    next();
-    return;
-  }
+  if (req.session.memberId) { next(); return; }
   res.status(401).json({ error: "Not authenticated as a member." });
 }
 
@@ -58,59 +52,48 @@ async function sendOtpWhatsApp(phone: string, code: string): Promise<void> {
   });
 }
 
+async function sendOtpEmail(email: string, code: string): Promise<void> {
+  const transport = nodemailer.createTransport({
+    service: "gmail",
+    auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
+  });
+  await transport.sendMail({
+    from: `"eblockwatch" <${process.env.GMAIL_USER}>`,
+    to: email,
+    subject: "Your eblockwatch login code",
+    html: `<p>Your eblockwatch login code is: <strong style="font-size:24px;letter-spacing:4px">${code}</strong></p><p>This code expires in 10 minutes. Do not share it with anyone.</p><p>— eblockwatch</p>`,
+  });
+}
+
 // ── POST /api/member-portal/request-otp ───────────────────────────────────────
 router.post("/member-portal/request-otp", async (req, res): Promise<void> => {
   const raw = (req.body?.whatsappNumber ?? "") as string;
-  if (!raw) {
-    res.status(400).json({ error: "whatsappNumber is required." });
-    return;
-  }
-
+  if (!raw) { res.status(400).json({ error: "whatsappNumber is required." }); return; }
   const phone = normalisePhone(raw.trim());
-
   cleanExpired();
 
-  // Enforce per-number cooldown — do not reveal whether the number is registered.
   const cooldown = otpCooldown.get(phone);
   if (cooldown && Date.now() - cooldown.lastRequestAt < OTP_COOLDOWN_MS) {
-    // Return a generic success response to avoid timing oracle; silently drop the request.
     res.json({ ok: true, message: "If that number is registered, you'll receive a WhatsApp OTP." });
     return;
   }
 
-  // Check member exists
   const [member] = await db
     .select({ id: membersTable.id, firstName: membersTable.firstName })
     .from(membersTable)
-    .where(
-      or(
-        eq(membersTable.whatsappNumber, `whatsapp:${phone}`),
-        eq(membersTable.whatsappNumber, phone),
-      ),
-    );
+    .where(or(eq(membersTable.whatsappNumber, `whatsapp:${phone}`), eq(membersTable.whatsappNumber, phone)));
 
-  // Always record the cooldown timestamp regardless of whether the number is registered.
-  // This prevents an attacker from using timing (or response differentiation) to enumerate members.
   otpCooldown.set(phone, { lastRequestAt: Date.now() });
 
   if (!member) {
-    // Generic response — must not reveal whether the number is in the database.
     res.json({ ok: true, message: "If that number is registered, you'll receive a WhatsApp OTP." });
     return;
   }
 
   const code = generateOtp();
   otpStore.set(phone, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0 });
-
-  // Respond immediately with the same generic message used for unknown numbers.
-  // The Twilio send is deferred to after the response so that registered and
-  // unregistered paths have indistinguishable response latency, preventing
-  // timing-based membership enumeration.
   res.json({ ok: true, message: "If that number is registered, you'll receive a WhatsApp OTP." });
-
-  sendOtpWhatsApp(phone, code).catch((err: unknown) => {
-    req.log.error({ err }, "Failed to send OTP via WhatsApp");
-  });
+  sendOtpWhatsApp(phone, code).catch((err: unknown) => req.log.error({ err }, "Failed to send OTP via WhatsApp"));
 });
 
 // ── POST /api/member-portal/verify-otp ────────────────────────────────────────
@@ -118,11 +101,7 @@ router.post("/member-portal/verify-otp", async (req, res): Promise<void> => {
   const raw = (req.body?.whatsappNumber ?? "") as string;
   const code = String(req.body?.code ?? "").trim();
 
-  if (!raw || !code) {
-    res.status(400).json({ error: "whatsappNumber and code are required." });
-    return;
-  }
-
+  if (!raw || !code) { res.status(400).json({ error: "whatsappNumber and code are required." }); return; }
   const phone = normalisePhone(raw.trim());
   const entry = otpStore.get(phone);
 
@@ -133,60 +112,223 @@ router.post("/member-portal/verify-otp", async (req, res): Promise<void> => {
 
   if (entry.code !== code) {
     entry.attempts += 1;
-
     if (entry.attempts >= OTP_MAX_ATTEMPTS) {
-      // Too many wrong guesses — invalidate the OTP entirely.
       otpStore.delete(phone);
       res.status(401).json({ error: "Too many incorrect attempts. Please request a new OTP." });
       return;
     }
-
     res.status(401).json({ error: "Incorrect OTP. Please check your WhatsApp and try again." });
     return;
   }
 
-  // Valid — find member
   const [member] = await db
     .select()
     .from(membersTable)
-    .where(
-      or(
-        eq(membersTable.whatsappNumber, `whatsapp:${phone}`),
-        eq(membersTable.whatsappNumber, phone),
-      ),
-    );
+    .where(or(eq(membersTable.whatsappNumber, `whatsapp:${phone}`), eq(membersTable.whatsappNumber, phone)));
 
-  if (!member) {
-    res.status(401).json({ error: "Member not found." });
+  if (!member) { res.status(401).json({ error: "Member not found." }); return; }
+
+  otpStore.delete(phone);
+  req.session.memberId = member.id;
+  req.session.save((err) => {
+    if (err) { res.status(500).json({ error: "Session error." }); return; }
+    res.json({ ok: true, member: { id: member.id, firstName: member.firstName, displayName: member.displayName } });
+  });
+});
+
+// ── POST /api/member-portal/login ─────────────────────────────────────────────
+// Password-based login — alternative to OTP
+router.post("/member-portal/login", async (req, res): Promise<void> => {
+  const rawPhone = (req.body?.whatsappNumber ?? req.body?.phone ?? "") as string;
+  const password = (req.body?.password ?? "") as string;
+
+  if (!rawPhone || !password) {
+    res.status(400).json({ error: "Phone number and password are required." });
     return;
   }
 
-  otpStore.delete(phone);
+  const phone = normalisePhone(rawPhone.trim());
+
+  const [member] = await db
+    .select()
+    .from(membersTable)
+    .where(or(eq(membersTable.whatsappNumber, `whatsapp:${phone}`), eq(membersTable.whatsappNumber, phone)));
+
+  if (!member || !member.passwordHash) {
+    // Generic delay to prevent timing oracle
+    await bcrypt.hash("dummy_delay", BCRYPT_ROUNDS);
+    res.status(401).json({ error: "Invalid phone number or password." });
+    return;
+  }
+
+  const valid = await bcrypt.compare(password, member.passwordHash);
+  if (!valid) {
+    res.status(401).json({ error: "Invalid phone number or password." });
+    return;
+  }
 
   req.session.memberId = member.id;
   req.session.save((err) => {
-    if (err) {
-      res.status(500).json({ error: "Session error." });
+    if (err) { res.status(500).json({ error: "Session error." }); return; }
+    res.json({ ok: true, member: { id: member.id, firstName: member.firstName, displayName: member.displayName } });
+  });
+});
+
+// ── POST /api/member-portal/set-password ─────────────────────────────────────
+// Authenticated — set or change password
+router.post("/member-portal/set-password", requireMemberAuth, async (req, res): Promise<void> => {
+  const newPassword = (req.body?.password ?? "") as string;
+  const currentPassword = (req.body?.currentPassword ?? "") as string;
+
+  if (!newPassword || newPassword.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters." });
+    return;
+  }
+
+  const [member] = await db
+    .select({ id: membersTable.id, passwordHash: membersTable.passwordHash })
+    .from(membersTable)
+    .where(eq(membersTable.id, req.session.memberId!));
+
+  if (!member) { res.status(404).json({ error: "Member not found." }); return; }
+
+  // If a password already exists, require the current password
+  if (member.passwordHash) {
+    if (!currentPassword) {
+      res.status(400).json({ error: "Current password is required to set a new one." });
       return;
     }
-    res.json({ ok: true, member: { id: member.id, firstName: member.firstName, displayName: member.displayName } });
+    const valid = await bcrypt.compare(currentPassword, member.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: "Current password is incorrect." });
+      return;
+    }
+  }
+
+  const hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  await db.update(membersTable).set({ passwordHash: hash, updatedAt: new Date() }).where(eq(membersTable.id, member.id));
+  res.json({ ok: true, message: "Password updated successfully." });
+});
+
+// ── POST /api/member-portal/forgot-password ───────────────────────────────────
+// Sends OTP to WhatsApp or email for password reset — same verify-otp flow
+router.post("/member-portal/forgot-password", async (req, res): Promise<void> => {
+  const rawPhone = (req.body?.whatsappNumber ?? "") as string;
+  const rawEmail = (req.body?.email ?? "") as string;
+
+  if (!rawPhone && !rawEmail) {
+    res.status(400).json({ error: "Provide whatsappNumber or email." });
+    return;
+  }
+
+  cleanExpired();
+  const generic = { ok: true, message: "If that account exists, a reset code has been sent." };
+
+  if (rawPhone) {
+    // WhatsApp OTP path (reuse same OTP flow)
+    const phone = normalisePhone(rawPhone.trim());
+
+    const cooldown = otpCooldown.get(phone);
+    if (cooldown && Date.now() - cooldown.lastRequestAt < OTP_COOLDOWN_MS) {
+      res.json(generic); return;
+    }
+    otpCooldown.set(phone, { lastRequestAt: Date.now() });
+
+    const [member] = await db
+      .select({ id: membersTable.id })
+      .from(membersTable)
+      .where(or(eq(membersTable.whatsappNumber, `whatsapp:${phone}`), eq(membersTable.whatsappNumber, phone)));
+
+    if (!member) { res.json(generic); return; }
+
+    const code = generateOtp();
+    otpStore.set(phone, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0 });
+    res.json(generic);
+    sendOtpWhatsApp(phone, code).catch((err: unknown) => req.log.error({ err }, "Failed to send reset OTP via WhatsApp"));
+    return;
+  }
+
+  // Email OTP path
+  const email = rawEmail.trim().toLowerCase();
+  const [member] = await db
+    .select({ id: membersTable.id, email: membersTable.email })
+    .from(membersTable)
+    .where(eq(membersTable.email, email));
+
+  if (!member?.email) { res.json(generic); return; }
+
+  const cooldown = otpCooldown.get(email);
+  if (cooldown && Date.now() - cooldown.lastRequestAt < OTP_COOLDOWN_MS) {
+    res.json(generic); return;
+  }
+  otpCooldown.set(email, { lastRequestAt: Date.now() });
+
+  const code = generateOtp();
+  otpStore.set(email, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0 });
+  res.json(generic);
+  sendOtpEmail(member.email, code).catch((err: unknown) => req.log.error({ err }, "Failed to send reset OTP via email"));
+});
+
+// ── POST /api/member-portal/verify-reset-otp ─────────────────────────────────
+// Verifies a reset OTP (from email or WhatsApp) and logs the member in
+router.post("/member-portal/verify-reset-otp", async (req, res): Promise<void> => {
+  const rawPhone = (req.body?.whatsappNumber ?? "") as string;
+  const rawEmail = (req.body?.email ?? "") as string;
+  const code = String(req.body?.code ?? "").trim();
+
+  const key = rawPhone ? normalisePhone(rawPhone.trim()) : rawEmail.trim().toLowerCase();
+  if (!key || !code) { res.status(400).json({ error: "Identifier and code are required." }); return; }
+
+  const entry = otpStore.get(key);
+  if (!entry || entry.expiresAt < Date.now()) {
+    res.status(401).json({ error: "Code expired or not found. Request a new one." });
+    return;
+  }
+
+  if (entry.code !== code) {
+    entry.attempts += 1;
+    if (entry.attempts >= OTP_MAX_ATTEMPTS) {
+      otpStore.delete(key);
+      res.status(401).json({ error: "Too many incorrect attempts. Please request a new code." });
+      return;
+    }
+    res.status(401).json({ error: "Incorrect code." });
+    return;
+  }
+
+  otpStore.delete(key);
+
+  let member: { id: number; firstName: string | null; displayName: string } | undefined;
+  if (rawPhone) {
+    const phone = normalisePhone(rawPhone.trim());
+    [member] = await db
+      .select({ id: membersTable.id, firstName: membersTable.firstName, displayName: membersTable.displayName })
+      .from(membersTable)
+      .where(or(eq(membersTable.whatsappNumber, `whatsapp:${phone}`), eq(membersTable.whatsappNumber, phone)));
+  } else {
+    const email = rawEmail.trim().toLowerCase();
+    [member] = await db
+      .select({ id: membersTable.id, firstName: membersTable.firstName, displayName: membersTable.displayName })
+      .from(membersTable)
+      .where(eq(membersTable.email, email));
+  }
+
+  if (!member) { res.status(401).json({ error: "Member not found." }); return; }
+
+  req.session.memberId = member.id;
+  req.session.save((err) => {
+    if (err) { res.status(500).json({ error: "Session error." }); return; }
+    res.json({ ok: true, member: { id: member!.id, firstName: member!.firstName, displayName: member!.displayName } });
   });
 });
 
 // ── GET /api/member-portal/me ─────────────────────────────────────────────────
 router.get("/member-portal/me", requireMemberAuth, async (req, res): Promise<void> => {
-  const [member] = await db
-    .select()
-    .from(membersTable)
-    .where(eq(membersTable.id, req.session.memberId!));
-
-  if (!member) {
-    req.session.destroy(() => {});
-    res.status(404).json({ error: "Member not found." });
-    return;
-  }
-
-  res.json({ member });
+  const [member] = await db.select().from(membersTable).where(eq(membersTable.id, req.session.memberId!));
+  if (!member) { req.session.destroy(() => {}); res.status(404).json({ error: "Member not found." }); return; }
+  // Strip sensitive server-only field before returning
+  const { passwordHash: _ph, ...safe } = member;
+  res.json({ member: safe });
 });
 
 // ── PATCH /api/member-portal/me ───────────────────────────────────────────────
@@ -198,34 +340,70 @@ router.patch("/member-portal/me", requireMemberAuth, async (req, res): Promise<v
   ] as const;
   type AllowedKey = typeof allowed[number];
   const update: Partial<Record<AllowedKey, string>> = {};
-
   for (const key of allowed) {
     const val = req.body?.[key];
     if (typeof val === "string") update[key] = val.trim();
   }
-
   if (Object.keys(update).length === 0) {
-    res.status(400).json({ error: "No valid fields provided." });
-    return;
+    res.status(400).json({ error: "No valid fields provided." }); return;
+  }
+  const [updated] = await db
+    .update(membersTable).set({ ...update, updatedAt: new Date() })
+    .where(eq(membersTable.id, req.session.memberId!)).returning();
+  const { passwordHash: _ph, ...safe } = updated;
+  res.json({ member: safe });
+});
+
+// ── POST /api/member-portal/cancel-subscription ───────────────────────────────
+router.post("/member-portal/cancel-subscription", requireMemberAuth, async (req, res): Promise<void> => {
+  const [member] = await db
+    .select({ id: membersTable.id, paystackSubscriptionCode: membersTable.paystackSubscriptionCode })
+    .from(membersTable)
+    .where(eq(membersTable.id, req.session.memberId!));
+
+  if (!member) { res.status(404).json({ error: "Member not found." }); return; }
+  if (!member.paystackSubscriptionCode) {
+    res.status(400).json({ error: "No active subscription found." }); return;
   }
 
-  const [updated] = await db
-    .update(membersTable)
-    .set({ ...update, updatedAt: new Date() })
-    .where(eq(membersTable.id, req.session.memberId!))
-    .returning();
+  const secretKey = process.env.PAYSTACK_SECRET_KEY;
+  if (!secretKey) { res.status(500).json({ error: "Payment system not configured." }); return; }
 
-  res.json({ member: updated });
+  // Fetch subscription to get email_token required by Paystack disable API
+  const subRes = await fetch(`https://api.paystack.co/subscription/${member.paystackSubscriptionCode}`, {
+    headers: { Authorization: `Bearer ${secretKey}` },
+  });
+  if (!subRes.ok) {
+    res.status(502).json({ error: "Could not retrieve subscription details from Paystack." }); return;
+  }
+  const subData = await subRes.json() as { data?: { email_token?: string } };
+  const emailToken = subData?.data?.email_token;
+  if (!emailToken) {
+    res.status(502).json({ error: "Subscription token not available. Contact support." }); return;
+  }
+
+  const disableRes = await fetch("https://api.paystack.co/subscription/disable", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ code: member.paystackSubscriptionCode, token: emailToken }),
+  });
+  if (!disableRes.ok) {
+    res.status(502).json({ error: "Failed to cancel subscription. Please try again or contact support." }); return;
+  }
+
+  // Mark member as inactive
+  await db.update(membersTable)
+    .set({ paystackStatus: "cancelled", memberStatus: "inactive", updatedAt: new Date() })
+    .where(eq(membersTable.id, member.id));
+
+  res.json({ ok: true, message: "Subscription cancelled. You will retain access until the end of the billing period." });
 });
 
 // ── POST /api/member-portal/logout ────────────────────────────────────────────
 router.post("/member-portal/logout", (req, res): void => {
   req.session.memberId = undefined;
   req.session.save((err) => {
-    if (err) {
-      res.status(500).json({ error: "Logout error." });
-      return;
-    }
+    if (err) { res.status(500).json({ error: "Logout error." }); return; }
     res.json({ ok: true });
   });
 });

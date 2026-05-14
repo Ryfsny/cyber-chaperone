@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -34,6 +34,8 @@ export const membersTable = pgTable("members", {
   paystackPlanCode: text("paystack_plan_code"),
   paystackPaidAt: timestamp("paystack_paid_at", { withTimezone: true }),
   facebookUrl: text("facebook_url"),
+  passwordHash: text("password_hash"),
+  memberToken: uuid("member_token").defaultRandom().unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

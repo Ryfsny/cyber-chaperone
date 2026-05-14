@@ -12,59 +12,147 @@ function WhatsAppIcon() {
   );
 }
 
+type LoginMode = "otp" | "password" | "forgot";
+
 export default function MemberLogin() {
   const [, navigate] = useLocation();
-  const [step, setStep] = useState<"phone" | "otp">("phone");
+  const [mode, setMode] = useState<LoginMode>("otp");
+  const [step, setStep] = useState<"phone" | "otp-code">("phone");
+
+  // OTP login state
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
+
+  // Password login state
+  const [pwPhone, setPwPhone] = useState("");
+  const [password, setPassword] = useState("");
+
+  // Forgot password state
+  const [forgotPhone, setForgotPhone] = useState("");
+  const [forgotCode, setForgotCode] = useState("");
+  const [forgotStep, setForgotStep] = useState<"request" | "verify" | "set">("request");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
 
+  function resetAll() {
+    setError(""); setInfo(""); setLoading(false);
+    setStep("phone"); setOtp(""); setForgotStep("request"); setForgotCode(""); setNewPassword(""); setConfirmPassword("");
+  }
+
+  // ── OTP flow ──────────────────────────────────────────────────────────────
   async function requestOtp(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
+    e.preventDefault(); setError(""); setLoading(true);
     try {
       const res = await fetch(`${BASE}/api/member-portal/request-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ whatsappNumber: phone }),
       });
       const data = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed to send OTP.");
-      setStep("otp");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setLoading(false);
-    }
+      setStep("otp-code");
+    } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
+    finally { setLoading(false); }
   }
 
   async function verifyOtp(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
+    e.preventDefault(); setError(""); setLoading(true);
     try {
       const res = await fetch(`${BASE}/api/member-portal/verify-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ whatsappNumber: phone, code: otp }),
       });
       const data = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Verification failed.");
-      navigate("/member");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setLoading(false);
-    }
+      navigate("/my-account");
+    } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
+    finally { setLoading(false); }
   }
+
+  // ── Password flow ─────────────────────────────────────────────────────────
+  async function loginWithPassword(e: React.FormEvent) {
+    e.preventDefault(); setError(""); setLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/member-portal/login`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ whatsappNumber: pwPhone, password }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Login failed.");
+      navigate("/my-account");
+    } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
+    finally { setLoading(false); }
+  }
+
+  // ── Forgot password flow ──────────────────────────────────────────────────
+  async function sendForgotOtp(e: React.FormEvent) {
+    e.preventDefault(); setError(""); setInfo(""); setLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/member-portal/forgot-password`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ whatsappNumber: forgotPhone }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string; message?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed.");
+      setInfo(data.message ?? "Code sent to your WhatsApp.");
+      setForgotStep("verify");
+    } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
+    finally { setLoading(false); }
+  }
+
+  async function verifyForgotOtp(e: React.FormEvent) {
+    e.preventDefault(); setError(""); setLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/member-portal/verify-reset-otp`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ whatsappNumber: forgotPhone, code: forgotCode }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Verification failed.");
+      setForgotStep("set");
+      setInfo("");
+    } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
+    finally { setLoading(false); }
+  }
+
+  async function setNewPasswordFn(e: React.FormEvent) {
+    e.preventDefault(); setError(""); setLoading(true);
+    if (newPassword !== confirmPassword) { setError("Passwords do not match."); setLoading(false); return; }
+    if (newPassword.length < 8) { setError("Password must be at least 8 characters."); setLoading(false); return; }
+    try {
+      const res = await fetch(`${BASE}/api/member-portal/set-password`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ password: newPassword }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to set password.");
+      navigate("/my-account");
+    } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
+    finally { setLoading(false); }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", border: "1px solid #d1d5db", borderRadius: "8px",
+    padding: "10px 14px", fontSize: "14px", outline: "none", color: "#111827",
+    boxSizing: "border-box", fontFamily: "'Open Sans', sans-serif",
+  };
+  const btnPrimary: React.CSSProperties = {
+    width: "100%", background: "#1db954", color: "#fff", border: "none",
+    borderRadius: "10px", padding: "13px", fontSize: "15px", fontWeight: 700,
+    cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1,
+    fontFamily: "Montserrat, sans-serif", marginBottom: "12px",
+  };
+  const tabStyle = (active: boolean): React.CSSProperties => ({
+    flex: 1, padding: "9px", fontSize: "13px", fontWeight: active ? 700 : 500,
+    background: active ? "#1db954" : "none", color: active ? "#fff" : "#6b7280",
+    border: "none", borderRadius: "8px", cursor: "pointer", transition: "all 0.15s",
+  });
 
   return (
     <div style={{ minHeight: "100vh", background: "#f9fafb", fontFamily: "'Open Sans', sans-serif", display: "flex", flexDirection: "column" }}>
-      {/* Nav */}
       <nav style={{ background: "#0d1117", padding: "0 24px", height: "64px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <a href={`${BASE}/`} style={{ textDecoration: "none" }}>
           <img src={LOGO} alt="eblockwatch" style={{ height: "36px", objectFit: "contain" }} />
@@ -75,156 +163,165 @@ export default function MemberLogin() {
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 16px" }}>
         <div style={{ width: "100%", maxWidth: "420px" }}>
 
-          {/* Card */}
-          <div style={{
-            background: "#fff",
-            borderRadius: "16px",
-            boxShadow: "0 4px 32px rgba(0,0,0,0.08)",
-            padding: "40px 36px",
-            border: "1px solid #e5e7eb",
-            marginBottom: "16px",
-          }}>
-            <div style={{ textAlign: "center", marginBottom: "32px" }}>
-              <div style={{
-                width: "56px", height: "56px", background: "#0d1117", borderRadius: "14px",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                margin: "0 auto 16px", border: "2px solid #1db954",
-              }}>
+          <div style={{ background: "#fff", borderRadius: "16px", boxShadow: "0 4px 32px rgba(0,0,0,0.08)", padding: "40px 36px", border: "1px solid #e5e7eb", marginBottom: "16px" }}>
+            <div style={{ textAlign: "center", marginBottom: "28px" }}>
+              <div style={{ width: "56px", height: "56px", background: "#0d1117", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", border: "2px solid #1db954" }}>
                 <span style={{ fontSize: "26px" }}>🛡️</span>
               </div>
-              <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0d1117", fontFamily: "Montserrat, sans-serif", margin: "0 0 6px" }}>
-                Member Portal
-              </h1>
+              <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0d1117", fontFamily: "Montserrat, sans-serif", margin: "0 0 6px" }}>Member Portal</h1>
               <p style={{ fontSize: "14px", color: "#6b7280", margin: 0 }}>
-                {step === "phone"
-                  ? "Enter your WhatsApp number to receive a login code."
-                  : `We've sent a 6-digit code to WhatsApp ${phone}`}
+                {mode === "forgot" ? "Reset your password" : "Sign in to your account"}
               </p>
             </div>
 
-            {step === "phone" ? (
+            {/* Mode tabs — OTP vs Password (not shown in forgot mode) */}
+            {mode !== "forgot" && (
+              <div style={{ display: "flex", gap: "4px", background: "#f3f4f6", borderRadius: "10px", padding: "4px", marginBottom: "24px" }}>
+                <button style={tabStyle(mode === "otp")} onClick={() => { setMode("otp"); resetAll(); }}>
+                  WhatsApp Code
+                </button>
+                <button style={tabStyle(mode === "password")} onClick={() => { setMode("password"); resetAll(); }}>
+                  Password
+                </button>
+              </div>
+            )}
+
+            {error && (
+              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "10px 14px", fontSize: "13px", color: "#dc2626", marginBottom: "16px" }}>
+                {error}
+              </div>
+            )}
+            {info && (
+              <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "8px", padding: "10px 14px", fontSize: "13px", color: "#166534", marginBottom: "16px" }}>
+                {info}
+              </div>
+            )}
+
+            {/* ── OTP login ─────────────────────────────────────────────── */}
+            {mode === "otp" && step === "phone" && (
               <form onSubmit={(e) => void requestOtp(e)}>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
-                  WhatsApp Number
-                </label>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>WhatsApp Number</label>
                 <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
-                  <div style={{
-                    background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: "8px",
-                    padding: "10px 12px", fontSize: "14px", color: "#374151", whiteSpace: "nowrap",
-                    display: "flex", alignItems: "center", gap: "6px",
-                  }}>
+                  <div style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: "8px", padding: "10px 12px", fontSize: "14px", color: "#374151", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px" }}>
                     🇿🇦 +27
                   </div>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="82 561 1065"
-                    required
-                    style={{
-                      flex: 1, border: "1px solid #d1d5db", borderRadius: "8px",
-                      padding: "10px 14px", fontSize: "14px", outline: "none", color: "#111827",
-                    }}
-                  />
+                  <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="82 561 1065" required style={{ ...inputStyle, flex: 1 }} />
                 </div>
-
-                {error && (
-                  <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "10px 14px", fontSize: "13px", color: "#dc2626", marginBottom: "16px" }}>
-                    {error}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading || !phone}
-                  style={{
-                    width: "100%", background: "#1db954", color: "#fff", border: "none",
-                    borderRadius: "10px", padding: "13px", fontSize: "15px", fontWeight: 700,
-                    cursor: loading || !phone ? "not-allowed" : "pointer",
-                    opacity: loading || !phone ? 0.6 : 1, fontFamily: "Montserrat, sans-serif",
-                    marginBottom: "12px",
-                  }}
-                >
+                <button type="submit" disabled={loading || !phone} style={btnPrimary}>
                   {loading ? "Sending…" : "Send WhatsApp Code"}
                 </button>
-
-                <p style={{ textAlign: "center", fontSize: "12px", color: "#9ca3af", margin: "0 0 0" }}>
-                  Not registered yet?{" "}
-                  <a href={`${BASE}/`} style={{ color: "#1db954", textDecoration: "none", fontWeight: 600 }}>
-                    Register for free
-                  </a>
+                <p style={{ textAlign: "center", fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+                  Not registered?{" "}
+                  <a href={`${BASE}/`} style={{ color: "#1db954", textDecoration: "none", fontWeight: 600 }}>Register for free</a>
                 </p>
               </form>
-            ) : (
+            )}
+
+            {mode === "otp" && step === "otp-code" && (
               <form onSubmit={(e) => void verifyOtp(e)}>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
-                  6-Digit Code
-                </label>
+                <p style={{ fontSize: "13px", color: "#6b7280", marginTop: 0, marginBottom: "14px" }}>
+                  We've sent a 6-digit code to WhatsApp <strong>{phone}</strong>
+                </p>
                 <input
-                  type="text"
-                  value={otp}
+                  type="text" value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="123456"
-                  maxLength={6}
-                  required
-                  autoFocus
-                  style={{
-                    width: "100%", border: "1px solid #d1d5db", borderRadius: "8px",
-                    padding: "12px 14px", fontSize: "22px", letterSpacing: "8px",
-                    textAlign: "center", outline: "none", color: "#111827", marginBottom: "20px",
-                    boxSizing: "border-box",
-                  }}
+                  placeholder="123456" maxLength={6} required autoFocus
+                  style={{ ...inputStyle, fontSize: "22px", letterSpacing: "8px", textAlign: "center", marginBottom: "20px" }}
                 />
-
-                {error && (
-                  <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "10px 14px", fontSize: "13px", color: "#dc2626", marginBottom: "16px" }}>
-                    {error}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading || otp.length !== 6}
-                  style={{
-                    width: "100%", background: "#1db954", color: "#fff", border: "none",
-                    borderRadius: "10px", padding: "13px", fontSize: "15px", fontWeight: 700,
-                    cursor: loading || otp.length !== 6 ? "not-allowed" : "pointer",
-                    opacity: loading || otp.length !== 6 ? 0.6 : 1, fontFamily: "Montserrat, sans-serif",
-                  }}
-                >
+                <button type="submit" disabled={loading || otp.length !== 6} style={{ ...btnPrimary, opacity: loading || otp.length !== 6 ? 0.6 : 1 }}>
                   {loading ? "Verifying…" : "Verify & Log In"}
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => { setStep("phone"); setOtp(""); setError(""); }}
-                  style={{ width: "100%", background: "none", border: "none", color: "#6b7280", fontSize: "13px", cursor: "pointer", marginTop: "12px", padding: "4px" }}
-                >
+                <button type="button" onClick={() => { setStep("phone"); setOtp(""); setError(""); }}
+                  style={{ width: "100%", background: "none", border: "none", color: "#6b7280", fontSize: "13px", cursor: "pointer", padding: "4px" }}>
                   ← Try a different number
+                </button>
+              </form>
+            )}
+
+            {/* ── Password login ────────────────────────────────────────── */}
+            {mode === "password" && (
+              <form onSubmit={(e) => void loginWithPassword(e)}>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>WhatsApp Number</label>
+                <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+                  <div style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: "8px", padding: "10px 12px", fontSize: "14px", color: "#374151", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px" }}>
+                    🇿🇦 +27
+                  </div>
+                  <input type="tel" value={pwPhone} onChange={(e) => setPwPhone(e.target.value)} placeholder="82 561 1065" required style={{ ...inputStyle, flex: 1 }} />
+                </div>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Password</label>
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your password" required style={{ ...inputStyle, marginBottom: "6px" }} />
+                <div style={{ textAlign: "right", marginBottom: "20px" }}>
+                  <button type="button" onClick={() => { setMode("forgot"); resetAll(); }}
+                    style={{ background: "none", border: "none", color: "#1db954", fontSize: "12px", cursor: "pointer", fontWeight: 600 }}>
+                    Forgot password?
+                  </button>
+                </div>
+                <button type="submit" disabled={loading || !pwPhone || !password} style={{ ...btnPrimary, opacity: loading || !pwPhone || !password ? 0.6 : 1 }}>
+                  {loading ? "Signing in…" : "Sign In"}
+                </button>
+              </form>
+            )}
+
+            {/* ── Forgot password ───────────────────────────────────────── */}
+            {mode === "forgot" && forgotStep === "request" && (
+              <form onSubmit={(e) => void sendForgotOtp(e)}>
+                <p style={{ fontSize: "13px", color: "#6b7280", marginTop: 0, marginBottom: "16px" }}>
+                  Enter your WhatsApp number and we'll send a reset code.
+                </p>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>WhatsApp Number</label>
+                <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
+                  <div style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: "8px", padding: "10px 12px", fontSize: "14px", color: "#374151", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px" }}>
+                    🇿🇦 +27
+                  </div>
+                  <input type="tel" value={forgotPhone} onChange={(e) => setForgotPhone(e.target.value)} placeholder="82 561 1065" required style={{ ...inputStyle, flex: 1 }} />
+                </div>
+                <button type="submit" disabled={loading || !forgotPhone} style={{ ...btnPrimary, opacity: loading || !forgotPhone ? 0.6 : 1 }}>
+                  {loading ? "Sending…" : "Send Reset Code"}
+                </button>
+                <button type="button" onClick={() => { setMode("otp"); resetAll(); }}
+                  style={{ width: "100%", background: "none", border: "none", color: "#6b7280", fontSize: "13px", cursor: "pointer", padding: "4px" }}>
+                  ← Back to login
+                </button>
+              </form>
+            )}
+
+            {mode === "forgot" && forgotStep === "verify" && (
+              <form onSubmit={(e) => void verifyForgotOtp(e)}>
+                <p style={{ fontSize: "13px", color: "#6b7280", marginTop: 0, marginBottom: "14px" }}>
+                  Enter the 6-digit code sent to WhatsApp <strong>{forgotPhone}</strong>
+                </p>
+                <input
+                  type="text" value={forgotCode}
+                  onChange={(e) => setForgotCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="123456" maxLength={6} required autoFocus
+                  style={{ ...inputStyle, fontSize: "22px", letterSpacing: "8px", textAlign: "center", marginBottom: "20px" }}
+                />
+                <button type="submit" disabled={loading || forgotCode.length !== 6} style={{ ...btnPrimary, opacity: loading || forgotCode.length !== 6 ? 0.6 : 1 }}>
+                  {loading ? "Verifying…" : "Verify Code"}
+                </button>
+              </form>
+            )}
+
+            {mode === "forgot" && forgotStep === "set" && (
+              <form onSubmit={(e) => void setNewPasswordFn(e)}>
+                <p style={{ fontSize: "13px", color: "#6b7280", marginTop: 0, marginBottom: "16px" }}>
+                  Choose a new password for your account.
+                </p>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>New Password</label>
+                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 8 characters" required style={{ ...inputStyle, marginBottom: "12px" }} />
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Confirm Password</label>
+                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Repeat your password" required style={{ ...inputStyle, marginBottom: "20px" }} />
+                <button type="submit" disabled={loading || !newPassword || !confirmPassword} style={{ ...btnPrimary, opacity: loading || !newPassword || !confirmPassword ? 0.6 : 1 }}>
+                  {loading ? "Saving…" : "Set New Password"}
                 </button>
               </form>
             )}
           </div>
 
-          {/* WhatsApp alternative */}
-          <div style={{
-            background: "#fff", borderRadius: "14px", border: "1px solid #e5e7eb",
-            padding: "20px 24px", textAlign: "center",
-          }}>
-            <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 14px" }}>
-              Prefer to do everything on your phone?
-            </p>
-            <a
-              href="https://wa.me/27825611065?text=Hi"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "inline-flex", alignItems: "center", gap: "10px",
-                background: "#25d366", color: "#fff", textDecoration: "none",
-                borderRadius: "10px", padding: "12px 22px", fontSize: "14px",
-                fontWeight: 700, fontFamily: "Montserrat, sans-serif",
-              }}
-            >
+          <div style={{ background: "#fff", borderRadius: "14px", border: "1px solid #e5e7eb", padding: "20px 24px", textAlign: "center" }}>
+            <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 14px" }}>Prefer to do everything on your phone?</p>
+            <a href="https://wa.me/27825611065?text=Hi" target="_blank" rel="noopener noreferrer"
+              style={{ display: "inline-flex", alignItems: "center", gap: "10px", background: "#25d366", color: "#fff", textDecoration: "none", borderRadius: "10px", padding: "12px 22px", fontSize: "14px", fontWeight: 700, fontFamily: "Montserrat, sans-serif" }}>
               <WhatsAppIcon />
               Chat with Andre on WhatsApp
             </a>
