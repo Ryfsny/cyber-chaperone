@@ -2,6 +2,5 @@ User-agent: *
 Allow: /website/
 Disallow: /api/
 Disallow: /cyber-chaperone-deck/
-Disallow: /
 
 Sitemap: https://cyber-chaperone-r--ryfsny.replit.app/website/sitemap.xml
