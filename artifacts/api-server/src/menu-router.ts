@@ -28,6 +28,11 @@ interface PendingTripData {
   clarificationNewDestination?: string;
   clarificationOriginalMessage?: string;
   isPreArrival?: boolean;
+  // Registration-specific fields
+  regSuburb?: string;
+  regCity?: string;
+  regProvince?: string;
+  regHomeAddress?: string;
 }
 
 interface ConvState {
@@ -83,6 +88,8 @@ const STEP_REG_EMAIL = "REG_EMAIL";
 const STEP_REG_SUBURB = "REG_SUBURB";
 const STEP_REG_CITY = "REG_CITY";
 const STEP_REG_PROVINCE = "REG_PROVINCE";
+const STEP_REG_HOME_ADDRESS = "REG_HOME_ADDRESS";
+const STEP_REG_ICE = "REG_ICE";
 
 // ── Keyword detectors ─────────────────────────────────────────────────────────
 
@@ -211,10 +218,11 @@ async function countNearbyResponders(lat: string, lon: string, radiusKm = 50): P
 
 function nearbyCoverageText(count: number): string {
   if (count === 0) return "eblockwatch members are active across South Africa — you are not alone.";
-  if (count < 5)   return `There are a few eblockwatch members active in your vicinity.`;
-  if (count < 15)  return `There are several eblockwatch members active near you.`;
-  if (count < 30)  return `There are over 10 eblockwatch members active in your area.`;
-  return `There is a strong eblockwatch presence active in your area.`;
+  if (count === 1) return `There is 1 eblockwatch member standing by within 30km of you.`;
+  if (count < 5)   return `There are ${count} eblockwatch members standing by within 30km of you.`;
+  if (count < 15)  return `There are ${count} eblockwatch members standing by in your area.`;
+  if (count < 30)  return `There are over ${Math.floor(count / 5) * 5} eblockwatch members active within 30km of you.`;
+  return `There is a strong eblockwatch presence — ${count}+ members active in your area.`;
 }
 
 // ── Platform-agnostic reply registry ─────────────────────────────────────────
@@ -463,10 +471,19 @@ async function createTrip(
       ? `\n\nWe will check in with you at ${effectiveTowns.join(", ")}.`
       : "";
 
+  // Add nearby member count to trip start confirmation
+  const nearbyLine = await (async () => {
+    if (routeInfo?.startCoords?.lat && routeInfo?.startCoords?.lon) {
+      const count = await countNearbyResponders(routeInfo.startCoords.lat, routeInfo.startCoords.lon, 30);
+      return count > 0 ? `\n\n${nearbyCoverageText(count)}` : "";
+    }
+    return "";
+  })();
+
   await sendWhatsApp(
     from,
     to,
-    `Your trip is now active.${cpLine} Reply ARRIVED when you reach ${destination}.\n\nReply 0 for Main Menu.`,
+    `Your trip is now active.${cpLine}${nearbyLine}\n\nReply ARRIVED when you reach ${destination}.\n\nReply 0 for Main Menu.`,
   );
 
   await sendWhatsApp(from, to, mainMenuText(name, member));
@@ -1812,14 +1829,36 @@ async function handleEblockwatchInfoChoice(ctx: MenuContext): Promise<void> {
   }
 
   if (choice === "4") {
-    // eblockshop
+    // eblockshop — real product menu
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    const isPaying = member?.membershipTier === "individual" || member?.membershipTier === "family";
     await sendWhatsApp(from, to, [
-      `${name}, eblockshop is where you find safer products to make you safer.`,
+      `🛒 Welcome to eblockshop, ${name}!`,
       ``,
-      `Coming soon — we will notify you when it is ready.`,
+      `Your one-stop shop for safer living.`,
       ``,
+      `1. 🛡️ Cyber Chaperone Individual — R150/month`,
+      `   Full route tracking, ICE escalation, priority response.`,
+      `   → https://paystack.shop/pay/cyber-chaperone`,
+      ``,
+      `2. 👨‍👩‍👧 Cyber Chaperone Family — R250/month`,
+      `   Cover your whole family (up to 5 members).`,
+      `   → https://paystack.shop/pay/family-cyber-chaperone`,
+      ``,
+      isPaying
+        ? [
+            `3. 📡 Bliksim Location Unit`,
+            `   Compact GPS tracker for your vehicle or bag.`,
+            `   Available to paying members — reply 3 and Andre will be in touch.`,
+          ].join("\n")
+        : [
+            `3. 📡 Bliksim Location Unit`,
+            `   Compact GPS tracker — available to Individual and Family members.`,
+            `   Upgrade your membership first to unlock this.`,
+          ].join("\n"),
+      ``,
+      `Reply 1, 2, or 3 to choose.`,
       `Reply 0 for Main Menu.`,
     ].join("\n"));
     return;
@@ -2012,7 +2051,7 @@ async function handleRegistrationStep(ctx: MenuContext, state: ConvState): Promi
     await setConvState(from, {
       currentFlow: FLOW_REGISTRATION,
       currentStep: STEP_REG_CITY,
-      pendingTripData: { ...pending, clarificationNewDestination: suburb ?? "" },
+      pendingTripData: { ...pending, regSuburb: suburb ?? "" },
     });
     await sendWhatsApp(from, to, `What city are you in? (e.g. Johannesburg, Cape Town)\n\nReply SKIP to skip.\nReply 0 to cancel.`);
     return;
@@ -2023,7 +2062,7 @@ async function handleRegistrationStep(ctx: MenuContext, state: ConvState): Promi
     await setConvState(from, {
       currentFlow: FLOW_REGISTRATION,
       currentStep: STEP_REG_PROVINCE,
-      pendingTripData: { ...pending, clarificationOriginalMessage: city ?? "" },
+      pendingTripData: { ...pending, regCity: city ?? "" },
     });
     await sendWhatsApp(from, to, [
       `Which province?`,
@@ -2050,11 +2089,76 @@ async function handleRegistrationStep(ctx: MenuContext, state: ConvState): Promi
     };
     const province = PROVINCES[trimmed] ?? (/^skip$/i.test(trimmed) ? null : trimmed.slice(0, 60));
 
+    // After province — collect home address
+    await setConvState(from, {
+      currentFlow: FLOW_REGISTRATION,
+      currentStep: STEP_REG_HOME_ADDRESS,
+      pendingTripData: {
+        ...pending,
+        regProvince: PROVINCES[trimmed] ?? (/^skip$/i.test(trimmed) ? "" : trimmed.slice(0, 60)),
+      },
+    });
+    await sendWhatsApp(from, to, [
+      `Almost done! What is your home address?`,
+      ``,
+      `This helps us send the nearest eblockwatch responder to you in an emergency.`,
+      ``,
+      `Example: 5 College Road, Bryanston, 2191`,
+      ``,
+      `Reply SKIP to skip.`,
+      `Reply 0 to cancel.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (state.currentStep === STEP_REG_HOME_ADDRESS) {
+    const homeAddress = /^skip$/i.test(trimmed) ? null : trimmed.slice(0, 160);
+    await setConvState(from, {
+      currentFlow: FLOW_REGISTRATION,
+      currentStep: STEP_REG_ICE,
+      pendingTripData: { ...pending, regHomeAddress: homeAddress ?? "" },
+    });
+    await sendWhatsApp(from, to, [
+      `Last one — who is your emergency contact (ICE)?`,
+      ``,
+      `Reply in this format:`,
+      `ICE: Name, +27 number`,
+      ``,
+      `Example: ICE: Jane Snyman, +27825611065`,
+      ``,
+      `Reply SKIP to skip.`,
+      `Reply 0 to cancel.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (state.currentStep === STEP_REG_ICE) {
+    const iceRaw = /^skip$/i.test(trimmed) ? null : trimmed;
+    let iceContactName: string | null = null;
+    let iceContactPhone: string | null = null;
+    if (iceRaw) {
+      const iceMatch = iceRaw.match(/^ICE:\s*(.+?),\s*(\+?[\d\s]+)$/i);
+      if (iceMatch) {
+        iceContactName = iceMatch[1].trim().slice(0, 80);
+        iceContactPhone = iceMatch[2].replace(/\s/g, "").slice(0, 20);
+      } else {
+        // Tolerate plain "Name, Number" without ICE: prefix
+        const plainMatch = iceRaw.match(/^(.+?),\s*(\+?[\d\s]+)$/);
+        if (plainMatch) {
+          iceContactName = plainMatch[1].trim().slice(0, 80);
+          iceContactPhone = plainMatch[2].replace(/\s/g, "").slice(0, 20);
+        }
+      }
+    }
+
+    // Pull all collected fields from pendingTripData using clean reg-specific keys
     const firstName = pending.startLocation ?? "Unknown";
     const lastName = pending.destination ?? "";
     const email = pending.reason ?? null;
-    const suburb = pending.clarificationNewDestination ?? null;
-    const city = pending.clarificationOriginalMessage ?? null;
+    const suburb = pending.regSuburb ?? null;
+    const city = pending.regCity ?? null;
+    const province = pending.regProvince ?? null;
+    const homeAddress = pending.regHomeAddress ?? null;
     const displayName = [firstName, lastName].filter(Boolean).join(" ");
 
     try {
@@ -2073,6 +2177,9 @@ async function handleRegistrationStep(ctx: MenuContext, state: ConvState): Promi
           city: city || null,
           province: province || null,
           country: "South Africa",
+          homeAddress: homeAddress || null,
+          iceContactName: iceContactName || null,
+          iceContactPhone: iceContactPhone || null,
           sourceBatch: "whatsapp_registration",
           importStatus: "registered",
         })
@@ -2086,6 +2193,9 @@ async function handleRegistrationStep(ctx: MenuContext, state: ConvState): Promi
             suburb: suburb || null,
             city: city || null,
             province: province || null,
+            homeAddress: homeAddress || null,
+            iceContactName: iceContactName || null,
+            iceContactPhone: iceContactPhone || null,
             importStatus: "registered",
           },
         });
@@ -2098,9 +2208,10 @@ async function handleRegistrationStep(ctx: MenuContext, state: ConvState): Promi
     await sendWhatsApp(from, to, [
       `✅ Welcome to eblockwatch, ${firstName}!`,
       ``,
-      `Your profile is registered. Andre and the team will be in touch.`,
+      `Your profile is registered. You are now part of a trusted safety network.`,
       ``,
-      `You are now part of a trusted safety network built on real people and real relationships.`,
+      `👉 Next step: upgrade to Cyber Chaperone for full route tracking, ICE escalation, and priority response.`,
+      `Reply 3 from the Main Menu to activate your membership.`,
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n"));
@@ -2114,6 +2225,8 @@ async function handleRegistrationStep(ctx: MenuContext, state: ConvState): Promi
       suburb ? `Suburb: ${suburb}` : null,
       city ? `City: ${city}` : null,
       province ? `Province: ${province}` : null,
+      homeAddress ? `Home address: ${homeAddress}` : null,
+      iceContactName ? `ICE: ${iceContactName}, ${iceContactPhone ?? "no number"}` : `ICE: not provided`,
       `Source: WhatsApp registration flow`,
       ``,
       `Next action: Confirm entry in Member Directory.`,
