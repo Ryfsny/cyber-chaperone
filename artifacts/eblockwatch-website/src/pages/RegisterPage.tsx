@@ -3,6 +3,64 @@ import { useState, useCallback } from "react";
 const LOGO = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif";
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
+const SA_INDUSTRIES = [
+  "Agriculture & Farming",
+  "Automotive & Motor Trade",
+  "Aviation & Aerospace",
+  "Banking & Financial Services",
+  "Broadcasting & Media",
+  "Building & Construction",
+  "Chemical & Petrochemical",
+  "Civil Engineering & Infrastructure",
+  "Cleaning & Facilities Management",
+  "Defence & Military",
+  "Domestic / Home Duties",
+  "Education & Training",
+  "Electrical & Electronics",
+  "Emergency Services (Fire / Ambulance / Rescue)",
+  "Energy & Utilities (Eskom / Renewables)",
+  "Environmental & Conservation",
+  "Events & Entertainment",
+  "Fashion & Clothing",
+  "Food & Beverage Manufacturing",
+  "Forestry & Timber",
+  "Funeral & Mortuary Services",
+  "Government & Public Sector",
+  "Healthcare & Medical",
+  "Hospitality & Hotels",
+  "Human Resources & Recruitment",
+  "Information Technology (IT)",
+  "Insurance",
+  "Legal Services",
+  "Logistics & Supply Chain",
+  "Manufacturing & Industrial",
+  "Marketing & Advertising",
+  "Mining & Resources",
+  "NGO & Non-profit",
+  "Performing Arts & Creative",
+  "Pharmaceuticals & Life Sciences",
+  "Photography & Film",
+  "Plumbing & HVAC",
+  "Policing & Law Enforcement",
+  "Printing & Publishing",
+  "Property & Real Estate",
+  "Religious & Faith-based",
+  "Restaurant & Food Service",
+  "Retail & Wholesale",
+  "Retired",
+  "Science & Research",
+  "Security & Private Investigations",
+  "Social Work & Community Services",
+  "Sport & Recreation",
+  "Student",
+  "Telecommunications",
+  "Tourism & Travel",
+  "Transport & Freight",
+  "Veterinary & Animal Care",
+  "Waste Management & Recycling",
+  "Other",
+];
+
 function WhatsAppIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" style={{ flexShrink: 0 }}>
@@ -288,7 +346,7 @@ export default function RegisterPage() {
                 <label style={{ display: "block", marginBottom: "6px", fontSize: "13px", fontWeight: 600, color: "#374151" }}>Select your Industry</label>
                 <select name="industry" className="ebw-form-field">
                   <option value="">Select your Industry</option>
-                  {["Farming / Agriculture", "Education", "Healthcare / Medical", "Security / Law Enforcement", "Construction / Trades", "Retail / Hospitality", "Transport / Logistics", "IT / Tech", "Finance / Business Services", "Other"].map(v => (
+                  {SA_INDUSTRIES.map(v => (
                     <option key={v} value={v}>{v}</option>
                   ))}
                 </select>

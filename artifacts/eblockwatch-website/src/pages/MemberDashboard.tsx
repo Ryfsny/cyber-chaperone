@@ -4,6 +4,64 @@ import { useLocation } from "wouter";
 const LOGO = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif";
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
+const SA_INDUSTRIES = [
+  "Agriculture & Farming",
+  "Automotive & Motor Trade",
+  "Aviation & Aerospace",
+  "Banking & Financial Services",
+  "Broadcasting & Media",
+  "Building & Construction",
+  "Chemical & Petrochemical",
+  "Civil Engineering & Infrastructure",
+  "Cleaning & Facilities Management",
+  "Defence & Military",
+  "Domestic / Home Duties",
+  "Education & Training",
+  "Electrical & Electronics",
+  "Emergency Services (Fire / Ambulance / Rescue)",
+  "Energy & Utilities (Eskom / Renewables)",
+  "Environmental & Conservation",
+  "Events & Entertainment",
+  "Fashion & Clothing",
+  "Food & Beverage Manufacturing",
+  "Forestry & Timber",
+  "Funeral & Mortuary Services",
+  "Government & Public Sector",
+  "Healthcare & Medical",
+  "Hospitality & Hotels",
+  "Human Resources & Recruitment",
+  "Information Technology (IT)",
+  "Insurance",
+  "Legal Services",
+  "Logistics & Supply Chain",
+  "Manufacturing & Industrial",
+  "Marketing & Advertising",
+  "Mining & Resources",
+  "NGO & Non-profit",
+  "Performing Arts & Creative",
+  "Pharmaceuticals & Life Sciences",
+  "Photography & Film",
+  "Plumbing & HVAC",
+  "Policing & Law Enforcement",
+  "Printing & Publishing",
+  "Property & Real Estate",
+  "Religious & Faith-based",
+  "Restaurant & Food Service",
+  "Retail & Wholesale",
+  "Retired",
+  "Science & Research",
+  "Security & Private Investigations",
+  "Social Work & Community Services",
+  "Sport & Recreation",
+  "Student",
+  "Telecommunications",
+  "Tourism & Travel",
+  "Transport & Freight",
+  "Veterinary & Animal Care",
+  "Waste Management & Recycling",
+  "Other",
+];
+
 interface Member {
   id: number;
   firstName: string;
@@ -25,6 +83,7 @@ interface Member {
   province: string | null;
   postalCode: string | null;
   country: string | null;
+  industry: string | null;
   paystackSubscriptionCode: string | null;
   paystackStatus: string | null;
   paystackPlanCode: string | null;
@@ -103,6 +162,7 @@ export default function MemberDashboard() {
     firstName: "", lastName: "", displayName: "", notes: "",
     iceContactName: "", iceContactPhone: "",
     email: "", mobile: "", homeAddress: "", suburb: "", city: "", province: "", postalCode: "", country: "South Africa",
+    industry: "",
   });
 
   useEffect(() => { void fetchMe(); }, []);
@@ -129,6 +189,7 @@ export default function MemberDashboard() {
         province: data.member.province ?? "",
         postalCode: data.member.postalCode ?? "",
         country: data.member.country ?? "South Africa",
+        industry: data.member.industry ?? "",
       });
     } catch { navigate("/login"); }
     finally { setLoading(false); }
@@ -324,6 +385,19 @@ export default function MemberDashboard() {
                     <Field label="Postal Code" value={form.postalCode} onChange={(v) => setForm(f => ({ ...f, postalCode: v }))} placeholder="2196" />
                     <Field label="Country" value={form.country} onChange={(v) => setForm(f => ({ ...f, country: v }))} placeholder="South Africa" />
                   </div>
+                  <div style={{ marginBottom: "16px" }}>
+                    <label style={{ display: "block", marginBottom: "6px", fontSize: "13px", fontWeight: 600, color: "#374151" }}>Industry</label>
+                    <select
+                      value={form.industry}
+                      onChange={(e) => setForm(f => ({ ...f, industry: e.target.value }))}
+                      style={{ width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: "8px", fontSize: "14px", color: "#111827", background: "#fff", appearance: "auto" }}
+                    >
+                      <option value="">Select your industry</option>
+                      {SA_INDUSTRIES.map(v => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
                   {!isFamilyPlan && (
                     <>
                       <hr style={{ border: "none", borderTop: "1px solid #f3f4f6", margin: "20px 0" }} />
@@ -378,6 +452,12 @@ export default function MemberDashboard() {
                       {(member.suburb || member.city) && (
                         <InfoRow label="Area" value={[member.suburb, member.city, member.province, member.postalCode].filter(Boolean).join(", ")} />
                       )}
+                    </>
+                  )}
+                  {member.industry && (
+                    <>
+                      <hr style={{ border: "none", borderTop: "1px solid #f3f4f6" }} />
+                      <InfoRow label="Industry" value={member.industry} />
                     </>
                   )}
                   {member.notes && (

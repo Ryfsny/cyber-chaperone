@@ -337,6 +337,7 @@ router.patch("/member-portal/me", requireMemberAuth, async (req, res): Promise<v
     "firstName", "lastName", "displayName", "notes",
     "iceContactName", "iceContactPhone",
     "email", "mobile", "homeAddress", "suburb", "city", "province", "postalCode", "country",
+    "industry",
   ] as const;
   type AllowedKey = typeof allowed[number];
   const update: Partial<Record<AllowedKey, string>> = {};
