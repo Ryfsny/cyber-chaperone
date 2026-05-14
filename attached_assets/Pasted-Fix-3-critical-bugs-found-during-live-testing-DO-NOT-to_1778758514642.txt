@@ -1,0 +1,15 @@
+Fix 3 critical bugs found during live testing. DO NOT touch the core webhook routing structure in webhook.ts — only fix the specific logic issues described below.
+
+BUG 1 — WhatsApp location pin arrives as empty message
+When a member sends a WhatsApp location pin, Twilio delivers it with an empty Body but with Latitude, Longitude, and Address fields in the request body. The current code only reads req.body.Body, so location pins produce "Message was empty — please try again."
+Fix: In the incoming message handler, before checking if Body is empty, check for req.body.Latitude and req.body.Longitude. If coordinates are present, construct a message string like: "📍 Location: [Address if present, else Latitude,Longitude]" and use that as the message body for the rest of the processing pipeline.
+
+BUG 2 — Audio/image messages crash the AI with empty content error
+When a member sends a voice note or image without any text, Body is empty. This empty string gets added to the AI conversation history, causing a 400 error: "user messages must have non-empty content."
+Fix: In the message processing code, if Body is empty AND there are no coordinates (not a location pin), respond with a friendly WhatsApp reply such as: "I received your voice note / image, but I can only process text messages for now. Please type your request." — and do NOT add the empty message to AI history.
+
+BUG 3 — ETA times show UTC instead of SAST (UTC+2)
+Members in South Africa see ETA like "08:56" when the actual local time is "10:56." All date/time formatting for ETAs and trip times must display in Africa/Johannesburg timezone (SAST = UTC+2).
+Fix: Find all places where ETA or arrival times are formatted for display in WhatsApp messages and ensure they use Africa/Johannesburg timezone. Use toLocaleTimeString with timeZone Africa/Johannesburg or equivalent. Do NOT change how timestamps are stored in the database — only fix the display formatting.
+
+After all 3 fixes are implemented and tested, click Publish to deploy.

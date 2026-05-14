@@ -205,9 +205,16 @@ function buildCheckpoints(durationMinutes: number): Checkpoint[] {
 
 export function minutesToSastTime(minutesFromNow: number): string {
   const d = new Date(Date.now() + minutesFromNow * 60000);
-  const h = (d.getUTCHours() + 2) % 24;
-  const m = d.getUTCMinutes();
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  // Use IANA timezone to handle SAST (UTC+2) correctly regardless of server locale
+  const parts = new Intl.DateTimeFormat("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const h = parts.find((p) => p.type === "hour")?.value ?? "00";
+  const m = parts.find((p) => p.type === "minute")?.value ?? "00";
+  return `${h}:${m}`;
 }
 
 async function getOsrmRoute(

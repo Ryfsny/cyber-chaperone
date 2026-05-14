@@ -382,6 +382,14 @@ router.post(
   const address: string = (rb["Address"] ?? rb["address"] ?? "").toString();
   const label: string = (rb["Label"] ?? rb["label"] ?? "").toString();
 
+  // BUG 1 FIX: Native WhatsApp location pin arrives with empty Body but populated
+  // Latitude/Longitude/Address fields. Synthesise a text body so the full pipeline
+  // (member lookup, menu router, active-trip handler) can process it normally.
+  if (body === "" && latitude !== "" && longitude !== "") {
+    const locationLabel = [label, address].filter(Boolean).join(", ");
+    body = `📍 Location: ${locationLabel || `${latitude},${longitude}`}`;
+  }
+
   // ── Voice note transcription ──────────────────────────────────────────────
   const numMedia = Number(rb["NumMedia"] ?? rb["numMedia"] ?? "0");
   const mediaUrl: string = (rb["MediaUrl0"] ?? rb["mediaUrl0"] ?? "").toString();
@@ -400,6 +408,20 @@ router.post(
     } catch (err) {
       req.log.error({ err }, "Voice note transcription failed — continuing with empty body");
     }
+  }
+
+  // BUG 2 FIX: If body is still empty after transcription attempt and there are media
+  // attachments (images, videos, stickers, documents), respond with a friendly message
+  // and return early — do NOT pass empty content to the AI or menu router.
+  if (body === "" && numMedia > 0) {
+    await sendReply(
+      from,
+      to,
+      "I received your voice note / image, but I can only process text messages for now. Please type your request.",
+    );
+    res.set("Content-Type", "text/xml");
+    res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+    return;
   }
 
   req.log.info(
