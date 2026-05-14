@@ -424,7 +424,7 @@ router.post("/broadcast/email", async (req: Request, res: Response): Promise<voi
         const subj = subject.trim().replace(/\{name\}/gi, fn);
         const emailBody = message.trim().replace(/\{name\}/gi, fn);
         try {
-          await t.sendMail({ from: `"Andre Snyman | eblockwatch" <${gmailUser}>`, to: m.email!, subject: subj, html: buildEmailHtml(fn, subj, message.trim()), text: emailBody });
+          await t.sendMail({ from: `"Andre Snyman | eblockwatch" <${gmailUser}>`, replyTo: "info@eblockwatch.co.za", to: m.email!, subject: subj, html: buildEmailHtml(fn, subj, message.trim()), text: emailBody });
           job.sent++;
           void db.insert(messagesTable).values({ fromNumber: gmailUser, toNumber: m.email!, body: `[${subj}] ${emailBody}`, direction: "broadcast", channel: "email", status: "sent" }).catch(() => undefined);
         } catch (err) { job.failed++; if (job.errors.length < 50) job.errors.push({ name: m.displayName, error: String(err) }); }
@@ -441,7 +441,7 @@ router.post("/broadcast/email", async (req: Request, res: Response): Promise<voi
     const subj = subject.trim().replace(/\{name\}/gi, fn);
     const emailBody = message.trim().replace(/\{name\}/gi, fn);
     try {
-      await t.sendMail({ from: `"Andre Snyman | eblockwatch" <${gmailUser}>`, to: m.email!, subject: subj, html: buildEmailHtml(fn, subj, message.trim()), text: emailBody });
+      await t.sendMail({ from: `"Andre Snyman | eblockwatch" <${gmailUser}>`, replyTo: "info@eblockwatch.co.za", to: m.email!, subject: subj, html: buildEmailHtml(fn, subj, message.trim()), text: emailBody });
       results.push({ id: m.id, name: m.displayName, status: "sent" });
       void db.insert(messagesTable).values({ fromNumber: gmailUser, toNumber: m.email!, body: `[${subj}] ${emailBody}`, direction: "broadcast", channel: "email", status: "sent" }).catch(() => undefined);
     } catch (err) { results.push({ id: m.id, name: m.displayName, status: "failed", error: String(err) }); }
@@ -607,6 +607,7 @@ router.post("/broadcast/multi", async (req: Request, res: Response): Promise<voi
         try {
           await emailT.sendMail({
             from: `"Andre Snyman | eblockwatch" <${gmailUser}>`,
+            replyTo: "info@eblockwatch.co.za",
             to: m.email.trim(),
             subject: "Message from eblockwatch",
             text: body,
@@ -666,6 +667,250 @@ router.post("/broadcast/multi", async (req: Request, res: Response): Promise<voi
     whatsappSent: count("whatsapp", "sent"),
     results,
   });
+});
+
+// ── Migration email template ───────────────────────────────────────────────────
+// Builds the "join the new system" email for old members being migrated.
+
+function buildMigrationEmailHtml(firstName: string, portalUrl: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<title>You're invited to the new eblockwatch</title>
+</head>
+<body style="margin:0;padding:0;background:#f0fdf4;font-family:Arial,sans-serif;-webkit-text-size-adjust:100%;">
+
+<!-- Preheader -->
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;color:#f0fdf4;">
+  eblockwatch has a brand-new member portal — and your spot is already waiting.
+</div>
+
+<div style="max-width:620px;margin:0 auto;background:#ffffff;">
+
+  <!-- Header -->
+  <div style="background:#1a1f2e;padding:36px 48px;text-align:center;">
+    <img src="https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif"
+      alt="eblockwatch" width="160" style="display:block;margin:0 auto;max-width:160px;" />
+    <div style="color:#9ca3af;font-size:10px;letter-spacing:3px;margin-top:14px;text-transform:uppercase;">
+      Est. 2001 &nbsp;·&nbsp; South Africa's Trusted Safety Network
+    </div>
+  </div>
+
+  <!-- Green bar -->
+  <div style="height:4px;background:linear-gradient(90deg,#16a34a,#22c55e,#16a34a);"></div>
+
+  <!-- Hero banner -->
+  <div style="background:#f0fdf4;padding:32px 48px;border-bottom:1px solid #bbf7d0;text-align:center;">
+    <div style="font-size:28px;font-weight:bold;color:#1a1f2e;font-family:Georgia,'Times New Roman',serif;line-height:1.3;">
+      ${firstName}, your eblockwatch<br>just got a whole lot smarter.
+    </div>
+    <div style="color:#16a34a;font-size:13px;letter-spacing:2px;text-transform:uppercase;margin-top:12px;font-weight:bold;">
+      New Member Portal · Now Live
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div style="padding:40px 48px 28px;color:#1e293b;">
+
+    <p style="margin:0 0 20px;font-size:16px;line-height:1.75;font-family:Georgia,'Times New Roman',serif;color:#1a1f2e;">
+      Dear ${firstName},
+    </p>
+
+    <p style="margin:0 0 18px;font-size:15px;line-height:1.75;color:#374151;font-family:Arial,sans-serif;">
+      I've been building eblockwatch since 2001 — and I'm proud to say we've just taken our biggest step forward yet.
+    </p>
+
+    <p style="margin:0 0 18px;font-size:15px;line-height:1.75;color:#374151;font-family:Arial,sans-serif;">
+      We've launched a <strong>brand-new member portal</strong> — and it's designed around everything our community has asked for:
+    </p>
+
+    <!-- Feature list -->
+    <table cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0 0 24px;">
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
+          <span style="color:#22c55e;font-weight:bold;font-size:18px;vertical-align:middle;">✓</span>
+          <span style="font-size:14px;color:#1e293b;font-family:Arial,sans-serif;margin-left:10px;vertical-align:middle;">
+            <strong>Cyber Chaperone</strong> — real-time trip monitoring via WhatsApp. Start a trip, check in, and your operator watches over you the whole way.
+          </span>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
+          <span style="color:#22c55e;font-weight:bold;font-size:18px;vertical-align:middle;">✓</span>
+          <span style="font-size:14px;color:#1e293b;font-family:Arial,sans-serif;margin-left:10px;vertical-align:middle;">
+            <strong>Your member profile</strong> — update your details, ICE contacts, and home address in one place.
+          </span>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
+          <span style="color:#22c55e;font-weight:bold;font-size:18px;vertical-align:middle;">✓</span>
+          <span style="font-size:14px;color:#1e293b;font-family:Arial,sans-serif;margin-left:10px;vertical-align:middle;">
+            <strong>Family membership</strong> — one plan, your whole household protected.
+          </span>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:10px 0;">
+          <span style="color:#22c55e;font-weight:bold;font-size:18px;vertical-align:middle;">✓</span>
+          <span style="font-size:14px;color:#1e293b;font-family:Arial,sans-serif;margin-left:10px;vertical-align:middle;">
+            <strong>Responder network</strong> — connected to verified eblockwatch responders in your area.
+          </span>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0 0 18px;font-size:15px;line-height:1.75;color:#374151;font-family:Arial,sans-serif;">
+      As an existing eblockwatch member, <strong>your account is already set up</strong>. All you need to do is claim it — takes less than 60 seconds.
+    </p>
+
+    <!-- CTA -->
+    <p style="margin:32px 0;text-align:center;">
+      <a href="${portalUrl}" target="_blank" rel="noopener"
+        style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;letter-spacing:1px;padding:18px 48px;font-family:Arial,sans-serif;border-radius:4px;border:2px solid #16a34a;">
+        CLAIM YOUR ACCOUNT
+      </a>
+    </p>
+
+    <p style="margin:0 0 18px;font-size:13px;line-height:1.7;color:#64748b;font-family:Arial,sans-serif;text-align:center;">
+      Or copy this link into your browser:<br>
+      <a href="${portalUrl}" style="color:#16a34a;word-break:break-all;">${portalUrl}</a>
+    </p>
+
+    <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0;">
+
+    <p style="margin:0 0 10px;font-size:14px;line-height:1.7;color:#374151;font-family:Arial,sans-serif;">
+      <strong>Already on WhatsApp?</strong> You can also just send us a message — type <strong>Hi</strong> to <a href="https://wa.me/27825611065" style="color:#16a34a;text-decoration:none;">+27 82 561 1065</a> and the Cyber Chaperone menu will guide you straight in.
+    </p>
+
+  </div>
+
+  <!-- Signature -->
+  <div style="background:#f0fdf4;padding:28px 48px;border-top:3px solid #22c55e;">
+    <table cellpadding="0" cellspacing="0" border="0" style="width:100%;">
+      <tr>
+        <td style="width:60px;vertical-align:top;">
+          <div style="width:52px;height:52px;border-radius:50%;background:#1a1f2e;border:2px solid #22c55e;text-align:center;line-height:52px;">
+            <span style="color:#22c55e;font-weight:bold;font-size:20px;font-family:Arial,sans-serif;">A</span>
+          </div>
+        </td>
+        <td style="vertical-align:top;padding-left:16px;">
+          <div style="font-weight:bold;color:#1a1f2e;font-size:16px;font-family:Arial,sans-serif;">Andre Snyman</div>
+          <div style="color:#475569;font-size:12px;font-family:Arial,sans-serif;margin-top:3px;">Founder · eblockwatch · Cyber Chaperone</div>
+          <div style="color:#64748b;font-size:11px;font-family:Arial,sans-serif;margin-top:2px;">+27 82 561 1065 · <a href="mailto:info@eblockwatch.co.za" style="color:#16a34a;text-decoration:none;">info@eblockwatch.co.za</a></div>
+        </td>
+      </tr>
+    </table>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #bbf7d0;">
+      <p style="color:#64748b;font-size:12px;font-family:Arial,sans-serif;margin:0;font-style:italic;">
+        "I started eblockwatch in 2001 with one goal: make sure no South African faces danger alone. 25 years on, that mission hasn't changed."
+      </p>
+    </div>
+  </div>
+
+  <!-- Social CTAs -->
+  <div style="background:#1a1f2e;padding:24px 48px;text-align:center;">
+    <a href="https://www.facebook.com/eblockwatchnational" target="_blank" rel="noopener"
+      style="display:inline-block;background:#1877f2;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Facebook</a>
+    <a href="https://www.instagram.com/eblockwatch" target="_blank" rel="noopener"
+      style="display:inline-block;background:#e1306c;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Instagram</a>
+    <a href="https://eblockwatch.co.za" target="_blank" rel="noopener"
+      style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Website</a>
+    <a href="${portalUrl}" target="_blank" rel="noopener"
+      style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Member Portal</a>
+    <a href="https://wa.me/27825611065" target="_blank" rel="noopener"
+      style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">WhatsApp</a>
+  </div>
+
+  <!-- Footer -->
+  <div style="background:#0f172a;padding:18px 48px;text-align:center;">
+    <p style="color:#475569;font-size:10px;margin:0;letter-spacing:1px;font-family:Arial,sans-serif;text-transform:uppercase;">
+      © 2026 eblockwatch (Pty) Ltd · South Africa · Protecting families since 2001
+    </p>
+    <p style="color:#334155;font-size:10px;margin:6px 0 0;font-family:Arial,sans-serif;">
+      You are receiving this as an eblockwatch member. Reply to unsubscribe.
+    </p>
+  </div>
+
+</div>
+</body>
+</html>`;
+}
+
+// ── POST /api/broadcast/migrate — send migration email to old-system members ──
+// Targets members with email addresses who haven't yet logged into the portal.
+// Dry-run mode (dryRun: true) returns the list without sending.
+
+router.post("/broadcast/migrate", async (req: Request, res: Response): Promise<void> => {
+  if (!nationalOnly(req, res)) return;
+
+  const { dryRun = false, limit: limitParam = 500 } = req.body as { dryRun?: boolean; limit?: number };
+  const sendLimit = Math.min(Number(limitParam) || 500, 1000);
+
+  const portalUrl = "https://cyber-chaperone-r--ryfsny.replit.app/website/";
+
+  // Target: members with an email address who are active or verified
+  const targets = await db
+    .select({
+      id:          membersTable.id,
+      firstName:   membersTable.firstName,
+      displayName: membersTable.displayName,
+      email:       membersTable.email,
+    })
+    .from(membersTable)
+    .where(
+      sql`email IS NOT NULL AND TRIM(email) != '' AND member_status IN ('active','verified')` as ReturnType<typeof eq>
+    )
+    .limit(sendLimit);
+
+  if (dryRun) {
+    res.json({ ok: true, dryRun: true, total: targets.length, targets: targets.map((t) => ({ id: t.id, name: t.displayName, email: t.email })) });
+    return;
+  }
+
+  const gmailUser = process.env["GMAIL_USER"] ?? "";
+  const gmailPass = process.env["GMAIL_APP_PASSWORD"] ?? "";
+  if (!gmailUser || !gmailPass) { res.status(503).json({ error: "Gmail not configured." }); return; }
+
+  const t = nodemailer.createTransport({ service: "gmail", auth: { user: gmailUser, pass: gmailPass } });
+
+  const results: { id: number; name: string; email: string; status: "sent" | "failed"; error?: string }[] = [];
+
+  for (const m of targets) {
+    const firstName = m.firstName ?? m.displayName.split(" ")[0] ?? "Member";
+    const subj = `${firstName}, your new eblockwatch member portal is ready`;
+    try {
+      await t.sendMail({
+        from: `"Andre Snyman | eblockwatch" <${gmailUser}>`,
+        replyTo: "info@eblockwatch.co.za",
+        to: m.email!,
+        subject: subj,
+        html: buildMigrationEmailHtml(firstName, portalUrl),
+        text: `Hi ${firstName},\n\neblockwatch has a brand-new member portal and your account is already set up.\n\nClaim it here: ${portalUrl}\n\nOr send "Hi" on WhatsApp to +27 82 561 1065.\n\nAndre Snyman\nFounder · eblockwatch\n+27 82 561 1065`,
+      });
+      results.push({ id: m.id, name: m.displayName, email: m.email!, status: "sent" });
+      void db.insert(messagesTable).values({
+        fromNumber: gmailUser,
+        toNumber:   m.email!,
+        body:       `[Migration invite] ${subj}`,
+        direction:  "broadcast",
+        channel:    "email",
+        status:     "sent",
+      }).catch(() => undefined);
+    } catch (err) {
+      results.push({ id: m.id, name: m.displayName, email: m.email!, status: "failed", error: String(err) });
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+
+  const sent   = results.filter((r) => r.status === "sent").length;
+  const failed = results.filter((r) => r.status === "failed").length;
+  req.log.info({ sent, failed, total: results.length }, "Migration broadcast sent");
+
+  res.json({ ok: true, dryRun: false, sent, failed, total: results.length, results });
 });
 
 export default router;

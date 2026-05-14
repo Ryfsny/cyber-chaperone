@@ -461,6 +461,7 @@ router.post("/members/:id/contact", async (req, res): Promise<void> => {
     try {
       await transporter.sendMail({
         from: `"eblockwatch Cyber Chaperone" <${GMAIL_USER}>`,
+        replyTo: "info@eblockwatch.co.za",
         to: member.email,
         subject: `Message from eblockwatch Cyber Chaperone`,
         text: body,

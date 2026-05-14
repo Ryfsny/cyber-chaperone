@@ -6,6 +6,7 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "import-members": "tsx ./src/import-members-to-prod.ts",
+    "label-gmail": "tsx ./src/label-gmail-inbox.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
@@ -14,6 +15,7 @@
     "tsx": "catalog:"
   },
   "dependencies": {
+    "imapflow": "^1.3.3",
     "nodemailer": "^8.0.7",
     "pg": "^8.20.0"
   }

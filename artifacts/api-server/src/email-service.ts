@@ -119,7 +119,8 @@ export async function sendOperatorEmail(
 
   try {
     await t.sendMail({
-      from: `"Cyber Chaperone" <${GMAIL_USER}>`,
+      from: `"eblockwatch Cyber Chaperone" <${GMAIL_USER}>`,
+      replyTo: "info@eblockwatch.co.za",
       to: OPERATOR_EMAIL,
       subject: fullSubject,
       text: body,
@@ -144,7 +145,8 @@ export async function sendRawEmail(
   if (!t) return;
   try {
     await t.sendMail({
-      from: `"Cyber Chaperone" <${GMAIL_USER}>`,
+      from: `"eblockwatch Cyber Chaperone" <${GMAIL_USER}>`,
+      replyTo: "info@eblockwatch.co.za",
       to: to ?? OPERATOR_EMAIL,
       subject,
       text,
