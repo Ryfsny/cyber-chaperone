@@ -1,3 +1,5 @@
+import logoSrc from "../../assets/eblockwatch-logo.png";
+
 export default function WhatsAppDualView() {
   const operatorMessages = [
     { from: "me", text: "🎤 I'm at home and going to Woolworths, leaving in 5 minutes." },
@@ -174,17 +176,28 @@ function Phone({
               width: 38,
               height: 38,
               borderRadius: "50%",
-              background: accentColor,
+              background: "#fff",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 14,
+              overflow: "hidden",
               flexShrink: 0,
+              border: `2px solid ${accentColor}`,
             }}
           >
-            {contactInitial}
+            <img
+              src={logoSrc}
+              alt="eblockwatch"
+              style={{ width: 34, height: 34, objectFit: "contain" }}
+              onError={(e) => {
+                const el = e.currentTarget as HTMLImageElement;
+                el.style.display = "none";
+                if (el.parentElement) {
+                  el.parentElement.style.background = accentColor;
+                  el.parentElement.textContent = contactInitial;
+                }
+              }}
+            />
           </div>
           <div>
             <div style={{ color: "#e9edef", fontWeight: 600, fontSize: 14 }}>{contactName}</div>
