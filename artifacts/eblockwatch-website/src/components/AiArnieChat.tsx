@@ -124,7 +124,7 @@ export default function AiArnieChat() {
             <img src={LOGO} alt="eblockwatch" style={{ height: "28px", objectFit: "contain" }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ color: "#fff", fontWeight: 700, fontSize: "14px", fontFamily: "Montserrat, sans-serif" }}>AI Arnie</div>
-              <div style={{ color: "#9ca3af", fontSize: "11px" }}>eblockwatch safety companion</div>
+              <div style={{ color: "#9ca3af", fontSize: "12px" }}>eblockwatch safety companion</div>
             </div>
             <button
               onClick={() => setOpen(false)}

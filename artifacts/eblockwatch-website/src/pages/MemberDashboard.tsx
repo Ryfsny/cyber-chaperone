@@ -200,13 +200,13 @@ export default function MemberDashboard() {
                 style={{ display: "block", background: "#1db954", color: "#fff", borderRadius: "10px", padding: "16px", textDecoration: "none", textAlign: "center" }}>
                 <div style={{ fontWeight: 800, fontSize: "20px", fontFamily: "Montserrat, sans-serif" }}>R150<span style={{ fontSize: "12px", fontWeight: 400 }}>/mo</span></div>
                 <div style={{ fontWeight: 700, fontSize: "13px", marginTop: "2px" }}>👤 Individual</div>
-                <div style={{ fontSize: "11px", opacity: 0.85, marginTop: "4px" }}>Just you, fully covered</div>
+                <div style={{ fontSize: "12px", opacity: 0.85, marginTop: "4px" }}>Just you, fully covered</div>
               </a>
               <a href={`${BASE}/upgrade`}
                 style={{ display: "block", background: "#fff", color: "#0d1117", borderRadius: "10px", padding: "16px", textDecoration: "none", textAlign: "center" }}>
                 <div style={{ fontWeight: 800, fontSize: "20px", fontFamily: "Montserrat, sans-serif" }}>R250<span style={{ fontSize: "12px", fontWeight: 400 }}>/mo</span></div>
                 <div style={{ fontWeight: 700, fontSize: "13px", marginTop: "2px" }}>🏠 Family (up to 5)</div>
-                <div style={{ fontSize: "11px", opacity: 0.65, marginTop: "4px" }}>Everyone covered together</div>
+                <div style={{ fontSize: "12px", opacity: 0.65, marginTop: "4px" }}>Everyone covered together</div>
               </a>
             </div>
           </div>
