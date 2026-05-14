@@ -550,7 +550,7 @@ export default function HomePage() {
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
                         <div>
-                          <label style={{ display: "block", marginBottom: "4px", fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>First Name</label>
+                          <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>First Name</label>
                           <input
                             className="ebw-form-field"
                             placeholder="First Name"
@@ -559,7 +559,7 @@ export default function HomePage() {
                           />
                         </div>
                         <div>
-                          <label style={{ display: "block", marginBottom: "4px", fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>Last Name</label>
+                          <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>Last Name</label>
                           <input
                             className="ebw-form-field"
                             placeholder="Last Name"
@@ -569,7 +569,7 @@ export default function HomePage() {
                         </div>
                       </div>
                       <div>
-                        <label style={{ display: "block", marginBottom: "4px", fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>WhatsApp Number</label>
+                        <label style={{ display: "block", marginBottom: "4px", fontSize: "12px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>WhatsApp Number</label>
                         <input
                           type="tel"
                           className="ebw-form-field"
