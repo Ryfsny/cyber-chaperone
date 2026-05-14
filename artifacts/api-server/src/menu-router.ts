@@ -2489,6 +2489,7 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
       ? activeTrip.title.split(" → ").pop()!
       : activeTrip.title;
     const name = member.displayName;
+    const stopPingDueMs = Date.now() + 30 * 60_000;
     await db
       .update(tripsTable)
       .set({
@@ -2496,8 +2497,11 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
         currentRouteConfidence: "amber",
         lastMemberCheckinTime: new Date(),
         etaDriftMinutes: 0,
-        evidenceNotes: appendNote(activeTrip.evidenceNotes, `[${ts}] PLANNED STOP: "${body.slice(0, 120)}"`),
-        nextAction: "Member declared a planned stop. Awaiting resume and new ETA.",
+        evidenceNotes: appendNote(
+          activeTrip.evidenceNotes,
+          `[${ts}] PLANNED STOP: "${body.slice(0, 120)}"\n[STOP-PING-DUE: ${stopPingDueMs}]`,
+        ),
+        nextAction: "Member declared a planned stop. 30-min safety ping scheduled.",
       })
       .where(eq(tripsTable.id, activeTrip.id));
     await setConvState(from, {

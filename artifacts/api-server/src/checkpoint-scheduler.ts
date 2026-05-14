@@ -23,6 +23,23 @@ async function sendWhatsApp(to: string, body: string): Promise<void> {
   }
 }
 
+function buildStopPingPrompt(name: string, destination: string): string {
+  return [
+    `${name} 👋 Cyber Chaperone here.`,
+    ``,
+    `You mentioned stopping about 30 minutes ago on your way to ${destination}.`,
+    `Just checking in — are you safe?`,
+    ``,
+    `Please reply:`,
+    ``,
+    `1. ✅ I'm okay and back on the road`,
+    `2. 🛑 Still stopped — I'll be a while longer`,
+    `3. 🆘 I need help`,
+    ``,
+    `Reply 0 for Main Menu.`,
+  ].join("\n");
+}
+
 function buildPrompt(name: string, label: string, destination: string, isPreArrival: boolean): string {
   if (isPreArrival) {
     return [
@@ -65,6 +82,30 @@ async function tick(log: Logger): Promise<void> {
     const now = Date.now();
 
     for (const trip of activeTrips) {
+      const evidenceNotes = trip.evidenceNotes ?? "";
+      const name = trip.travelerName ?? trip.travelerPhone;
+      const destination = trip.title.includes(" → ")
+        ? trip.title.split(" → ").pop()!
+        : trip.title;
+
+      // ── Planned stop safety ping — fires 30 min after member declared a stop ──
+      const stopPingMatch = evidenceNotes.match(/\[STOP-PING-DUE:\s*(\d+)\]/);
+      if (stopPingMatch && !evidenceNotes.includes("[STOP-PING-SENT]")) {
+        const dueMs = parseInt(stopPingMatch[1], 10);
+        if (!isNaN(dueMs) && now >= dueMs) {
+          await sendWhatsApp(trip.travelerPhone, buildStopPingPrompt(name, destination));
+          const ts = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
+          await db
+            .update(tripsTable)
+            .set({
+              evidenceNotes: [evidenceNotes, `[STOP-PING-SENT] Sent at ${ts}`].join("\n"),
+              nextAction: "30-min stop safety ping sent. Awaiting member response.",
+            })
+            .where(eq(tripsTable.id, trip.id));
+          log.info({ tripId: trip.id }, "Stop safety ping sent after 30-min planned stop");
+        }
+      }
+
       if (!trip.checkpointList) continue;
 
       let checkpoints: Checkpoint[];
@@ -77,7 +118,6 @@ async function tick(log: Logger): Promise<void> {
       if (!checkpoints.length) continue;
 
       const tripStartMs = new Date(trip.createdAt).getTime();
-      const evidenceNotes = trip.evidenceNotes ?? "";
 
       for (const cp of checkpoints) {
         const scheduledMs = tripStartMs + cp.minutesFromStart * 60_000;
