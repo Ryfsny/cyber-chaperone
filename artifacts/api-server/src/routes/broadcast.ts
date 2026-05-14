@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, membersTable } from "@workspace/db";
+import { db, membersTable, messagesTable } from "@workspace/db";
 import { inArray, eq, or, sql, ilike } from "drizzle-orm";
 import twilio from "twilio";
 import nodemailer from "nodemailer";
@@ -366,7 +366,12 @@ router.post("/broadcast", async (req: Request, res: Response): Promise<void> => 
     (async () => {
       const client = twilio(sid, token);
       for (const m of valid) {
-        try { await client.messages.create({ from, to: m.whatsappNumber, body: message.trim().replace(/\{name\}/gi, m.firstName ?? m.displayName) }); job.sent++; }
+        const body = message.trim().replace(/\{name\}/gi, m.firstName ?? m.displayName);
+        try {
+          const sent = await client.messages.create({ from, to: m.whatsappNumber, body });
+          job.sent++;
+          void db.insert(messagesTable).values({ fromNumber: from, toNumber: m.whatsappNumber, body, messageSid: sent.sid, direction: "broadcast", channel: "whatsapp", status: "sent" }).catch(() => undefined);
+        }
         catch (err) { job.failed++; if (job.errors.length < 50) job.errors.push({ name: m.displayName, error: String(err) }); }
         await new Promise((r) => setTimeout(r, 80));
       }
@@ -378,7 +383,12 @@ router.post("/broadcast", async (req: Request, res: Response): Promise<void> => 
   const client = twilio(sid, token);
   const results: { id: number; name: string; status: "sent" | "failed"; error?: string }[] = [];
   for (const m of valid) {
-    try { await client.messages.create({ from, to: m.whatsappNumber, body: message.trim().replace(/\{name\}/gi, m.firstName ?? m.displayName) }); results.push({ id: m.id, name: m.displayName, status: "sent" }); }
+    const body = message.trim().replace(/\{name\}/gi, m.firstName ?? m.displayName);
+    try {
+      const sent = await client.messages.create({ from, to: m.whatsappNumber, body });
+      results.push({ id: m.id, name: m.displayName, status: "sent" });
+      void db.insert(messagesTable).values({ fromNumber: from, toNumber: m.whatsappNumber, body, messageSid: sent.sid, direction: "broadcast", channel: "whatsapp", status: "sent" }).catch(() => undefined);
+    }
     catch (err) { results.push({ id: m.id, name: m.displayName, status: "failed", error: String(err) }); }
     await new Promise((r) => setTimeout(r, 80));
   }
@@ -412,9 +422,11 @@ router.post("/broadcast/email", async (req: Request, res: Response): Promise<voi
       for (const m of valid) {
         const fn   = m.firstName ?? m.displayName.split(" ")[0] ?? "Member";
         const subj = subject.trim().replace(/\{name\}/gi, fn);
+        const emailBody = message.trim().replace(/\{name\}/gi, fn);
         try {
-          await t.sendMail({ from: `"Andre Snyman | eblockwatch" <${gmailUser}>`, to: m.email!, subject: subj, html: buildEmailHtml(fn, subj, message.trim()), text: message.trim().replace(/\{name\}/gi, fn) });
+          await t.sendMail({ from: `"Andre Snyman | eblockwatch" <${gmailUser}>`, to: m.email!, subject: subj, html: buildEmailHtml(fn, subj, message.trim()), text: emailBody });
           job.sent++;
+          void db.insert(messagesTable).values({ fromNumber: gmailUser, toNumber: m.email!, body: `[${subj}] ${emailBody}`, direction: "broadcast", channel: "email", status: "sent" }).catch(() => undefined);
         } catch (err) { job.failed++; if (job.errors.length < 50) job.errors.push({ name: m.displayName, error: String(err) }); }
         await new Promise((r) => setTimeout(r, 200));
       }
@@ -427,9 +439,11 @@ router.post("/broadcast/email", async (req: Request, res: Response): Promise<voi
   for (const m of valid) {
     const fn   = m.firstName ?? m.displayName.split(" ")[0] ?? "Member";
     const subj = subject.trim().replace(/\{name\}/gi, fn);
+    const emailBody = message.trim().replace(/\{name\}/gi, fn);
     try {
-      await t.sendMail({ from: `"Andre Snyman | eblockwatch" <${gmailUser}>`, to: m.email!, subject: subj, html: buildEmailHtml(fn, subj, message.trim()), text: message.trim().replace(/\{name\}/gi, fn) });
+      await t.sendMail({ from: `"Andre Snyman | eblockwatch" <${gmailUser}>`, to: m.email!, subject: subj, html: buildEmailHtml(fn, subj, message.trim()), text: emailBody });
       results.push({ id: m.id, name: m.displayName, status: "sent" });
+      void db.insert(messagesTable).values({ fromNumber: gmailUser, toNumber: m.email!, body: `[${subj}] ${emailBody}`, direction: "broadcast", channel: "email", status: "sent" }).catch(() => undefined);
     } catch (err) { results.push({ id: m.id, name: m.displayName, status: "failed", error: String(err) }); }
     await new Promise((r) => setTimeout(r, 200));
   }

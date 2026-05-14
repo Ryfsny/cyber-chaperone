@@ -10,6 +10,8 @@ export const messagesTable = pgTable("messages", {
   messageSid: text("message_sid"),
   tripId: integer("trip_id"),
   direction: text("direction").notNull().default("inbound"),
+  channel: text("channel").notNull().default("whatsapp"),
+  status: text("status"),
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -405,6 +405,8 @@ router.post("/members/:id/contact", async (req, res): Promise<void> => {
       body,
       messageSid: messageSid ?? null,
       direction: "outbound",
+      channel: "whatsapp",
+      status: "sent",
     });
     res.json({ ok: true, channel: "whatsapp" });
     return;
@@ -468,6 +470,14 @@ router.post("/members/:id/contact", async (req, res): Promise<void> => {
       res.status(500).json({ error: `Email failed: ${String(err)}` });
       return;
     }
+    await db.insert(messagesTable).values({
+      fromNumber: GMAIL_USER || "operator",
+      toNumber: member.email,
+      body,
+      direction: "outbound",
+      channel: "email",
+      status: "sent",
+    });
     res.json({ ok: true, channel: "email", to: member.email });
     return;
   }
@@ -498,6 +508,8 @@ router.post("/members/:id/contact", async (req, res): Promise<void> => {
       body,
       messageSid: messageSid ?? null,
       direction: "outbound",
+      channel: "sms",
+      status: "sent",
     });
     res.json({ ok: true, channel: "sms", to: toMobile });
     return;

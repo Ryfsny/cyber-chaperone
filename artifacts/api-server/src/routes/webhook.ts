@@ -337,13 +337,19 @@ router.post(
   "/webhook/twilio",
   express.urlencoded({ extended: true, type: () => true }),
   async (req, res): Promise<void> => {
-  // ── Ignore Twilio status callbacks (outbound delivery notifications) ────────
-  // Status callbacks POST MessageStatus / SmsStatus fields. They are NOT
-  // inbound messages — processing them as such causes false distress alerts.
+  // ── Twilio delivery status callbacks ─────────────────────────────────────
+  // Status callbacks POST MessageStatus / SmsStatus. They are NOT inbound
+  // member messages — do NOT feed them into the menu router.
+  // Instead, capture the delivery status and update the message record.
   const messageStatus: string = req.body?.MessageStatus ?? "";
   if (messageStatus) {
-    const callbackSid: string = req.body?.MessageSid ?? req.body?.SmsSid ?? "unknown";
-    req.log.info(`Ignored Twilio status callback: ${messageStatus} ${callbackSid}`);
+    const callbackSid: string = req.body?.MessageSid ?? req.body?.SmsSid ?? "";
+    if (callbackSid) {
+      await db.update(messagesTable)
+        .set({ status: messageStatus.toLowerCase() })
+        .where(eq(messagesTable.messageSid, callbackSid));
+      req.log.info(`Delivery status update: ${callbackSid} → ${messageStatus}`);
+    }
     res.sendStatus(200);
     return;
   }

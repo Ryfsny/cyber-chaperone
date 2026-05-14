@@ -6,6 +6,7 @@ import {
   ArrowLeft, Phone, Mail, MapPin, Shield, Calendar, MessageSquare,
   Navigation, CheckCircle2, AlertCircle, AlertTriangle, Clock, Users, FileText,
   Home, Fingerprint, ExternalLink, Send, ChevronDown, ChevronUp,
+  Check, CheckCheck, XCircle, Loader2, Smartphone, AtSign, Radio,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,8 @@ interface MemberMessage {
   messageSid: string | null;
   tripId: number | null;
   direction: string;
+  channel: string;
+  status: string | null;
   receivedAt: string;
 }
 
@@ -137,16 +140,42 @@ function SectionCard({ title, icon: Icon, children }: { title: string; icon: Rea
   );
 }
 
+// ── Channel icon ────────────────────────────────────────────────────────────────
+function ChannelIcon({ channel, className }: { channel: string; className?: string }) {
+  if (channel === "email")    return <AtSign className={cn("w-3 h-3", className)} />;
+  if (channel === "sms")      return <Smartphone className={cn("w-3 h-3", className)} />;
+  if (channel === "messenger") return <Radio className={cn("w-3 h-3", className)} />;
+  return <MessageSquare className={cn("w-3 h-3", className)} />;
+}
+
+// ── Delivery badge ───────────────────────────────────────────────────────────────
+function DeliveryBadge({ status }: { status: string | null }) {
+  if (!status) return <Check className="w-3 h-3 text-muted-foreground/40" />;
+  if (status === "read")       return <span title="Read"><CheckCheck className="w-3 h-3 text-primary" /></span>;
+  if (status === "delivered")  return <span title="Delivered"><CheckCheck className="w-3 h-3 text-muted-foreground" /></span>;
+  if (status === "sent")       return <span title="Sent"><Check className="w-3 h-3 text-muted-foreground" /></span>;
+  if (status === "failed" || status === "undelivered")
+    return <span title={status}><XCircle className="w-3 h-3 text-red-400" /></span>;
+  return <span title={status}><Loader2 className="w-3 h-3 text-muted-foreground animate-spin" /></span>;
+}
+
 // ── Message bubble ─────────────────────────────────────────────────────────────
 function MessageBubble({ msg, memberNumber }: { msg: MemberMessage; memberNumber: string }) {
   const isInbound = msg.fromNumber === memberNumber || msg.direction === "inbound";
+  const ch = msg.channel ?? "whatsapp";
+  const isBroadcast = msg.direction === "broadcast";
+  const channelLabel: Record<string, string> = {
+    whatsapp: "WhatsApp", email: "Email", sms: "SMS", messenger: "Messenger",
+  };
   return (
     <div className={cn("flex flex-col max-w-[75%]", isInbound ? "self-start" : "self-end items-end")}>
       <div className={cn(
         "px-3 py-2 text-sm leading-relaxed",
         isInbound
           ? "bg-muted text-foreground rounded-br-xl rounded-tr-xl rounded-bl-sm"
-          : "bg-primary/20 border border-primary/30 text-foreground rounded-bl-xl rounded-tl-xl rounded-br-sm"
+          : isBroadcast
+            ? "bg-blue-900/20 border border-blue-700/30 text-foreground rounded-bl-xl rounded-tl-xl rounded-br-sm"
+            : "bg-primary/20 border border-primary/30 text-foreground rounded-bl-xl rounded-tl-xl rounded-br-sm"
       )}>
         {msg.body}
         {msg.tripId && (
@@ -156,7 +185,13 @@ function MessageBubble({ msg, memberNumber }: { msg: MemberMessage; memberNumber
           </div>
         )}
       </div>
-      <span className="text-[10px] text-muted-foreground mt-0.5 px-1">{fmtAgo(msg.receivedAt)}</span>
+      <div className="flex items-center gap-1.5 mt-0.5 px-1">
+        <ChannelIcon channel={ch} className="text-muted-foreground/50" />
+        <span className="text-[10px] text-muted-foreground/60">{channelLabel[ch] ?? ch}</span>
+        {isBroadcast && <span className="text-[10px] text-blue-400/70">broadcast</span>}
+        <span className="text-[10px] text-muted-foreground">{fmtAgo(msg.receivedAt)}</span>
+        {!isInbound && <DeliveryBadge status={msg.status} />}
+      </div>
     </div>
   );
 }
@@ -661,39 +696,92 @@ export default function MemberProfile() {
         )}
 
         {/* ── MESSAGES ─────────────────────────────────────── */}
-        {tab === "messages" && (
-          <div className="flex flex-col h-full">
-            {messages.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
-                <MessageSquare className="w-7 h-7 opacity-30" />
-                <p className="text-xs uppercase tracking-widest">No messages yet</p>
-              </div>
-            ) : (
-              <div className="p-4 flex flex-col gap-2">
-                {/* Date grouping */}
-                {messages.map((msg, i) => {
-                  const dayKey = format(new Date(msg.receivedAt), "d MMM yyyy");
-                  const prevDayKey = i > 0 ? format(new Date(messages[i - 1].receivedAt), "d MMM yyyy") : null;
-                  return (
-                    <div key={msg.id}>
-                      {dayKey !== prevDayKey && (
-                        <div className="flex items-center gap-3 my-3">
-                          <div className="flex-1 h-px bg-border" />
-                          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{dayKey}</span>
-                          <div className="flex-1 h-px bg-border" />
-                        </div>
-                      )}
-                      <div className="flex flex-col">
-                        <MessageBubble msg={msg} memberNumber={member.whatsappNumber} />
+        {tab === "messages" && (() => {
+          const sent     = messages.filter((m) => m.direction !== "inbound");
+          const received = messages.filter((m) => m.direction === "inbound");
+          const delivered = sent.filter((m) => m.status === "delivered" || m.status === "read");
+          const read      = sent.filter((m) => m.status === "read");
+          const failed    = sent.filter((m) => m.status === "failed" || m.status === "undelivered");
+          const firstMsg  = messages[0];
+          const lastMsg   = messages[messages.length - 1];
+
+          const channelCounts: Record<string, number> = {};
+          for (const m of messages) {
+            const ch = m.channel ?? "whatsapp";
+            channelCounts[ch] = (channelCounts[ch] ?? 0) + 1;
+          }
+          const channelLabels: Record<string, string> = { whatsapp: "📱 WhatsApp", email: "✉️ Email", sms: "📨 SMS", messenger: "💬 Messenger" };
+
+          return (
+            <div className="flex flex-col h-full">
+              {/* ── Interaction stats bar ─── */}
+              {messages.length > 0 && (
+                <div className="shrink-0 border-b border-border bg-card/60 px-4 py-3">
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">Interaction summary</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+                    {[
+                      { label: "From member", value: received.length },
+                      { label: "From operator", value: sent.length },
+                      { label: "Delivered", value: `${delivered.length} / ${sent.length}` },
+                      { label: "Read", value: `${read.length} / ${sent.length}` },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="border border-border bg-card px-2 py-1.5 flex flex-col gap-0.5">
+                        <span className="text-[9px] uppercase tracking-widest text-muted-foreground">{label}</span>
+                        <span className="text-sm font-bold font-mono text-foreground">{value}</span>
                       </div>
-                    </div>
-                  );
-                })}
-                <div className="h-4" />
-              </div>
-            )}
-          </div>
-        )}
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {Object.entries(channelCounts).map(([ch, n]) => (
+                      <span key={ch} className="text-[10px] text-muted-foreground">
+                        {channelLabels[ch] ?? ch} · <span className="font-mono text-foreground">{n}</span>
+                      </span>
+                    ))}
+                    {failed.length > 0 && (
+                      <span className="text-[10px] text-red-400">
+                        ✗ {failed.length} failed
+                      </span>
+                    )}
+                    <span className="text-[10px] text-muted-foreground ml-auto">
+                      First: {firstMsg ? fmtDate(firstMsg.receivedAt) : "—"}
+                      {" · "}Last: {lastMsg ? fmtDate(lastMsg.receivedAt) : "—"}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {messages.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
+                  <MessageSquare className="w-7 h-7 opacity-30" />
+                  <p className="text-xs uppercase tracking-widest">No messages yet</p>
+                  <p className="text-[10px] text-muted-foreground/60">Messages sent from here will appear in this log</p>
+                </div>
+              ) : (
+                <div className="p-4 flex flex-col gap-2">
+                  {messages.map((msg, i) => {
+                    const dayKey = format(new Date(msg.receivedAt), "d MMM yyyy");
+                    const prevDayKey = i > 0 ? format(new Date(messages[i - 1].receivedAt), "d MMM yyyy") : null;
+                    return (
+                      <div key={msg.id}>
+                        {dayKey !== prevDayKey && (
+                          <div className="flex items-center gap-3 my-3">
+                            <div className="flex-1 h-px bg-border" />
+                            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{dayKey}</span>
+                            <div className="flex-1 h-px bg-border" />
+                          </div>
+                        )}
+                        <div className="flex flex-col">
+                          <MessageBubble msg={msg} memberNumber={member.whatsappNumber} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="h-4" />
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── TRIPS ─────────────────────────────────────────── */}
         {tab === "trips" && (
@@ -813,22 +901,30 @@ export default function MemberProfile() {
                       /* message — ev.kind === "message" is implied after the two early returns above */
                       if (ev.kind !== "message") return null;
                       const isInbound = ev.msg.direction === "inbound" || ev.msg.fromNumber === member.whatsappNumber;
+                      const isBcast   = ev.msg.direction === "broadcast";
+                      const ch = ev.msg.channel ?? "whatsapp";
+                      const chLabel: Record<string, string> = { whatsapp: "WhatsApp", email: "Email", sms: "SMS", messenger: "Messenger" };
                       return (
                         <div key={`m-${ev.msg.id}-${i}`} className="flex items-start gap-3">
                           <div className={cn(
                             "w-7 h-7 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
-                            isInbound ? "bg-blue-900/30 border-blue-700/40" : "bg-zinc-800/60 border-zinc-700/40"
+                            isInbound ? "bg-blue-900/30 border-blue-700/40"
+                            : isBcast  ? "bg-blue-950/40 border-blue-800/40"
+                            : "bg-zinc-800/60 border-zinc-700/40"
                           )}>
-                            <MessageSquare className={cn("w-3.5 h-3.5", isInbound ? "text-blue-400" : "text-zinc-400")} />
+                            <ChannelIcon channel={ch} className={isInbound ? "text-blue-400" : isBcast ? "text-blue-400/60" : "text-zinc-400"} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className={cn("text-[10px] font-bold uppercase tracking-wider", isInbound ? "text-blue-400" : "text-zinc-400")}>
-                                {isInbound ? "Member" : "System"}
+                              <span className={cn("text-[10px] font-bold uppercase tracking-wider",
+                                isInbound ? "text-blue-400" : isBcast ? "text-blue-400/60" : "text-zinc-400"
+                              )}>
+                                {isInbound ? "Member" : isBcast ? "Broadcast" : "Operator"} · {chLabel[ch] ?? ch}
                               </span>
                               {ev.msg.tripId && (
                                 <Link href={`/trips/${ev.msg.tripId}`} className="text-[10px] text-primary hover:underline">Trip #{ev.msg.tripId}</Link>
                               )}
+                              {!isInbound && <DeliveryBadge status={ev.msg.status} />}
                               <span className="text-[10px] text-muted-foreground ml-auto">{format(ev.at, "HH:mm")}</span>
                             </div>
                             <p className="text-sm text-foreground whitespace-pre-wrap line-clamp-4 mt-0.5">{ev.msg.body}</p>
