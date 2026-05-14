@@ -1,5 +1,5 @@
 import express, { Router, type IRouter } from "express";
-import { db, messagesTable, tripsTable, membersTable, caseParticipantsTable, caseLogsTable } from "@workspace/db";
+import { db, messagesTable, tripsTable, membersTable, caseParticipantsTable, caseLogsTable, conversationStatesTable } from "@workspace/db";
 import { and, eq, ne, desc, count } from "drizzle-orm";
 import twilio from "twilio";
 import { assessRisk } from "./ai.js";
@@ -434,50 +434,70 @@ router.post(
   {
     const senderDigits = from.replace("whatsapp:+", "").replace("whatsapp:", "");
     if (senderDigits === "27825611065") {
-      // TEST: prefix — let Andre experience the member flow for testing
-      if (/^test:\s*/i.test(body.trim())) {
-        body = body.replace(/^test:\s*/i, "").trim();
-        req.log.info({ from, body }, "operator-ai: TEST mode — routing to member menu");
-        // Fall through — body is now the stripped message, handled by member logic below
+      const trimmedBody = body.trim();
+
+      // "BOSS" or "OPERATOR" → exit member mode, switch back to Claude
+      if (/^(boss|operator|operator mode)$/i.test(trimmedBody)) {
+        await db.delete(conversationStatesTable)
+          .where(eq(conversationStatesTable.whatsappNumber, from))
+          .catch(() => {});
+        await sendReply(from, to, "Switched back to operator mode. You're talking to Claude again. 🛡️");
+        res.set("Content-Type", "text/xml");
+        res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+        return;
+      }
+
+      // "MEMBER MODE" → enter member mode (sets a menu flow state, shows main menu)
+      if (/^(member mode|member|test mode)$/i.test(trimmedBody)) {
+        await db
+          .insert(conversationStatesTable)
+          .values({ whatsappNumber: from, currentFlow: "MAIN_MENU", currentStep: null, pendingTripData: null })
+          .onConflictDoUpdate({
+            target: conversationStatesTable.whatsappNumber,
+            set: { currentFlow: "MAIN_MENU", currentStep: null, pendingTripData: null, updatedAt: new Date() },
+          })
+          .catch(() => {});
+        req.log.info({ from }, "operator-ai: MEMBER MODE activated — routing to member menu");
+        // Fall through to member logic — menu router will send the main menu
       } else {
-      // Diagnostic: log every field Twilio sent so we can debug body extraction
-      const rbKeys = Object.fromEntries(
-        Object.entries(rb).map(([k, v]) => [k, String(v ?? "").slice(0, 120)])
-      );
-      req.log.info({ rbKeys, bodyResolved: body.slice(0, 120) }, "operator-ai: raw request fields");
-      req.log.info({ from, body: body.slice(0, 80) }, "operator-ai: routing to Claude — bypassing all member logic");
+        // Check if Andre is currently in an active member flow
+        const [convRow] = await db
+          .select({ currentFlow: conversationStatesTable.currentFlow })
+          .from(conversationStatesTable)
+          .where(eq(conversationStatesTable.whatsappNumber, from))
+          .limit(1)
+          .catch(() => []);
 
-      // Save Andre's message to DB
-      await db.insert(messagesTable).values({
-        fromNumber: from,
-        toNumber: to,
-        body,
-        messageSid,
-        tripId: null,
-        direction: "operator",
-      }).catch(() => {});
+        const inMemberMode = convRow?.currentFlow != null;
 
-      // Call Claude
-      const claudeReply = await callOperatorClaude(body, from);
+        if (!inMemberMode) {
+          // Normal operator mode — route to Claude AI
+          const rbKeys = Object.fromEntries(
+            Object.entries(rb).map(([k, v]) => [k, String(v ?? "").slice(0, 120)])
+          );
+          req.log.info({ rbKeys, bodyResolved: body.slice(0, 120) }, "operator-ai: raw request fields");
+          req.log.info({ from, body: body.slice(0, 80) }, "operator-ai: routing to Claude — bypassing all member logic");
 
-      // Send Claude's reply back to Andre via Twilio
-      await sendReply(from, to, claudeReply);
+          await db.insert(messagesTable).values({
+            fromNumber: from, toNumber: to, body, messageSid, tripId: null, direction: "operator",
+          }).catch(() => {});
 
-      // Save Claude's reply for conversation history
-      await db.insert(messagesTable).values({
-        fromNumber: to,
-        toNumber: from,
-        body: claudeReply,
-        messageSid: null,
-        tripId: null,
-        direction: "operator-reply",
-      }).catch(() => {});
+          const claudeReply = await callOperatorClaude(body, from);
+          await sendReply(from, to, claudeReply);
 
-      req.log.info({ from, replyLength: claudeReply.length }, "operator-ai: Claude reply sent");
-      res.set("Content-Type", "text/xml");
-      res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
-      return;
-      } // closes else (not TEST mode)
+          await db.insert(messagesTable).values({
+            fromNumber: to, toNumber: from, body: claudeReply, messageSid: null, tripId: null, direction: "operator-reply",
+          }).catch(() => {});
+
+          req.log.info({ from, replyLength: claudeReply.length }, "operator-ai: Claude reply sent");
+          res.set("Content-Type", "text/xml");
+          res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+          return;
+        }
+
+        // inMemberMode = true — fall through to member logic below
+        req.log.info({ from, body: body.slice(0, 80) }, "operator-ai: in MEMBER MODE — routing to member menu");
+      }
     }
   }
 
