@@ -458,7 +458,7 @@ router.post(
           })
           .catch(() => {});
         req.log.info({ from }, "operator-ai: MEMBER MODE activated — routing to member menu");
-        // Fall through to member logic — menu router will send the main menu
+        body = "Hi"; // reset so menu router fires global override and shows main menu
       } else {
         // Check if Andre is currently in an active member flow
         const [convRow] = await db
