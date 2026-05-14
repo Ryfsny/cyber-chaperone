@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
 import { Download, Search, UserCheck, UserX, Clock, HelpCircle, Map, List, MapPin, ChevronLeft, ChevronRight, Tag, Copy, AlertTriangle, ExternalLink, Pencil, Check, X, RefreshCw, CreditCard, CalendarDays, SlidersHorizontal } from "lucide-react";
 import { SA_GEO, citiesForProvince, suburbsForCity } from "@/lib/sa-geodata";
@@ -58,6 +58,7 @@ interface MapMember {
   city: string | null;
   province: string | null;
   email: string | null;
+  mobile: string | null;
   industry: string | null;
 }
 
@@ -322,6 +323,20 @@ function DuplicatesView() {
 function MemberMapView() {
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const clusterRef = useRef<any>(null);
+
+  // Filters
+  const [mapSearch, setMapSearch] = useState("");
+  const [mapProvince, setMapProvince] = useState("");
+  const [mapCity, setMapCity] = useState("");
+  const [mapSuburb, setMapSuburb] = useState("");
+
+  // Contact panel
+  const [selected, setSelected] = useState<MapMember | null>(null);
+  const [channel, setChannel] = useState<"whatsapp" | "messenger" | "email" | "sms">("whatsapp");
+  const [msg, setMsg] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   const { data: mapMembers = [], isLoading } = useQuery<MapMember[]>({
     queryKey: ["/api/members/map"],
@@ -329,13 +344,36 @@ function MemberMapView() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const withGps = Array.isArray(mapMembers)
-    ? mapMembers.filter((m) => m.homeLat && m.homeLon && !isNaN(parseFloat(m.homeLat)) && !isNaN(parseFloat(m.homeLon)))
-    : [];
+  const withGps = useMemo(() =>
+    Array.isArray(mapMembers)
+      ? mapMembers.filter((m) => m.homeLat && m.homeLon && !isNaN(parseFloat(m.homeLat!)) && !isNaN(parseFloat(m.homeLon!)))
+      : [],
+  [mapMembers]);
 
+  const mapCities = mapProvince ? citiesForProvince(mapProvince) : [];
+  const mapSuburbs = (mapProvince && mapCity) ? suburbsForCity(mapProvince, mapCity) : [];
+
+  const filtered = useMemo(() => {
+    let r = withGps;
+    const s = mapSearch.trim().toLowerCase();
+    if (s) r = r.filter((m) =>
+      m.displayName.toLowerCase().includes(s) ||
+      (m.homeAddress ?? "").toLowerCase().includes(s) ||
+      (m.suburb ?? "").toLowerCase().includes(s) ||
+      (m.city ?? "").toLowerCase().includes(s) ||
+      formatPhone(m.whatsappNumber).includes(s) ||
+      (m.mobile ?? "").replace(/\D/g, "").includes(s.replace(/\D/g, ""))
+    );
+    if (mapProvince) r = r.filter((m) => (m.province ?? "").toLowerCase() === mapProvince.toLowerCase());
+    if (mapCity)     r = r.filter((m) => (m.city ?? "").toLowerCase().includes(mapCity.toLowerCase()));
+    if (mapSuburb)   r = r.filter((m) => (m.suburb ?? "").toLowerCase().includes(mapSuburb.toLowerCase()));
+    return r;
+  }, [withGps, mapSearch, mapProvince, mapCity, mapSuburb]);
+
+  // Init map once
   useEffect(() => {
     if (!mapDivRef.current || mapRef.current) return;
-    const map = L.map(mapDivRef.current, { center: [-26.2041, 28.0473], zoom: 9, zoomControl: true });
+    const map = L.map(mapDivRef.current, { center: [-28.5, 25.5], zoom: 5, zoomControl: true });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors", maxZoom: 19,
     }).addTo(map);
@@ -343,65 +381,258 @@ function MemberMapView() {
     return () => { map.remove(); mapRef.current = null; };
   }, []);
 
+  // Rebuild markers + zoom when filtered changes
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || withGps.length === 0) return;
+    if (!map) return;
+    if (clusterRef.current) { clusterRef.current.remove(); clusterRef.current = null; }
+    if (filtered.length === 0) return;
 
-    const clusterGroup = (L as any).markerClusterGroup({
-      maxClusterRadius: 60,
+    const cluster = (L as any).markerClusterGroup({
+      maxClusterRadius: 50,
       spiderfyOnMaxZoom: true,
       showCoverageOnHover: false,
       zoomToBoundsOnClick: true,
-      iconCreateFunction: (cluster: any) => {
-        const count = cluster.getChildCount();
-        const size = count < 50 ? 34 : count < 200 ? 40 : 48;
+      iconCreateFunction: (c: any) => {
+        const n = c.getChildCount();
+        const sz = n < 50 ? 34 : n < 200 ? 40 : 48;
         return L.divIcon({
-          html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:rgba(34,197,94,0.85);border:2px solid #fff;box-shadow:0 0 8px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-family:monospace;font-size:11px;font-weight:bold;color:#fff;">${count.toLocaleString()}</div>`,
-          className: "",
-          iconSize: [size, size],
-          iconAnchor: [size / 2, size / 2],
+          html: `<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:rgba(34,197,94,0.9);border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;color:#fff;">${n}</div>`,
+          className: "", iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2],
         });
       },
     });
 
     const bounds: [number, number][] = [];
-    for (const m of withGps) {
+    for (const m of filtered) {
       const lat = parseFloat(m.homeLat!);
       const lon = parseFloat(m.homeLon!);
       bounds.push([lat, lon]);
-      const color = m.memberStatus === "active" || m.memberStatus === "verified" ? "#22c55e" : "#f59e0b";
+      const isActive = m.memberStatus === "active" || m.memberStatus === "verified";
       const icon = L.divIcon({
         className: "",
-        html: `<div style="width:10px;height:10px;border-radius:50%;background:${color};border:1.5px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>`,
-        iconSize: [10, 10], iconAnchor: [5, 5],
+        html: `<div style="width:14px;height:14px;border-radius:50%;background:${isActive ? "#22c55e" : "#f59e0b"};border:2px solid #fff;box-shadow:0 0 5px rgba(0,0,0,0.4);cursor:pointer;transition:transform .1s;"></div>`,
+        iconSize: [14, 14], iconAnchor: [7, 7],
       });
       const marker = L.marker([lat, lon], { icon });
-      const locationLine = [m.suburb, m.city, m.province].filter(Boolean).join(", ");
-      marker.bindPopup(`
-        <div style="font-family:monospace;font-size:12px;min-width:160px;">
-          <div style="font-weight:bold;margin-bottom:2px;">${m.displayName}</div>
-          ${locationLine ? `<div style="color:#aaa;margin-bottom:2px;">${locationLine}</div>` : ""}
-          ${m.homeAddress ? `<div style="color:#888;font-size:11px;margin-bottom:4px;">${m.homeAddress}</div>` : ""}
-          <div style="color:#aaa;">${formatPhone(m.whatsappNumber)}</div>
-          ${m.email ? `<div style="color:#aaa;">${m.email}</div>` : ""}
-        </div>
-      `);
-      clusterGroup.addLayer(marker);
+      marker.on("click", () => {
+        setSelected(m);
+        setMsg("");
+        setSendResult(null);
+        // Auto-pick best channel
+        if (m.whatsappNumber.startsWith("fb:")) setChannel("messenger");
+        else setChannel("whatsapp");
+      });
+      cluster.addLayer(marker);
     }
 
-    clusterGroup.addTo(map);
-    if (bounds.length > 0) map.fitBounds(bounds as L.LatLngBoundsExpression, { padding: [40, 40] });
-    return () => { clusterGroup.remove(); };
-  }, [withGps]);
+    cluster.addTo(map);
+    clusterRef.current = cluster;
+
+    const maxZoom = filtered.length === 1 ? 16 : mapSuburb ? 14 : mapCity ? 12 : mapProvince ? 9 : 8;
+    map.fitBounds(bounds as L.LatLngBoundsExpression, { padding: [60, 60], maxZoom });
+
+    return () => { if (clusterRef.current) { clusterRef.current.remove(); clusterRef.current = null; } };
+  }, [filtered, mapProvince, mapCity, mapSuburb]);
+
+  async function handleSend() {
+    if (!selected || !msg.trim()) return;
+    setSending(true);
+    setSendResult(null);
+    try {
+      const res = await fetch(`/api/members/${selected.id}/contact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ channel, message: msg.trim() }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (res.ok) {
+        setSendResult({ ok: true, text: "Message sent." });
+        setMsg("");
+      } else {
+        setSendResult({ ok: false, text: data.error ?? "Failed to send." });
+      }
+    } catch {
+      setSendResult({ ok: false, text: "Network error." });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const isFb = selected?.whatsappNumber.startsWith("fb:");
+  const hasEmail = !!(selected?.email);
+  const hasMobile = !!(selected?.mobile);
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 py-2 border-b border-border shrink-0 flex items-center gap-2 text-xs text-muted-foreground">
-        <MapPin className="w-3 h-3" />
-        {isLoading ? "Loading GPS data…" : `${withGps.length} members with GPS coordinates`}
+      {/* Filter bar */}
+      <div className="px-4 py-2 border-b border-border shrink-0 flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search name, suburb, street…"
+            value={mapSearch}
+            onChange={(e) => setMapSearch(e.target.value)}
+            className="w-full pl-8 pr-3 py-1.5 border border-border bg-background text-foreground text-xs focus:outline-none focus:border-primary transition-colors"
+          />
+        </div>
+        <select
+          value={mapProvince}
+          onChange={(e) => { setMapProvince(e.target.value); setMapCity(""); setMapSuburb(""); }}
+          className="border border-border bg-background text-foreground text-xs px-2 py-1.5 focus:outline-none focus:border-primary min-w-[130px]"
+        >
+          <option value="">All Provinces</option>
+          {SA_GEO.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+        </select>
+        <select
+          value={mapCity}
+          onChange={(e) => { setMapCity(e.target.value); setMapSuburb(""); }}
+          disabled={!mapProvince}
+          className="border border-border bg-background text-foreground text-xs px-2 py-1.5 focus:outline-none focus:border-primary min-w-[130px] disabled:opacity-40"
+        >
+          <option value="">All Cities</option>
+          {mapCities.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+        </select>
+        <select
+          value={mapSuburb}
+          onChange={(e) => setMapSuburb(e.target.value)}
+          disabled={!mapCity}
+          className="border border-border bg-background text-foreground text-xs px-2 py-1.5 focus:outline-none focus:border-primary min-w-[130px] disabled:opacity-40"
+        >
+          <option value="">All Suburbs</option>
+          {mapSuburbs.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+        </select>
+        {(mapSearch || mapProvince || mapCity || mapSuburb) && (
+          <button
+            onClick={() => { setMapSearch(""); setMapProvince(""); setMapCity(""); setMapSuburb(""); }}
+            className="text-[10px] text-muted-foreground hover:text-destructive flex items-center gap-1 shrink-0"
+          >
+            <X className="w-3 h-3" /> Clear
+          </button>
+        )}
+        <span className="text-[10px] text-muted-foreground ml-auto shrink-0">
+          {isLoading ? "Loading…" : `${filtered.length} / ${withGps.length} members`}
+        </span>
       </div>
+
+      {/* Map + contact panel */}
       <div className="flex-1 relative overflow-hidden">
         <div ref={mapDivRef} className="absolute inset-0" />
+
+        {/* Contact panel */}
+        {selected && (
+          <div className="absolute top-3 right-3 w-72 bg-card border border-border shadow-2xl z-[1000] flex flex-col"
+               style={{ maxHeight: "calc(100% - 24px)" }}>
+            {/* Header */}
+            <div className="flex items-start justify-between gap-2 px-4 py-3 border-b border-border bg-secondary">
+              <div>
+                <div className="font-bold text-sm text-foreground">{selected.displayName}</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">
+                  {[selected.suburb, selected.city, selected.province].filter(Boolean).join(", ") || "No location"}
+                </div>
+                {selected.homeAddress && (
+                  <div className="text-[10px] text-muted-foreground/70 mt-0.5 flex items-center gap-1">
+                    <MapPin className="w-2.5 h-2.5 shrink-0" />{selected.homeAddress}
+                  </div>
+                )}
+              </div>
+              <button onClick={() => setSelected(null)} className="text-muted-foreground hover:text-foreground mt-0.5 shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Channel selector */}
+            <div className="px-4 pt-3 pb-2">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">Send via</div>
+              <div className="flex gap-1.5 flex-wrap">
+                {!isFb && (
+                  <button
+                    onClick={() => setChannel("whatsapp")}
+                    className={`flex items-center gap-1 px-2.5 py-1 text-[11px] border rounded-sm transition-colors ${channel === "whatsapp" ? "bg-green-800 text-green-200 border-green-600" : "border-border text-muted-foreground hover:text-foreground"}`}
+                  >
+                    📱 WhatsApp
+                  </button>
+                )}
+                {isFb && (
+                  <button
+                    onClick={() => setChannel("messenger")}
+                    className={`flex items-center gap-1 px-2.5 py-1 text-[11px] border rounded-sm transition-colors ${channel === "messenger" ? "bg-blue-800 text-blue-200 border-blue-600" : "border-border text-muted-foreground hover:text-foreground"}`}
+                  >
+                    💬 Messenger
+                  </button>
+                )}
+                {hasEmail && (
+                  <button
+                    onClick={() => setChannel("email")}
+                    className={`flex items-center gap-1 px-2.5 py-1 text-[11px] border rounded-sm transition-colors ${channel === "email" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+                  >
+                    ✉️ Email
+                  </button>
+                )}
+                {hasMobile && (
+                  <button
+                    onClick={() => setChannel("sms")}
+                    className={`flex items-center gap-1 px-2.5 py-1 text-[11px] border rounded-sm transition-colors ${channel === "sms" ? "bg-amber-800 text-amber-200 border-amber-600" : "border-border text-muted-foreground hover:text-foreground"}`}
+                  >
+                    📨 SMS
+                  </button>
+                )}
+              </div>
+              {/* Contact details */}
+              <div className="mt-2 space-y-0.5">
+                {!isFb && <div className="text-[10px] text-muted-foreground font-mono">{formatPhone(selected.whatsappNumber)}</div>}
+                {hasMobile && <div className="text-[10px] text-muted-foreground font-mono">{selected.mobile}</div>}
+                {hasEmail && <div className="text-[10px] text-muted-foreground">{selected.email}</div>}
+              </div>
+            </div>
+
+            {/* Message compose */}
+            <div className="px-4 pb-3 flex-1 flex flex-col gap-2">
+              <textarea
+                value={msg}
+                onChange={(e) => setMsg(e.target.value)}
+                placeholder={`Type a ${channel} message…`}
+                rows={4}
+                className="w-full border border-border bg-background text-foreground text-xs px-3 py-2 focus:outline-none focus:border-primary resize-none transition-colors"
+              />
+              {sendResult && (
+                <div className={`text-[11px] px-2 py-1.5 rounded-sm ${sendResult.ok ? "bg-green-900/40 text-green-300" : "bg-red-900/40 text-red-300"}`}>
+                  {sendResult.text}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => void handleSend()}
+                  disabled={sending || !msg.trim()}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider disabled:opacity-40 hover:bg-primary/90 transition-colors"
+                >
+                  {sending ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                  {sending ? "Sending…" : "Send"}
+                </button>
+                <button
+                  onClick={() => setSelected(null)}
+                  className="px-3 py-1.5 border border-border text-muted-foreground text-xs hover:text-foreground transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* No GPS members notice */}
+        {!isLoading && filtered.length === 0 && withGps.length > 0 && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-card border border-border px-4 py-2 text-xs text-muted-foreground shadow-lg z-[999]">
+            No members match this filter in GPS range.
+          </div>
+        )}
+        {!isLoading && withGps.length === 0 && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-card border border-border px-4 py-2 text-xs text-muted-foreground shadow-lg z-[999]">
+            No members with GPS coordinates yet.
+          </div>
+        )}
       </div>
     </div>
   );

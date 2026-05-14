@@ -198,7 +198,10 @@ router.get("/members/map", async (req, res): Promise<void> => {
       suburb: membersTable.suburb,
       city: membersTable.city,
       province: membersTable.province,
-      ...(nationalAdmin ? { email: membersTable.email } : {}),
+      ...(nationalAdmin ? {
+        email: membersTable.email,
+        mobile: membersTable.mobile,
+      } : {}),
       industry: membersTable.industry,
     })
     .from(membersTable)
