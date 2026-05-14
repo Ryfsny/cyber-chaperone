@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
-import { db, caseParticipantsTable, caseLogsTable, tripsTable } from "@workspace/db";
+import { eq, and, ilike, sql } from "drizzle-orm";
+import { db, caseParticipantsTable, caseLogsTable, tripsTable, membersTable } from "@workspace/db";
+import { getAdminScope, type AdminScope } from "../middleware/require-auth.js";
 import {
   ListCaseParticipantsParams,
   InviteCaseParticipantParams,
@@ -12,10 +13,40 @@ import {
 
 const router: IRouter = Router();
 
+type ScopeCond = ReturnType<typeof eq>;
+
+async function getScopedMemberPhones(scope: AdminScope): Promise<Set<string>> {
+  const parts: ScopeCond[] = [];
+  if (scope.province) parts.push(ilike(membersTable.province, scope.province) as unknown as ScopeCond);
+  if (scope.city)     parts.push(ilike(membersTable.city, `%${scope.city}%`) as unknown as ScopeCond);
+  if (scope.suburb)   parts.push(ilike(membersTable.suburb, `%${scope.suburb}%`) as unknown as ScopeCond);
+  const where = parts.length === 0 ? undefined
+    : parts.length === 1 ? parts[0]
+    : parts.reduce((a, b) => sql`${a} AND ${b}` as unknown as ScopeCond);
+  const rows = await db.select({ whatsappNumber: membersTable.whatsappNumber }).from(membersTable).where(where);
+  return new Set(rows.map((r) => r.whatsappNumber));
+}
+
+async function tripInScope(travelerPhone: string, scope: AdminScope | null): Promise<boolean> {
+  if (!scope) return true;
+  const phones = await getScopedMemberPhones(scope);
+  return phones.has(travelerPhone);
+}
+
 // ── List participants for a trip ──────────────────────────────────────────────
 router.get("/trips/:id/participants", async (req, res): Promise<void> => {
   const params = ListCaseParticipantsParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: "Invalid trip id" }); return; }
+
+  const [trip] = await db.select({ travelerPhone: tripsTable.travelerPhone }).from(tripsTable).where(eq(tripsTable.id, params.data.id));
+  if (!trip) { res.status(404).json({ error: "Trip not found" }); return; }
+
+  const scope = getAdminScope(req);
+  if (!(await tripInScope(trip.travelerPhone, scope))) {
+    res.status(403).json({ error: "Forbidden. This trip is outside your assigned area." });
+    return;
+  }
+
   const participants = await db
     .select()
     .from(caseParticipantsTable)
@@ -33,6 +64,12 @@ router.post("/trips/:id/participants", async (req, res): Promise<void> => {
 
   const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, params.data.id));
   if (!trip) { res.status(404).json({ error: "Trip not found" }); return; }
+
+  const scope = getAdminScope(req);
+  if (!(await tripInScope(trip.travelerPhone, scope))) {
+    res.status(403).json({ error: "Forbidden. This trip is outside your assigned area." });
+    return;
+  }
 
   const [participant] = await db
     .insert(caseParticipantsTable)
@@ -73,6 +110,12 @@ router.patch("/trips/:id/participants/:participantId", async (req, res): Promise
   if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
   const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, params.data.id));
+
+  const scope = getAdminScope(req);
+  if (trip && !(await tripInScope(trip.travelerPhone, scope))) {
+    res.status(403).json({ error: "Forbidden. This trip is outside your assigned area." });
+    return;
+  }
 
   const updateData: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.accessStatus === "removed" && parsed.data.removedBy) {
@@ -118,6 +161,16 @@ router.patch("/trips/:id/participants/:participantId", async (req, res): Promise
 router.get("/trips/:id/case-logs", async (req, res): Promise<void> => {
   const params = ListCaseLogsParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: "Invalid trip id" }); return; }
+
+  const [trip] = await db.select({ travelerPhone: tripsTable.travelerPhone }).from(tripsTable).where(eq(tripsTable.id, params.data.id));
+  if (!trip) { res.status(404).json({ error: "Trip not found" }); return; }
+
+  const scope = getAdminScope(req);
+  if (!(await tripInScope(trip.travelerPhone, scope))) {
+    res.status(403).json({ error: "Forbidden. This trip is outside your assigned area." });
+    return;
+  }
+
   const logs = await db
     .select()
     .from(caseLogsTable)

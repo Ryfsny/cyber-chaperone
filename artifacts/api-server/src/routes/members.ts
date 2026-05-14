@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, membersTable, tripsTable, messagesTable } from "@workspace/db";
 import { insertMemberSchema } from "@workspace/db";
 import { ilike, or, sql, asc, eq, desc } from "drizzle-orm";
-import { isNationalAdmin, getAdminScope } from "../middleware/require-auth.js";
+import { isNationalAdmin, getAdminScope, type AdminScope } from "../middleware/require-auth.js";
 import twilio from "twilio";
 import nodemailer from "nodemailer";
 import { sendFacebookMessage } from "../facebook-service.js";
@@ -12,6 +12,17 @@ const GMAIL_USER  = process.env["GMAIL_USER"] ?? "";
 const GMAIL_PASS  = process.env["GMAIL_APP_PASSWORD"] ?? "";
 
 const router: IRouter = Router();
+
+/** Returns true if a member's geo fields fall within the operator's assigned scope. */
+function memberMatchesScope(
+  member: { province: string | null; city: string | null; suburb: string | null },
+  scope: AdminScope
+): boolean {
+  if (scope.province && !member.province?.toLowerCase().includes(scope.province.toLowerCase())) return false;
+  if (scope.city     && !member.city?.toLowerCase().includes(scope.city.toLowerCase()))         return false;
+  if (scope.suburb   && !member.suburb?.toLowerCase().includes(scope.suburb.toLowerCase()))     return false;
+  return true;
+}
 
 // ── GET /api/members — paginated + searchable ─────────────────────────────────
 router.get("/members", async (req, res): Promise<void> => {
@@ -105,8 +116,12 @@ router.get("/members", async (req, res): Promise<void> => {
   });
 });
 
-// ── GET /api/members/sources ──────────────────────────────────────────────────
-router.get("/members/sources", async (_req, res): Promise<void> => {
+// ── GET /api/members/sources — national admin only ────────────────────────────
+router.get("/members/sources", async (req, res): Promise<void> => {
+  if (!isNationalAdmin(req)) {
+    res.status(403).json({ error: "Forbidden. National admin access required." });
+    return;
+  }
   const rows = await db
     .select({ source: membersTable.sourceBatch, count: sql<number>`count(*)` })
     .from(membersTable)
@@ -115,8 +130,12 @@ router.get("/members/sources", async (_req, res): Promise<void> => {
   res.json(rows);
 });
 
-// ── GET /api/members/duplicates ───────────────────────────────────────────────
-router.get("/members/duplicates", async (_req, res): Promise<void> => {
+// ── GET /api/members/duplicates — national admin only ─────────────────────────
+router.get("/members/duplicates", async (req, res): Promise<void> => {
+  if (!isNationalAdmin(req)) {
+    res.status(403).json({ error: "Forbidden. National admin access required." });
+    return;
+  }
   const [dupePhones, dupeNames] = await Promise.all([
     db.execute(sql`
       SELECT whatsapp_number, count(*) as cnt
@@ -135,7 +154,25 @@ router.get("/members/duplicates", async (_req, res): Promise<void> => {
 });
 
 // ── GET /api/members/map — GPS-only list for maps ─────────────────────────────
-router.get("/members/map", async (_req, res): Promise<void> => {
+router.get("/members/map", async (req, res): Promise<void> => {
+  const nationalAdmin = isNationalAdmin(req);
+  const scope = getAdminScope(req);
+
+  type MapWhere = ReturnType<typeof ilike> | ReturnType<typeof eq>;
+  const conditions: MapWhere[] = [
+    sql`home_lat IS NOT NULL AND home_lon IS NOT NULL` as unknown as MapWhere,
+  ];
+
+  if (scope) {
+    if (scope.province) conditions.push(ilike(membersTable.province, scope.province));
+    if (scope.city)     conditions.push(ilike(membersTable.city, `%${scope.city}%`));
+    if (scope.suburb)   conditions.push(ilike(membersTable.suburb, `%${scope.suburb}%`));
+  }
+
+  const where = conditions.length === 1
+    ? conditions[0]
+    : conditions.reduce((a, b) => sql`${a} AND ${b}` as unknown as MapWhere);
+
   const members = await db
     .select({
       id: membersTable.id,
@@ -148,11 +185,11 @@ router.get("/members/map", async (_req, res): Promise<void> => {
       suburb: membersTable.suburb,
       city: membersTable.city,
       province: membersTable.province,
-      email: membersTable.email,
+      ...(nationalAdmin ? { email: membersTable.email } : {}),
       industry: membersTable.industry,
     })
     .from(membersTable)
-    .where(sql`home_lat IS NOT NULL AND home_lon IS NOT NULL`);
+    .where(where);
   res.json(members);
 });
 
@@ -162,6 +199,18 @@ router.get("/members/:id", async (req, res): Promise<void> => {
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const [member] = await db.select().from(membersTable).where(eq(membersTable.id, id));
   if (!member) { res.status(404).json({ error: "Not found" }); return; }
+
+  const scope = getAdminScope(req);
+  if (scope && !memberMatchesScope(member, scope)) {
+    res.status(403).json({ error: "Forbidden. This member is outside your assigned area." });
+    return;
+  }
+
+  if (!isNationalAdmin(req)) {
+    const { email: _e, mobile: _m, ...safe } = member;
+    res.json(safe);
+    return;
+  }
   res.json(member);
 });
 
@@ -169,9 +218,15 @@ router.get("/members/:id", async (req, res): Promise<void> => {
 router.get("/members/:id/trips", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const [member] = await db.select({ whatsappNumber: membersTable.whatsappNumber, mobile: membersTable.mobile })
+  const [member] = await db.select({ whatsappNumber: membersTable.whatsappNumber, mobile: membersTable.mobile, province: membersTable.province, city: membersTable.city, suburb: membersTable.suburb })
     .from(membersTable).where(eq(membersTable.id, id));
   if (!member) { res.status(404).json({ error: "Not found" }); return; }
+
+  const scope = getAdminScope(req);
+  if (scope && !memberMatchesScope(member, scope)) {
+    res.status(403).json({ error: "Forbidden. This member is outside your assigned area." });
+    return;
+  }
 
   // trips are linked by traveler_phone = member's whatsapp_number
   const trips = await db.select().from(tripsTable)
@@ -184,9 +239,15 @@ router.get("/members/:id/trips", async (req, res): Promise<void> => {
 router.get("/members/:id/messages", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const [member] = await db.select({ whatsappNumber: membersTable.whatsappNumber })
+  const [member] = await db.select({ whatsappNumber: membersTable.whatsappNumber, province: membersTable.province, city: membersTable.city, suburb: membersTable.suburb })
     .from(membersTable).where(eq(membersTable.id, id));
   if (!member) { res.status(404).json({ error: "Not found" }); return; }
+
+  const scope = getAdminScope(req);
+  if (scope && !memberMatchesScope(member, scope)) {
+    res.status(403).json({ error: "Forbidden. This member is outside your assigned area." });
+    return;
+  }
 
   const messages = await db.select().from(messagesTable)
     .where(
@@ -205,12 +266,30 @@ router.patch("/members/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const allowed = [
-    "firstName", "lastName", "displayName", "memberStatus", "membershipTier",
-    "role", "notes", "iceContactName", "iceContactPhone",
-    "email", "mobile", "homeAddress", "suburb", "city", "province", "postalCode", "country",
+  const [existing] = await db.select({ province: membersTable.province, city: membersTable.city, suburb: membersTable.suburb })
+    .from(membersTable).where(eq(membersTable.id, id));
+  if (!existing) { res.status(404).json({ error: "Member not found." }); return; }
+
+  const scope = getAdminScope(req);
+  if (scope && !memberMatchesScope(existing, scope)) {
+    res.status(403).json({ error: "Forbidden. This member is outside your assigned area." });
+    return;
+  }
+
+  const nationalAdmin = isNationalAdmin(req);
+
+  // Sub-national admins may not modify sensitive fields
+  const allowedBase = [
+    "firstName", "lastName", "displayName",
+    "notes", "iceContactName", "iceContactPhone",
+    "homeAddress", "suburb", "city", "province", "postalCode", "country",
     "facebookUrl",
   ] as const;
+  const allowedNational = [
+    ...allowedBase,
+    "memberStatus", "membershipTier", "role", "email", "mobile",
+  ] as const;
+  const allowed: readonly string[] = nationalAdmin ? allowedNational : allowedBase;
 
   const setValues: Record<string, string | null | Date> = { updatedAt: new Date() };
 
@@ -235,6 +314,12 @@ router.patch("/members/:id", async (req, res): Promise<void> => {
     .returning();
 
   if (!updated) { res.status(404).json({ error: "Member not found." }); return; }
+
+  if (!nationalAdmin) {
+    const { email: _e, mobile: _m, ...safe } = updated;
+    res.json(safe);
+    return;
+  }
   res.json(updated);
 });
 
@@ -251,6 +336,12 @@ router.post("/members/:id/contact", async (req, res): Promise<void> => {
 
   const [member] = await db.select().from(membersTable).where(eq(membersTable.id, id));
   if (!member) { res.status(404).json({ error: "Member not found" }); return; }
+
+  const scope = getAdminScope(req);
+  if (scope && !memberMatchesScope(member, scope)) {
+    res.status(403).json({ error: "Forbidden. This member is outside your assigned area." });
+    return;
+  }
 
   const body = message.trim();
 
@@ -399,8 +490,12 @@ router.post("/members/:id/contact", async (req, res): Promise<void> => {
   res.status(400).json({ error: "Unknown channel. Use whatsapp, messenger, email, or sms." });
 });
 
-// ── POST /api/members — create / upsert member ───────────────────────────────
+// ── POST /api/members — create / upsert member (national admin only) ──────────
 router.post("/members", async (req, res): Promise<void> => {
+  if (!isNationalAdmin(req)) {
+    res.status(403).json({ error: "Forbidden. National admin access required." });
+    return;
+  }
   const parsed = insertMemberSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
   const [member] = await db

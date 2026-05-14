@@ -1,9 +1,30 @@
 import { Router, type IRouter } from "express";
-import { db, tripsTable, messagesTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { db, tripsTable, messagesTable, membersTable } from "@workspace/db";
+import { eq, desc, ilike, sql, inArray } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { isNationalAdmin, getAdminScope, type AdminScope } from "../middleware/require-auth.js";
 
 const router: IRouter = Router();
+
+type ScopeCond = ReturnType<typeof eq>;
+
+async function getScopedMemberPhones(scope: AdminScope): Promise<Set<string>> {
+  const parts: ScopeCond[] = [];
+  if (scope.province) parts.push(ilike(membersTable.province, scope.province) as unknown as ScopeCond);
+  if (scope.city)     parts.push(ilike(membersTable.city, `%${scope.city}%`) as unknown as ScopeCond);
+  if (scope.suburb)   parts.push(ilike(membersTable.suburb, `%${scope.suburb}%`) as unknown as ScopeCond);
+  const where = parts.length === 0 ? undefined
+    : parts.length === 1 ? parts[0]
+    : parts.reduce((a, b) => sql`${a} AND ${b}` as unknown as ScopeCond);
+  const rows = await db.select({ whatsappNumber: membersTable.whatsappNumber }).from(membersTable).where(where);
+  return new Set(rows.map((r) => r.whatsappNumber));
+}
+
+async function tripInScope(travelerPhone: string, scope: AdminScope | null): Promise<boolean> {
+  if (!scope) return true;
+  const phones = await getScopedMemberPhones(scope);
+  return phones.has(travelerPhone);
+}
 
 // ── POST /api/ai/trips/:id/summary ────────────────────────────────────────────
 // Generate a plain-English trip summary using GPT
@@ -17,6 +38,12 @@ router.post("/ai/trips/:id/summary", async (req, res): Promise<void> => {
   const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId));
   if (!trip) {
     res.status(404).json({ error: "Trip not found" });
+    return;
+  }
+
+  const scope = getAdminScope(req);
+  if (!(await tripInScope(trip.travelerPhone, scope))) {
+    res.status(403).json({ error: "Forbidden. This trip is outside your assigned area." });
     return;
   }
 
@@ -72,6 +99,12 @@ router.post("/ai/trips/:id/reply-draft", async (req, res): Promise<void> => {
     return;
   }
 
+  const scope = getAdminScope(req);
+  if (!(await tripInScope(trip.travelerPhone, scope))) {
+    res.status(403).json({ error: "Forbidden. This trip is outside your assigned area." });
+    return;
+  }
+
   const [lastMsg] = await db
     .select()
     .from(messagesTable)
@@ -115,12 +148,28 @@ router.post("/ai/chat", async (req, res): Promise<void> => {
     return;
   }
 
-  // Gather recent context
-  const trips = await db
-    .select()
-    .from(tripsTable)
-    .orderBy(desc(tripsTable.createdAt))
-    .limit(20);
+  // Gather scoped trip context
+  const scope = getAdminScope(req);
+  let trips: (typeof tripsTable.$inferSelect)[] = [];
+
+  if (scope) {
+    const phones = await getScopedMemberPhones(scope);
+    const phoneList = Array.from(phones);
+    if (phoneList.length > 0) {
+      trips = await db
+        .select()
+        .from(tripsTable)
+        .where(inArray(tripsTable.travelerPhone, phoneList))
+        .orderBy(desc(tripsTable.createdAt))
+        .limit(20);
+    }
+  } else {
+    trips = await db
+      .select()
+      .from(tripsTable)
+      .orderBy(desc(tripsTable.createdAt))
+      .limit(20);
+  }
 
   const tripContext = trips
     .map(
@@ -173,6 +222,12 @@ router.post("/ai/trips/:id/risk-assess", async (req, res): Promise<void> => {
   const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId));
   if (!trip) {
     res.status(404).json({ error: "Trip not found" });
+    return;
+  }
+
+  const scope = getAdminScope(req);
+  if (!(await tripInScope(trip.travelerPhone, scope))) {
+    res.status(403).json({ error: "Forbidden. This trip is outside your assigned area." });
     return;
   }
 

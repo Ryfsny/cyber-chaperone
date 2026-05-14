@@ -4,8 +4,17 @@ import { inArray, eq, or, sql, ilike } from "drizzle-orm";
 import twilio from "twilio";
 import nodemailer from "nodemailer";
 import { randomUUID } from "node:crypto";
+import { isNationalAdmin } from "../middleware/require-auth.js";
 
 const router: IRouter = Router();
+
+function nationalOnly(req: Request, res: Response): boolean {
+  if (!isNationalAdmin(req)) {
+    res.status(403).json({ error: "Forbidden. National admin access required." });
+    return false;
+  }
+  return true;
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -222,7 +231,8 @@ function makeJob(channel: BroadcastJob["channel"], total: number): BroadcastJob 
 }
 
 // ── GET /api/broadcast/geo-stats ──────────────────────────────────────────────
-router.get("/broadcast/geo-stats", async (_req: Request, res: Response): Promise<void> => {
+router.get("/broadcast/geo-stats", async (req: Request, res: Response): Promise<void> => {
+  if (!nationalOnly(req, res)) return;
   const rows = await db
     .select({
       province: membersTable.province,
@@ -242,6 +252,7 @@ router.get("/broadcast/geo-stats", async (_req: Request, res: Response): Promise
 
 // ── GET /api/broadcast/member-list ────────────────────────────────────────────
 router.get("/broadcast/member-list", async (req: Request, res: Response): Promise<void> => {
+  if (!nationalOnly(req, res)) return;
   const { status, sourceBatch, province, tier, search, channel } = req.query as Record<string, string>;
   const limit  = Math.min(parseInt(req.query.limit  as string ?? "150", 10), 500);
   const offset = parseInt(req.query.offset as string ?? "0", 10);
@@ -272,7 +283,8 @@ router.get("/broadcast/member-list", async (req: Request, res: Response): Promis
 });
 
 // ── GET /api/broadcast/counts ─────────────────────────────────────────────────
-router.get("/broadcast/counts", async (_req: Request, res: Response): Promise<void> => {
+router.get("/broadcast/counts", async (req: Request, res: Response): Promise<void> => {
+  if (!nationalOnly(req, res)) return;
   const hasEmail  = sql`email IS NOT NULL AND email != ''`  as unknown as DrizzleCondition;
   const hasMobile = sql`mobile IS NOT NULL AND mobile != ''` as unknown as DrizzleCondition;
   const isActive   = eq(membersTable.memberStatus, "active");
@@ -313,6 +325,7 @@ router.get("/broadcast/counts", async (_req: Request, res: Response): Promise<vo
 
 // ── GET /api/broadcast/job/:id ────────────────────────────────────────────────
 router.get("/broadcast/job/:id", (req: Request, res: Response): void => {
+  if (!nationalOnly(req, res)) return;
   const job = jobs.get(req.params.id as string);
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
   res.json(job);
@@ -320,6 +333,7 @@ router.get("/broadcast/job/:id", (req: Request, res: Response): void => {
 
 // ── POST /api/broadcast (WhatsApp) ────────────────────────────────────────────
 router.post("/broadcast", async (req: Request, res: Response): Promise<void> => {
+  if (!nationalOnly(req, res)) return;
   const { filter, memberIds, message } = req.body as { filter?: BroadcastFilter; memberIds?: number[]; message?: string };
   if (!message?.trim()) { res.status(400).json({ error: "message is required." }); return; }
 
@@ -364,6 +378,7 @@ router.post("/broadcast", async (req: Request, res: Response): Promise<void> => 
 
 // ── POST /api/broadcast/email ─────────────────────────────────────────────────
 router.post("/broadcast/email", async (req: Request, res: Response): Promise<void> => {
+  if (!nationalOnly(req, res)) return;
   const { filter, memberIds, subject, message } = req.body as { filter?: BroadcastFilter; memberIds?: number[]; subject?: string; message?: string };
   if (!message?.trim()) { res.status(400).json({ error: "message is required." }); return; }
   if (!subject?.trim()) { res.status(400).json({ error: "subject is required." }); return; }
@@ -414,6 +429,7 @@ router.post("/broadcast/email", async (req: Request, res: Response): Promise<voi
 
 // ── POST /api/broadcast/sms ───────────────────────────────────────────────────
 router.post("/broadcast/sms", async (req: Request, res: Response): Promise<void> => {
+  if (!nationalOnly(req, res)) return;
   const { filter, memberIds, message } = req.body as { filter?: BroadcastFilter; memberIds?: number[]; message?: string };
   if (!message?.trim()) { res.status(400).json({ error: "message is required." }); return; }
 
@@ -460,6 +476,7 @@ router.post("/broadcast/sms", async (req: Request, res: Response): Promise<void>
 // Returns distinct province / city / suburb values that actually have members.
 // Cascade: ?province=X narrows cities; ?province=X&city=Y narrows suburbs.
 router.get("/broadcast/geo-facets", async (req: Request, res: Response): Promise<void> => {
+  if (!nationalOnly(req, res)) return;
   const province = String(req.query.province ?? "").trim();
   const city     = String(req.query.city ?? "").trim();
 
@@ -507,6 +524,7 @@ router.get("/broadcast/geo-facets", async (req: Request, res: Response): Promise
 
 // ── POST /api/broadcast/multi (multi-channel, exact member IDs) ───────────────
 router.post("/broadcast/multi", async (req: Request, res: Response): Promise<void> => {
+  if (!nationalOnly(req, res)) return;
   const { memberIds, message, channels } = req.body as {
     memberIds?: number[];
     message?: string;

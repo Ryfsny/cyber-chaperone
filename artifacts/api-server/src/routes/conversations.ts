@@ -1,8 +1,9 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, messagesTable, membersTable } from "@workspace/db";
-import { or, eq, desc, asc } from "drizzle-orm";
+import { or, eq, desc, asc, ilike, sql } from "drizzle-orm";
 import twilio from "twilio";
 import { sendFacebookMessage } from "../facebook-service.js";
+import { isNationalAdmin, getAdminScope, type AdminScope } from "../middleware/require-auth.js";
 
 const router: IRouter = Router();
 
@@ -23,9 +24,32 @@ function contactDisplayName(number: string): string {
   return number.replace("whatsapp:", "");
 }
 
+type ScopeCond = ReturnType<typeof eq>;
+
+async function getScopedMemberPhones(scope: AdminScope): Promise<Set<string>> {
+  const parts: ScopeCond[] = [];
+  if (scope.province) parts.push(ilike(membersTable.province, scope.province) as unknown as ScopeCond);
+  if (scope.city)     parts.push(ilike(membersTable.city, `%${scope.city}%`) as unknown as ScopeCond);
+  if (scope.suburb)   parts.push(ilike(membersTable.suburb, `%${scope.suburb}%`) as unknown as ScopeCond);
+  const where = parts.length === 0 ? undefined
+    : parts.length === 1 ? parts[0]
+    : parts.reduce((a, b) => sql`${a} AND ${b}` as unknown as ScopeCond);
+  const rows = await db.select({ whatsappNumber: membersTable.whatsappNumber }).from(membersTable).where(where);
+  return new Set(rows.map((r) => r.whatsappNumber));
+}
+
 // ── GET /api/conversations ────────────────────────────────────────────────────
 // Returns one row per unique contact, with last message + member name.
-router.get("/conversations", async (_req: Request, res: Response): Promise<void> => {
+router.get("/conversations", async (req: Request, res: Response): Promise<void> => {
+  const nationalAdmin = isNationalAdmin(req);
+  const scope = getAdminScope(req);
+
+  // For scoped operators, limit to member phone numbers in their area
+  let allowedNumbers: Set<string> | null = null;
+  if (scope) {
+    allowedNumbers = await getScopedMemberPhones(scope);
+  }
+
   const all = await db
     .select()
     .from(messagesTable)
@@ -34,6 +58,8 @@ router.get("/conversations", async (_req: Request, res: Response): Promise<void>
   const seen = new Map<string, (typeof all)[0]>();
   for (const msg of all) {
     const contact = msg.direction === "inbound" ? msg.fromNumber : msg.toNumber;
+    // Skip contacts outside scope for non-national operators
+    if (allowedNumbers !== null && !allowedNumbers.has(contact)) continue;
     if (!seen.has(contact)) seen.set(contact, msg);
   }
 
@@ -77,6 +103,15 @@ router.get("/conversations/:number", async (req: Request, res: Response): Promis
   const raw    = decodeURIComponent(req.params["number"] as string);
   const number = canonicalNumber(raw);
 
+  const scope = getAdminScope(req);
+  if (scope) {
+    const phones = await getScopedMemberPhones(scope);
+    if (!phones.has(number)) {
+      res.status(403).json({ error: "Forbidden. This contact is outside your assigned area." });
+      return;
+    }
+  }
+
   const messages = await db
     .select()
     .from(messagesTable)
@@ -91,6 +126,12 @@ router.get("/conversations/:number", async (req: Request, res: Response): Promis
       .from(membersTable)
       .where(eq(membersTable.whatsappNumber, number));
     member = members[0] ?? null;
+
+    // Strip sensitive fields for non-national admins
+    if (member && !isNationalAdmin(req)) {
+      const { email: _e, mobile: _m, ...safe } = member;
+      member = safe as typeof member;
+    }
   }
 
   res.json({ messages, member });
@@ -105,6 +146,16 @@ router.post("/conversations/reply", async (req: Request, res: Response): Promise
   if (!to || !body?.trim()) {
     res.status(400).json({ error: "to and body are required." });
     return;
+  }
+
+  const scope = getAdminScope(req);
+  if (scope) {
+    const phones = await getScopedMemberPhones(scope);
+    const canonical = canonicalNumber(to);
+    if (!phones.has(canonical)) {
+      res.status(403).json({ error: "Forbidden. This contact is outside your assigned area." });
+      return;
+    }
   }
 
   // ── Facebook Messenger reply ─────────────────────────────────────────────

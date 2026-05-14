@@ -8,6 +8,14 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   res.status(401).json({ error: "Unauthorized." });
 }
 
+export function requireNationalAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (isNationalAdmin(req)) {
+    next();
+    return;
+  }
+  res.status(403).json({ error: "Forbidden. National admin access required." });
+}
+
 /**
  * Returns true if the current session belongs to a national admin
  * (either the legacy OPERATOR_PASSWORD login or a named admin with role "national").

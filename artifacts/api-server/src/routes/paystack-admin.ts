@@ -1,13 +1,18 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { upsertMemberFromPaystack } from "./paystack";
+import { isNationalAdmin } from "../middleware/require-auth.js";
 
 const router: IRouter = Router();
 
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY ?? "";
 
-// ── POST /api/paystack/sync  (operator-only — behind requireAuth)
+// ── POST /api/paystack/sync  (national admin only — behind requireAuth)
 // Pulls all subscriptions from Paystack and upserts them into the member registry
 router.post("/paystack/sync", async (req: Request, res: Response) => {
+  if (!isNationalAdmin(req)) {
+    res.status(403).json({ error: "Forbidden. National admin access required." });
+    return;
+  }
   if (!PAYSTACK_SECRET) {
     res.status(503).json({ error: "PAYSTACK_SECRET_KEY not set" });
     return;
@@ -70,8 +75,12 @@ router.post("/paystack/sync", async (req: Request, res: Response) => {
   res.json({ synced: results.length, errorCount: errors.length, results, errors });
 });
 
-// ── GET /api/paystack/status  (operator-only — behind requireAuth)
+// ── GET /api/paystack/status  (national admin only — behind requireAuth)
 router.get("/paystack/status", async (req: Request, res: Response) => {
+  if (!isNationalAdmin(req)) {
+    res.status(403).json({ error: "Forbidden. National admin access required." });
+    return;
+  }
   if (!PAYSTACK_SECRET) {
     res.json({ configured: false });
     return;
