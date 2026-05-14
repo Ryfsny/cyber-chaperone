@@ -117,7 +117,9 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
 
   try {
     // ── Register primary member ──────────────────────────────────────────────
-    const [primaryMember] = await db
+    // Use onConflictDoNothing so existing member records are never overwritten
+    // by a public registration submission.
+    const inserted = await db
       .insert(membersTable)
       .values({
         firstName,
@@ -142,28 +144,23 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
         iceContactName: !isFamilyPlan && ice_contact_name ? ice_contact_name : null,
         iceContactPhone: !isFamilyPlan && ice_contact_phone ? toWaNumber(ice_contact_phone) ?? ice_contact_phone : null,
       })
-      .onConflictDoUpdate({
-        target: membersTable.whatsappNumber,
-        set: {
-          firstName,
-          lastName,
-          displayName,
-          email: email ?? null,
-          mobile: mobileRaw ?? null,
-          industry: industry ?? null,
-          suburb: suburb ?? null,
-          city: city ?? null,
-          province: province ?? null,
-          postalCode: postal_code ?? null,
-          country: country ?? "South Africa",
-          membershipTier: membership_type ?? null,
-          notes: extraNotes || null,
-          importStatus: "registered",
-          iceContactName: !isFamilyPlan && ice_contact_name ? ice_contact_name : null,
-          iceContactPhone: !isFamilyPlan && ice_contact_phone ? toWaNumber(ice_contact_phone) ?? ice_contact_phone : null,
-        },
-      })
+      .onConflictDoNothing()
       .returning();
+
+    // If the number already existed, look up the existing record (read-only)
+    let primaryMember = inserted[0];
+    if (!primaryMember) {
+      const [existing] = await db
+        .select()
+        .from(membersTable)
+        .where(eq(membersTable.whatsappNumber, wa))
+        .limit(1);
+      if (!existing) {
+        res.status(500).json({ error: "Registration failed." });
+        return;
+      }
+      primaryMember = existing;
+    }
 
     // ── Handle family members ────────────────────────────────────────────────
     const allMembers = [primaryMember];
@@ -171,11 +168,13 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
     if (isFamilyPlan && Array.isArray(family_members) && family_members.length > 0) {
       const familyGroupId = primaryMember.id;
 
-      // Set primary member's family group
-      await db
-        .update(membersTable)
-        .set({ familyGroupId })
-        .where(eq(membersTable.id, primaryMember.id));
+      // Set primary member's family group only if they were just inserted
+      if (inserted[0]) {
+        await db
+          .update(membersTable)
+          .set({ familyGroupId })
+          .where(eq(membersTable.id, primaryMember.id));
+      }
 
       for (const fm of family_members.slice(0, 4)) {
         const fmWa = toWaNumber(fm.mobile ?? "");
@@ -183,7 +182,10 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
         const fmFirst = (fm.first_name ?? "").trim() || "Unknown";
         const fmLast = (fm.last_name ?? "").trim();
         const fmDisplay = [fmFirst, fmLast].filter(Boolean).join(" ");
-        const [fmMember] = await db
+
+        // Use onConflictDoNothing — never overwrite an existing member's data
+        // (including their family group linkage and ICE contact).
+        const fmInserted = await db
           .insert(membersTable)
           .values({
             firstName: fmFirst,
@@ -201,22 +203,25 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
             iceContactName: displayName,
             iceContactPhone: wa,
           })
-          .onConflictDoUpdate({
-            target: membersTable.whatsappNumber,
-            set: {
-              familyGroupId,
-              membershipTier: membership_type ?? null,
-              importStatus: "registered",
-              iceContactName: displayName,
-              iceContactPhone: wa,
-            },
-          })
+          .onConflictDoNothing()
           .returning();
-        allMembers.push(fmMember);
+
+        if (fmInserted[0]) {
+          allMembers.push(fmInserted[0]);
+        } else {
+          // Number already registered — read existing record but do not modify it
+          const [existingFm] = await db
+            .select()
+            .from(membersTable)
+            .where(eq(membersTable.whatsappNumber, fmWa))
+            .limit(1);
+          if (existingFm) allMembers.push(existingFm);
+        }
       }
 
       // Set primary member's ICE contact to first family member (reciprocal)
-      if (allMembers.length > 1) {
+      // Only do this if the primary member was freshly inserted.
+      if (inserted[0] && allMembers.length > 1) {
         const firstFamilyMember = allMembers[1]!;
         await db
           .update(membersTable)
@@ -229,8 +234,10 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    // ── Send WhatsApp welcome messages ───────────────────────────────────────
-    void sendWelcomeWhatsApp(wa, firstName, membership_type ?? "");
+    // ── Send WhatsApp welcome messages (only for newly inserted members) ──────
+    if (inserted[0]) {
+      void sendWelcomeWhatsApp(wa, firstName, membership_type ?? "");
+    }
     if (isFamilyPlan && allMembers.length > 1) {
       for (const fm of allMembers.slice(1)) {
         void sendWelcomeWhatsApp(fm.whatsappNumber, fm.firstName, membership_type ?? "");
@@ -249,34 +256,6 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
   } catch (err) {
     res.status(500).json({ error: "Registration failed.", detail: String(err) });
   }
-});
-
-// ── GET /api/members/:id — single member lookup ──────────────────────────────
-router.get("/members/:id", async (req: Request, res: Response, next): Promise<void> => {
-  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const id = parseInt(rawId ?? "", 10);
-  if (isNaN(id)) {
-    next();
-    return;
-  }
-  const apiKey = process.env["REGISTER_API_KEY"];
-  const provided =
-    (req.headers["x-api-key"] as string | undefined) ??
-    (req.query["api_key"] as string | undefined);
-  if (apiKey && provided !== apiKey) {
-    res.status(401).json({ error: "Invalid API key." });
-    return;
-  }
-  const [member] = await db
-    .select()
-    .from(membersTable)
-    .where(eq(membersTable.id, id))
-    .limit(1);
-  if (!member) {
-    res.status(404).json({ error: "Not found." });
-    return;
-  }
-  res.json(member);
 });
 
 export default router;

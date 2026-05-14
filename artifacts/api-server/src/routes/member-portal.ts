@@ -6,13 +6,24 @@ import { eq, or } from "drizzle-orm";
 const router: IRouter = Router();
 
 // ── In-memory OTP store (10-minute TTL) ───────────────────────────────────────
-interface OtpEntry { code: string; expiresAt: number }
+interface OtpEntry { code: string; expiresAt: number; attempts: number }
 const otpStore = new Map<string, OtpEntry>();
+
+// ── Per-number OTP request cooldown (60 seconds between requests) ─────────────
+interface CooldownEntry { lastRequestAt: number }
+const otpCooldown = new Map<string, CooldownEntry>();
+
+const OTP_TTL_MS = 10 * 60 * 1000;          // 10 minutes
+const OTP_COOLDOWN_MS = 60 * 1000;           // 60 seconds between OTP requests
+const OTP_MAX_ATTEMPTS = 5;                  // lock out after 5 wrong guesses
 
 function cleanExpired() {
   const now = Date.now();
   for (const [k, v] of otpStore) {
     if (v.expiresAt < now) otpStore.delete(k);
+  }
+  for (const [k, v] of otpCooldown) {
+    if (now - v.lastRequestAt > OTP_TTL_MS) otpCooldown.delete(k);
   }
 }
 
@@ -57,6 +68,16 @@ router.post("/member-portal/request-otp", async (req, res): Promise<void> => {
 
   const phone = normalisePhone(raw.trim());
 
+  cleanExpired();
+
+  // Enforce per-number cooldown — do not reveal whether the number is registered.
+  const cooldown = otpCooldown.get(phone);
+  if (cooldown && Date.now() - cooldown.lastRequestAt < OTP_COOLDOWN_MS) {
+    // Return a generic success response to avoid timing oracle; silently drop the request.
+    res.json({ ok: true, message: "If that number is registered, you'll receive a WhatsApp OTP." });
+    return;
+  }
+
   // Check member exists
   const [member] = await db
     .select({ id: membersTable.id, firstName: membersTable.firstName })
@@ -68,25 +89,28 @@ router.post("/member-portal/request-otp", async (req, res): Promise<void> => {
       ),
     );
 
+  // Always record the cooldown timestamp regardless of whether the number is registered.
+  // This prevents an attacker from using timing (or response differentiation) to enumerate members.
+  otpCooldown.set(phone, { lastRequestAt: Date.now() });
+
   if (!member) {
-    // Don't reveal whether the number exists — generic response
+    // Generic response — must not reveal whether the number is in the database.
     res.json({ ok: true, message: "If that number is registered, you'll receive a WhatsApp OTP." });
     return;
   }
 
-  cleanExpired();
   const code = generateOtp();
-  otpStore.set(phone, { code, expiresAt: Date.now() + 10 * 60 * 1000 });
+  otpStore.set(phone, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0 });
 
-  try {
-    await sendOtpWhatsApp(phone, code);
-  } catch (err) {
+  // Respond immediately with the same generic message used for unknown numbers.
+  // The Twilio send is deferred to after the response so that registered and
+  // unregistered paths have indistinguishable response latency, preventing
+  // timing-based membership enumeration.
+  res.json({ ok: true, message: "If that number is registered, you'll receive a WhatsApp OTP." });
+
+  sendOtpWhatsApp(phone, code).catch((err: unknown) => {
     req.log.error({ err }, "Failed to send OTP via WhatsApp");
-    res.status(500).json({ error: "Failed to send WhatsApp OTP. Please try again." });
-    return;
-  }
-
-  res.json({ ok: true, message: "OTP sent to your WhatsApp number." });
+  });
 });
 
 // ── POST /api/member-portal/verify-otp ────────────────────────────────────────
@@ -108,6 +132,15 @@ router.post("/member-portal/verify-otp", async (req, res): Promise<void> => {
   }
 
   if (entry.code !== code) {
+    entry.attempts += 1;
+
+    if (entry.attempts >= OTP_MAX_ATTEMPTS) {
+      // Too many wrong guesses — invalidate the OTP entirely.
+      otpStore.delete(phone);
+      res.status(401).json({ error: "Too many incorrect attempts. Please request a new OTP." });
+      return;
+    }
+
     res.status(401).json({ error: "Incorrect OTP. Please check your WhatsApp and try again." });
     return;
   }
