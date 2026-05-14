@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, membersTable, tripsTable, messagesTable } from "@workspace/db";
 import { insertMemberSchema } from "@workspace/db";
-import { ilike, or, sql, asc, eq, desc } from "drizzle-orm";
+import { ilike, or, sql, asc, eq, desc, gte, lte } from "drizzle-orm";
 import { isNationalAdmin, getAdminScope, type AdminScope } from "../middleware/require-auth.js";
 import twilio from "twilio";
 import nodemailer from "nodemailer";
@@ -36,6 +36,8 @@ router.get("/members", async (req, res): Promise<void> => {
   const source = String(req.query.source ?? "").trim();
   const status = String(req.query.status ?? "").trim();
   const tier = String(req.query.tier ?? "").trim();
+  const dateFrom = String(req.query.dateFrom ?? "").trim();
+  const dateTo = String(req.query.dateTo ?? "").trim();
 
   const nationalAdmin = isNationalAdmin(req);
   const scope = getAdminScope(req);
@@ -82,6 +84,17 @@ router.get("/members", async (req, res): Promise<void> => {
     conditions.push(ilike(membersTable.sourceBatch, source));
   }
   if (status) conditions.push(eq(membersTable.memberStatus, status));
+  if (dateFrom) {
+    const d = new Date(dateFrom);
+    if (!isNaN(d.getTime())) conditions.push(gte(membersTable.createdAt, d));
+  }
+  if (dateTo) {
+    const d = new Date(dateTo);
+    if (!isNaN(d.getTime())) {
+      d.setHours(23, 59, 59, 999);
+      conditions.push(lte(membersTable.createdAt, d));
+    }
+  }
   if (tier === "family") {
     conditions.push(sql`family_group_id IS NOT NULL` as unknown as ReturnType<typeof eq>);
   } else if (tier) {

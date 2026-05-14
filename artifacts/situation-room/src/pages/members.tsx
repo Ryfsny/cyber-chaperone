@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { Download, Search, UserCheck, UserX, Clock, HelpCircle, Map, List, MapPin, ChevronLeft, ChevronRight, Tag, Copy, AlertTriangle, ExternalLink, Pencil, Check, X, RefreshCw, CreditCard } from "lucide-react";
+import { Download, Search, UserCheck, UserX, Clock, HelpCircle, Map, List, MapPin, ChevronLeft, ChevronRight, Tag, Copy, AlertTriangle, ExternalLink, Pencil, Check, X, RefreshCw, CreditCard, CalendarDays, SlidersHorizontal } from "lucide-react";
+import { SA_GEO, citiesForProvince, suburbsForCity } from "@/lib/sa-geodata";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -664,6 +665,15 @@ export default function Members() {
   const [page, setPage] = useState(1);
   const [sourceFilter, setSourceFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [provinceFilter, setProvinceFilter] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
+  const [suburbFilter, setSuburbFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const availableCities = provinceFilter ? citiesForProvince(provinceFilter) : [];
+  const availableSuburbs = (provinceFilter && cityFilter) ? suburbsForCity(provinceFilter, cityFilter) : [];
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -673,8 +683,15 @@ export default function Members() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Reset page when filters change
-  useEffect(() => { setPage(1); }, [sourceFilter, statusFilter]);
+  useEffect(() => { setPage(1); }, [sourceFilter, statusFilter, provinceFilter, cityFilter, suburbFilter, dateFrom, dateTo]);
+
+  const hasActiveFilters = !!(sourceFilter || statusFilter || provinceFilter || cityFilter || suburbFilter || dateFrom || dateTo);
+
+  function clearAllFilters() {
+    setSourceFilter(""); setStatusFilter("");
+    setProvinceFilter(""); setCityFilter(""); setSuburbFilter("");
+    setDateFrom(""); setDateTo("");
+  }
 
   const { data: sourcesData } = useQuery<SourceRow[]>({
     queryKey: ["/api/members/sources"],
@@ -688,11 +705,16 @@ export default function Members() {
     if (s) params.set("search", s);
     if (sourceFilter) params.set("source", sourceFilter);
     if (statusFilter) params.set("status", statusFilter);
+    if (provinceFilter) params.set("province", provinceFilter);
+    if (cityFilter) params.set("city", cityFilter);
+    if (suburbFilter) params.set("suburb", suburbFilter);
+    if (dateFrom) params.set("dateFrom", dateFrom);
+    if (dateTo) params.set("dateTo", dateTo);
     return `/api/members?${params.toString()}`;
   };
 
   const { data, isLoading, error } = useQuery<PaginatedResponse>({
-    queryKey: ["/api/members/paginated", page, debouncedSearch, sourceFilter, statusFilter],
+    queryKey: ["/api/members/paginated", page, debouncedSearch, sourceFilter, statusFilter, provinceFilter, cityFilter, suburbFilter, dateFrom, dateTo],
     queryFn: () =>
       fetch(buildUrl(page, debouncedSearch), { credentials: "include" }).then(async (r) => {
         const json = await r.json();
@@ -744,61 +766,137 @@ export default function Members() {
       {/* Filter + Search bar */}
       {view !== "duplicates" && (
         <>
-          {/* Search */}
-          <div className="px-6 py-3 border-b border-border shrink-0">
-            <div className="relative">
+          {/* Search row */}
+          <div className="px-6 py-3 border-b border-border shrink-0 flex items-center gap-3">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search by name, surname, email, cellphone, address, suburb, city…"
+                placeholder="Search name, surname, email, cell, WhatsApp, street, suburb, city…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 text-sm"
               />
             </div>
+            <button
+              onClick={() => setShowAdvanced((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-sm transition-colors shrink-0 ${showAdvanced || hasActiveFilters ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+            >
+              <SlidersHorizontal className="w-3 h-3" />
+              Filters{hasActiveFilters ? ` (active)` : ""}
+            </button>
+            {hasActiveFilters && (
+              <button onClick={clearAllFilters} className="text-[10px] text-muted-foreground hover:text-destructive transition-colors shrink-0 flex items-center gap-1">
+                <X className="w-3 h-3" /> Clear
+              </button>
+            )}
           </div>
 
-          {/* Filter chips */}
-          <div className="px-6 py-2 border-b border-border shrink-0 flex items-center gap-3 flex-wrap">
+          {/* Advanced filters panel */}
+          {showAdvanced && (
+            <div className="px-6 py-3 border-b border-border shrink-0 bg-secondary/40 space-y-3">
 
-            {/* Channel quick-filter */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0">Channel:</span>
-              <button
-                onClick={() => setSourceFilter("")}
-                className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors ${sourceFilter === "" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
-                All
-              </button>
-              <button
-                onClick={() => setSourceFilter(sourceFilter === "facebook" ? "" : "facebook")}
-                className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors flex items-center gap-1 ${sourceFilter === "facebook" ? "bg-blue-800 text-blue-100 border-blue-500" : "border-border text-muted-foreground hover:text-foreground"}`}>
-                💬 WhatsApp only
-              </button>
-            </div>
+              {/* Row 1: Status + Channel */}
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0">Status:</span>
+                  {["", ...STATUS_OPTIONS].map((s) => (
+                    <button
+                      key={s || "all"}
+                      onClick={() => setStatusFilter(s)}
+                      className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors capitalize ${
+                        statusFilter === s
+                          ? s === "" ? "bg-primary text-primary-foreground border-primary"
+                            : s === "active" || s === "verified" ? "bg-green-800 text-green-200 border-green-600"
+                            : s === "pending" ? "bg-yellow-800 text-yellow-200 border-yellow-600"
+                            : "bg-red-800 text-red-200 border-red-600"
+                          : "border-border text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {s || "All"}
+                    </button>
+                  ))}
+                </div>
 
-            <div className="h-4 w-px bg-border shrink-0" />
+                <div className="h-4 w-px bg-border shrink-0" />
 
-            {/* Status filter */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0">Status:</span>
-              {["", ...STATUS_OPTIONS].map((s) => (
-                <button
-                  key={s || "all"}
-                  onClick={() => setStatusFilter(s)}
-                  className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors capitalize ${
-                    statusFilter === s
-                      ? s === "" ? "bg-primary text-primary-foreground border-primary"
-                        : s === "active" || s === "verified" ? "bg-green-800 text-green-200 border-green-600"
-                        : s === "pending" ? "bg-yellow-800 text-yellow-200 border-yellow-600"
-                        : "bg-red-800 text-red-200 border-red-600"
-                      : "border-border text-muted-foreground hover:text-foreground"
-                  }`}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0">Channel:</span>
+                  <button
+                    onClick={() => setSourceFilter("")}
+                    className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors ${sourceFilter === "" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
+                    All
+                  </button>
+                  <button
+                    onClick={() => setSourceFilter(sourceFilter === "facebook" ? "" : "facebook")}
+                    className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors flex items-center gap-1 ${sourceFilter === "facebook" ? "bg-blue-800 text-blue-100 border-blue-500" : "border-border text-muted-foreground hover:text-foreground"}`}>
+                    💬 Messenger only
+                  </button>
+                </div>
+              </div>
+
+              {/* Row 2: Province → City → Suburb */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0">Location:</span>
+                <select
+                  value={provinceFilter}
+                  onChange={(e) => { setProvinceFilter(e.target.value); setCityFilter(""); setSuburbFilter(""); }}
+                  className="border border-border bg-background text-foreground text-xs px-2 py-1.5 focus:outline-none focus:border-primary transition-colors min-w-[160px]"
                 >
-                  {s || "All"}
-                </button>
-              ))}
-            </div>
+                  <option value="">All Provinces</option>
+                  {SA_GEO.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+                </select>
+                <select
+                  value={cityFilter}
+                  onChange={(e) => { setCityFilter(e.target.value); setSuburbFilter(""); }}
+                  disabled={!provinceFilter}
+                  className="border border-border bg-background text-foreground text-xs px-2 py-1.5 focus:outline-none focus:border-primary transition-colors min-w-[160px] disabled:opacity-40"
+                >
+                  <option value="">All Cities</option>
+                  {availableCities.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+                <select
+                  value={suburbFilter}
+                  onChange={(e) => setSuburbFilter(e.target.value)}
+                  disabled={!cityFilter}
+                  className="border border-border bg-background text-foreground text-xs px-2 py-1.5 focus:outline-none focus:border-primary transition-colors min-w-[160px] disabled:opacity-40"
+                >
+                  <option value="">All Suburbs</option>
+                  {availableSuburbs.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+                </select>
+              </div>
 
-          </div>
+              {/* Row 3: Date of registration range */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0 flex items-center gap-1">
+                  <CalendarDays className="w-3 h-3" /> Joined:
+                </span>
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] text-muted-foreground">From</label>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="border border-border bg-background text-foreground text-xs px-2 py-1.5 focus:outline-none focus:border-primary transition-colors"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] text-muted-foreground">To</label>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="border border-border bg-background text-foreground text-xs px-2 py-1.5 focus:outline-none focus:border-primary transition-colors"
+                  />
+                </div>
+                {(dateFrom || dateTo) && (
+                  <button onClick={() => { setDateFrom(""); setDateTo(""); }} className="text-[10px] text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1">
+                    <X className="w-3 h-3" /> Clear dates
+                  </button>
+                )}
+              </div>
+
+            </div>
+          )}
         </>
       )}
 
