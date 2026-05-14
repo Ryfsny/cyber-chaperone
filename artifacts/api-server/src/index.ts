@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { startCheckpointScheduler } from "./checkpoint-scheduler.js";
 import { startWeeklyDigest } from "./weekly-digest.js";
 import { startSixHourBriefing } from "./six-hour-briefing.js";
+import { startGmailInboxPoller } from "./gmail-inbox-poller.js";
 
 const rawPort = process.env["PORT"];
 
@@ -28,6 +29,7 @@ app.listen(port, (err) => {
   startCheckpointScheduler(logger);
   startWeeklyDigest(logger);
   startSixHourBriefing(logger);
+  startGmailInboxPoller(logger);
   startKeepAlive(port);
 });
 
