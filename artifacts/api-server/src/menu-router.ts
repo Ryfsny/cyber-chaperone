@@ -90,6 +90,10 @@ const MAIN_MENU_TRIGGER = /^(hi|hello|menu|main menu|start|0)$/i;
 const GLOBAL_MENU_OVERRIDE = /^(hi|hello|hey|hallo|menu|main menu|start|0|join)$/i;
 const JOIN_PREFIX = /^join\s+/i;
 const CC_KEYWORDS = /\b(cyber chaperone|travel|trip|start trip)\b/i;
+// Planned stop — member voluntarily pausing for fuel, food, coffee, rest, etc.
+// Must NOT match bare "stop" (that is trip-end) — requires context words
+const PLANNED_STOP_PATTERN =
+  /\b(stopping\s+(?:at|in|for)|pulling\s+over|taking\s+a\s+break|grabbing\s+(?:some\s+)?(?:coffee|food|lunch|dinner|bite|petrol|fuel)|going\s+(?:in\s+)?(?:for|to\s+get)\s+(?:coffee|food|fuel|petrol)|(?:getting|buying)\s+(?:fuel|petrol|coffee|food)|wimpy|steers|nando|kfc|mcdonalds|mcdonald'?s|ocean\s*basket|spur|engen|sasol|bp\s+garage|shell\s+garage|caltex|total\s+garage|filling\s+station|petrol\s+station|service\s+station|fuel\s+stop|rest\s+stop|pit\s+stop|comfort\s+stop|toilet\s+stop)\b/i;
 const AMBIGUOUS_DEST_PATTERN =
   /\b(i'?m? (?:am )?going to|on my way to|heading to|going to)\s+(.+)/i;
 const START_FORMAT =
@@ -160,10 +164,14 @@ function calculateEtaDrift(originalMemberEta: string, _tripCreatedAt: Date): num
   return Math.round((now.getTime() - etaDate.getTime()) / 60000);
 }
 
-function shouldSendCheckin(trip: { lastMemberCheckinTime: Date | null | undefined }): boolean {
+function shouldSendCheckin(trip: { lastMemberCheckinTime: Date | null | undefined; routeEtaMinutes?: number | null }): boolean {
   if (!trip.lastMemberCheckinTime) return true;
   const mins = (Date.now() - new Date(trip.lastMemberCheckinTime).getTime()) / 60000;
-  return mins > 25;
+  // Scale check-in interval based on planned trip duration so long-haul trips
+  // are not nagged every 25 minutes — short trip: 25 min, medium: 45 min, long: 90 min
+  const duration = trip.routeEtaMinutes ?? 60;
+  const interval = duration <= 60 ? 25 : duration <= 180 ? 45 : 90;
+  return mins > interval;
 }
 
 // ── Nearby responder count (haversine) ────────────────────────────────────────
@@ -2466,6 +2474,59 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
 
   // Fetch active trip once for the remaining checks
   const activeTrip = await findActiveTrip(from);
+
+  // 6c. Planned stop — member declaring a voluntary pause (fuel, coffee, rest, etc.)
+  // Acknowledges the stop, pauses ETA drift monitoring, and waits for member to resume.
+  if (
+    activeTrip &&
+    activeTrip.status !== "completed" &&
+    activeTrip.status !== "red" &&
+    member?.isKnown &&
+    PLANNED_STOP_PATTERN.test(trimmed)
+  ) {
+    const ts = nowUtc();
+    const destination = activeTrip.title.includes(" → ")
+      ? activeTrip.title.split(" → ").pop()!
+      : activeTrip.title;
+    const name = member.displayName;
+    await db
+      .update(tripsTable)
+      .set({
+        status: "amber",
+        currentRouteConfidence: "amber",
+        lastMemberCheckinTime: new Date(),
+        etaDriftMinutes: 0,
+        evidenceNotes: appendNote(activeTrip.evidenceNotes, `[${ts}] PLANNED STOP: "${body.slice(0, 120)}"`),
+        nextAction: "Member declared a planned stop. Awaiting resume and new ETA.",
+      })
+      .where(eq(tripsTable.id, activeTrip.id));
+    await setConvState(from, {
+      currentFlow: FLOW_CHECKIN,
+      currentStep: STEP_WAITING_FOR_NEW_ETA,
+      pendingTripData: { clarificationActiveTripId: activeTrip.id },
+    });
+    await sendWhatsApp(from, to, [
+      `Got it ${name} — safe stop! 🛑`,
+      ``,
+      `We've noted your stop and paused monitoring.`,
+      ``,
+      `When you're back on the road, just send your new ETA to ${destination}`,
+      `(e.g. ETA 17:30) and we'll continue watching over you.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    await sendOperatorMirror(to, [
+      `CYBER CHAPERONE — PLANNED STOP ⚠️`,
+      `Member: ${name}`,
+      `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+      `Status: AMBER (stopped)`,
+      `Member message: "${body.slice(0, 120)}"`,
+      `Next action: Monitor. Await resume and new ETA from member.`,
+    ].join("\n"));
+    await saveMessage(from, to, body, messageSid, activeTrip.id);
+    log.info({ from, tripId: activeTrip.id }, "menu-router: planned stop detected — monitoring paused");
+    return { handled: true };
+  }
 
   // 7a. Route checkpoint check-in — time-based intermediate checks
   if (

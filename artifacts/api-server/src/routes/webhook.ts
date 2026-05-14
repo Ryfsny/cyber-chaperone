@@ -826,8 +826,13 @@ router.post(
 
         if (hasNativeLocation) {
           const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
+          // Prefer Nominatim street-level geocoding over Twilio/WhatsApp address metadata
+          // (Twilio's address often returns old municipal boundaries like "Randburg" instead of "Bryanston")
+          const nominatimAddress = await reverseGeocodeStreetAddress(latitude, longitude);
           const twilioAddress = [label, address].filter(Boolean).join(", ");
-          const humanAddress = twilioAddress || await reverseGeocodeStreetAddress(latitude, longitude) || "Address unavailable — use map link";
+          const humanAddress = nominatimAddress
+            ? (label ? `${label} — ${nominatimAddress}` : nominatimAddress)
+            : (twilioAddress || "Address unavailable — use map link");
           const noteEntry = `[${ts}] LOCATION received: ${humanAddress} (${latitude},${longitude})`;
           const note = appendNote(activeTrip.evidenceNotes, noteEntry);
           const routeNote = "Location received. Route calculation unavailable. Quiet monitor using member ETA.";
@@ -837,10 +842,11 @@ router.post(
             .set({ evidenceNotes: note, nextAction: routeNote })
             .where(eq(tripsTable.id, activeTrip.id));
 
+          // Voice-readable reply — car hands-free reads the street address aloud to the driver
           await sendReply(
             from,
             to,
-            "Location received. We have added it to your active trip and will use it to confirm your route.\n\nReply 0 for Main Menu.",
+            `📍 You are at ${humanAddress}.\n\nLocation added to your trip — we have you. Safe travels!\n\nReply 0 for Main Menu.`,
           );
 
           req.log.info(
