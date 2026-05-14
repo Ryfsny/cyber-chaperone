@@ -38,21 +38,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
     {
       href: "/",
       label: "Live Trips",
-      sub: "Active monitoring board",
+      sub: "Watch live member journeys",
       icon: LayoutDashboard,
       show: true,
     },
     {
       href: "/conversations",
       label: "WhatsApp & Messenger",
-      sub: "Message members directly",
+      sub: "Chat with individual members",
       icon: MessagesSquare,
       show: isNational,
     },
     {
       href: "/members",
       label: "Members",
-      sub: role === "national" ? "Full registry" : scopeSub(role, scope),
+      sub: role === "national" ? "All 92 000 members" : scopeSub(role, scope),
       icon: BookUser,
       show: true,
     },
@@ -64,7 +64,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       show: isNational,
     },
     {
-      href: "/operator/broadcast",
+      href: "/conversations",
       label: "Direct Send",
       sub: "Pick members · Email/SMS/WhatsApp",
       icon: Send,
@@ -73,7 +73,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     {
       href: "/admin/approvals",
       label: "Broadcast Approvals",
-      sub: isNational ? "Review community requests" : "Track your submissions",
+      sub: "Approve pending alerts",
       icon: Clock,
       show: true,
       badge: isNational && pendingCount > 0 ? pendingCount : 0,
@@ -81,14 +81,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
     {
       href: "/radar",
       label: "Network Map",
-      sub: "Member locations across SA",
+      sub: "See where your members are",
       icon: Map,
       show: isNational,
     },
     {
       href: "/messages",
       label: "Message Log",
-      sub: "Raw inbound / outbound feed",
+      sub: "All sent and received messages",
       icon: ScrollText,
       show: isNational,
     },
@@ -191,12 +191,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Shield className="w-3 h-3 text-primary shrink-0" />
               <span className="text-[10px] font-bold text-foreground truncate">{displayName}</span>
             </div>
-            <p className="text-[9px] text-muted-foreground mt-0.5 capitalize">
-              {role} admin
-              {!isNational && scope.province && ` · ${scope.province}`}
-              {!isNational && scope.city && ` › ${scope.city}`}
-              {!isNational && scope.suburb && ` › ${scope.suburb}`}
-            </p>
+            {!isNational && (
+              <p className="text-[9px] text-muted-foreground mt-0.5 capitalize">
+                {role} admin
+                {scope.province && ` · ${scope.province}`}
+                {scope.city && ` › ${scope.city}`}
+                {scope.suburb && ` › ${scope.suburb}`}
+              </p>
+            )}
           </div>
         )}
 

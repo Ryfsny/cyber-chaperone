@@ -37,7 +37,7 @@ export default function Messages() {
           <ArrowLeft className="w-3.5 h-3.5" /> Home
         </Link>
         <div className="h-4 w-px bg-border" />
-        <h1 className="text-sm uppercase tracking-widest font-bold text-foreground">Global Inbox</h1>
+        <h1 className="text-sm uppercase tracking-widest font-bold text-foreground">Message History</h1>
       </header>
 
       <div className="flex-1 overflow-auto p-8">

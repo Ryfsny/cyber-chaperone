@@ -254,7 +254,7 @@ function ResponderRow({ responder, onEdit }: { responder: Responder; onEdit: (r:
   };
 
   const handleDelete = () => {
-    if (!confirm(`Remove ${responder.name} from the conduit network?`)) return;
+    if (!confirm(`Remove ${responder.name} from your response team?`)) return;
     deleteResponder.mutate(
       { id: responder.id },
       { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListRespondersQueryKey() }) }
@@ -403,10 +403,10 @@ export default function Responders() {
           <div className="h-4 w-px bg-border shrink-0" />
           <div>
             <h1 className="text-sm font-bold uppercase tracking-widest text-foreground">
-              Local Conduit Network
+              My Response Team
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {activeCount} active · {responders.length} total — eblockwatch Situation Room conduits
+              {activeCount} active · {responders.length} total — eblockwatch Situation Room responders
             </p>
           </div>
         </div>
@@ -415,7 +415,7 @@ export default function Responders() {
             onClick={() => setShowForm(true)}
             className="bg-primary text-primary-foreground px-4 py-2 text-xs uppercase tracking-widest font-bold hover:bg-primary/90 transition-colors"
           >
-            + Add Conduit
+            + Add Responder
           </button>
         )}
       </div>
@@ -424,7 +424,7 @@ export default function Responders() {
         {(showForm || editingResponder) && (
           <div className="bg-card border border-border rounded-sm p-4">
             <h2 className="text-xs font-bold uppercase tracking-wider text-foreground mb-4">
-              {editingResponder ? `Edit — ${editingResponder.name}` : "New Local Conduit"}
+              {editingResponder ? `Edit — ${editingResponder.name}` : "New Responder"}
             </h2>
             <ResponderForm
               initial={editingResponder ? toFormData(editingResponder) : EMPTY_FORM}
@@ -441,9 +441,9 @@ export default function Responders() {
 
         {!isLoading && responders.length === 0 && !showForm && (
           <div className="text-center py-16 space-y-3">
-            <p className="text-muted-foreground text-sm">No conduits configured.</p>
+            <p className="text-muted-foreground text-sm">No responders configured.</p>
             <p className="text-muted-foreground text-xs max-w-md mx-auto">
-              Add eblockwatch local conduits — area captains, neighbourhood watch coordinators,
+              Add eblockwatch local responders — area captains, neighbourhood watch coordinators,
               armed response contacts, or residents' association leads. Their locations appear
               as diamond pins on the Live Radar. Dispatch is always Situation Room-mediated.
             </p>
@@ -451,7 +451,7 @@ export default function Responders() {
               onClick={() => setShowForm(true)}
               className="mt-2 bg-primary text-primary-foreground px-6 py-2 text-xs uppercase tracking-widest font-bold hover:bg-primary/90 transition-colors"
             >
-              Add First Conduit
+              Add First Responder
             </button>
           </div>
         )}

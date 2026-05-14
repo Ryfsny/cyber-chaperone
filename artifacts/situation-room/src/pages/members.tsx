@@ -223,7 +223,7 @@ function PaystackSyncButton() {
           ? <RefreshCw className="w-3 h-3 animate-spin" />
           : <CreditCard className="w-3 h-3" />
         }
-        {syncing ? "Syncing…" : "Sync Paystack"}
+        {syncing ? "Syncing…" : "Sync Payments"}
       </Button>
       {result && (
         <span className="text-xs text-emerald-700 font-medium">
@@ -771,7 +771,7 @@ export default function Members() {
               <button
                 onClick={() => setSourceFilter(sourceFilter === "facebook" ? "" : "facebook")}
                 className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors flex items-center gap-1 ${sourceFilter === "facebook" ? "bg-blue-800 text-blue-100 border-blue-500" : "border-border text-muted-foreground hover:text-foreground"}`}>
-                💬 Messenger only
+                💬 WhatsApp only
               </button>
             </div>
 
@@ -798,33 +798,6 @@ export default function Members() {
               ))}
             </div>
 
-            {/* Divider */}
-            <div className="h-4 w-px bg-border shrink-0" />
-
-            {/* Source filter */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0">Source:</span>
-              <button
-                onClick={() => setSourceFilter("")}
-                className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors ${sourceFilter === "" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
-                All
-              </button>
-              <button
-                onClick={() => setSourceFilter("none")}
-                className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors ${sourceFilter === "none" ? "bg-zinc-700 text-white border-zinc-500" : "border-border text-muted-foreground hover:text-foreground"}`}>
-                Legacy
-              </button>
-              {sources.filter((s) => s.source).map((s) => (
-                <button
-                  key={s.source}
-                  onClick={() => setSourceFilter(sourceFilter === s.source! ? "" : s.source!)}
-                  className={`px-2 py-0.5 text-[10px] border rounded-sm transition-colors flex items-center gap-1 ${sourceFilter === s.source ? "bg-blue-800 text-blue-100 border-blue-600" : "border-border text-muted-foreground hover:text-foreground"}`}>
-                  <Tag className="w-2 h-2" />
-                  {s.source}
-                  <span className="opacity-60">({Number(s.count).toLocaleString()})</span>
-                </button>
-              ))}
-            </div>
           </div>
         </>
       )}

@@ -15,6 +15,12 @@ import "leaflet/dist/leaflet.css";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+function decodeHtml(str: string): string {
+  const el = document.createElement("textarea");
+  el.innerHTML = str;
+  return el.value;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Channel = "whatsapp" | "email" | "sms";
@@ -95,7 +101,7 @@ const EMAIL_TEMPLATES = [
   {
     id: "welcome",
     label: "Welcome",
-    stage: "Awareness",
+    stage: "First touch",
     description: "First touch — warm, belonging, relief",
     subject: "You made the right call, {name}.",
     body: `Hi {name},
@@ -127,7 +133,7 @@ P.S. — Share this with someone you care about. The more of us watching out for
   {
     id: "activation",
     label: "Cyber Chaperone",
-    stage: "Activation",
+    stage: "Follow-up",
     description: "Fear → simple action → relief",
     subject: "One message could save your life, {name}.",
     body: `Hi {name},
@@ -163,7 +169,7 @@ P.S. — Takes less than 30 seconds. Try it right now, even just as a test. I pr
   {
     id: "social_proof",
     label: "Social Proof",
-    stage: "Engagement",
+    stage: "Community story",
     description: "Story → community → fear resolved",
     subject: "What happened when {name}'s neighbour did not check in.",
     body: `Hi {name},
@@ -199,7 +205,7 @@ P.S. — T is now one of our most vocal advocates. She has referred 14 members s
   {
     id: "upgrade",
     label: "Upgrade",
-    stage: "Consideration",
+    stage: "Upgrade offer",
     description: "Family protection — loss aversion — FOMO",
     subject: "Your family deserves more than a maybe, {name}.",
     body: `Hi {name},
@@ -233,7 +239,7 @@ P.S. — You can cancel any time. But most people who upgrade never do. Not beca
   {
     id: "reengagement",
     label: "Re-engagement",
-    stage: "Retention",
+    stage: "Win back",
     description: "Personal concern — gentle — pull back",
     subject: "I have been thinking about you, {name}.",
     body: `Hi {name},
@@ -267,7 +273,7 @@ P.S. — If life has changed and you are ready to go deeper — upgrade your mem
   {
     id: "blank_email",
     label: "Blank",
-    stage: "Custom",
+    stage: "Write your own",
     description: "Start from scratch",
     subject: "",
     body: `Hi {name},\n\n\n\n— Andre Snyman\neblockwatch`
@@ -480,7 +486,7 @@ function MemberListPanel({ filters, channel }: { filters: Filters; channel: Chan
         {members.slice(0, displayCount).map((m) => (
           <div key={m.id} className="flex items-start gap-2 px-3 py-2 border-b border-border/30 hover:bg-secondary/20">
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium truncate">{m.displayName}</div>
+              <div className="text-xs font-medium truncate">{decodeHtml(m.displayName)}</div>
               <div className="text-[10px] text-muted-foreground truncate">
                 {m.suburb || m.city || m.province || "—"}
               </div>
@@ -629,7 +635,7 @@ export default function Broadcast() {
           {/* Province list (quick select) */}
           <div className="shrink-0 border-b border-border">
             <button onClick={() => setShowFilters(!showFilters)} className="w-full flex items-center justify-between px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground">
-              <span className="flex items-center gap-1.5"><Filter className="w-3 h-3" />Filters {hasFilters && <span className="bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center text-[9px]">•</span>}</span>
+              <span className="flex items-center gap-1.5"><Filter className="w-3 h-3" />Who receives this? {hasFilters && <span className="bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center text-[9px]">•</span>}</span>
               {showFilters ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
           </div>
