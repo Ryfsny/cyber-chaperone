@@ -25,6 +25,7 @@ export const tripsTable = pgTable("trips", {
   routeEtaMinutes: integer("route_eta_minutes"),
   routeEtaTime: text("route_eta_time"),
   checkpointList: text("checkpoint_list"),
+  mediaPhotos: text("media_photos"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

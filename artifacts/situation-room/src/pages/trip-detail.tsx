@@ -17,7 +17,7 @@ import {
 } from "@workspace/api-client-react";
 import type { CaseParticipant, Responder, Trip } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
-import { ArrowLeft, Loader2, Save, Activity, XCircle, Users, Shield, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Activity, XCircle, Users, Shield, Camera } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -530,6 +530,38 @@ export default function TripDetail() {
                   <label className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Operator Notes</label>
                   <Textarea value={operatorNotes} onChange={(e) => setOperatorNotes(e.target.value)} className="min-h-32 font-sans bg-card border-border" placeholder="Internal context..." />
                 </div>
+
+                {/* Trip Photos */}
+                {(() => {
+                  type Photo = { url: string; ts: string };
+                  const photos: Photo[] = (() => {
+                    try { return trip.mediaPhotos ? (JSON.parse(trip.mediaPhotos) as Photo[]) : []; }
+                    catch { return []; }
+                  })();
+                  if (photos.length === 0) return null;
+                  return (
+                    <div className="space-y-3">
+                      <label className="text-xs uppercase tracking-widest text-muted-foreground font-bold flex items-center gap-2">
+                        <Camera className="w-3 h-3" /> Trip Photos ({photos.length})
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {photos.map((p, i) => (
+                          <a key={i} href={p.url} target="_blank" rel="noopener noreferrer" className="group relative block aspect-square bg-muted rounded-sm overflow-hidden border border-border hover:border-primary transition-colors">
+                            <img
+                              src={p.url}
+                              alt={`Trip photo ${i + 1}`}
+                              className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                            />
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5 text-[10px] text-white/80 font-mono">
+                              {format(new Date(p.ts), "HH:mm")}
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="pt-6 border-t border-border">
                   <TripAiPanel tripId={tripId} tripStatus={trip.status} />

@@ -62,6 +62,8 @@ export interface Trip {
   routeEtaTime?: string | null;
   /** @nullable */
   checkpointList?: string | null;
+  /** @nullable */
+  mediaPhotos?: string | null;
   messageCount: number;
   createdAt: string;
   updatedAt: string;

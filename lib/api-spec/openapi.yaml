@@ -513,6 +513,8 @@ components:
           type: ["string", "null"]
         checkpointList:
           type: ["string", "null"]
+        mediaPhotos:
+          type: ["string", "null"]
         messageCount:
           type: integer
         createdAt:

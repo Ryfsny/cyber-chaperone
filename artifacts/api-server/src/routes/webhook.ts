@@ -416,6 +416,35 @@ router.post(
     }
   }
 
+  // ── Trip photo capture ────────────────────────────────────────────────────
+  // If an image is sent during an active trip, save the URL as evidence.
+  // Images are stored as a JSON array of {url, timestamp} in trips.media_photos.
+  const isImage = numMedia > 0 && mediaContentType.startsWith("image/");
+  if (isImage && mediaUrl) {
+    const activeTrip = await findActiveTrip(from);
+    if (activeTrip) {
+      try {
+        const existing: Array<{ url: string; ts: string }> = activeTrip.mediaPhotos
+          ? (JSON.parse(activeTrip.mediaPhotos) as Array<{ url: string; ts: string }>)
+          : [];
+        existing.push({ url: mediaUrl, ts: new Date().toISOString() });
+        await db
+          .update(tripsTable)
+          .set({ mediaPhotos: JSON.stringify(existing) })
+          .where(eq(tripsTable.id, activeTrip.id));
+        req.log.info({ tripId: activeTrip.id, photoCount: existing.length }, "Trip photo saved");
+        // Acknowledge so member knows it was received
+        await sendReply(from, to, `📸 Photo received and saved to your trip (${existing.length} photo${existing.length === 1 ? "" : "s"} on record). Safe travels!`);
+      } catch (err) {
+        req.log.warn({ err }, "Failed to save trip photo");
+      }
+      res.set("Content-Type", "text/xml");
+      res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+      return;
+    }
+    // Image with no active trip — fall through to the generic media handler below
+  }
+
   // BUG 2 FIX: If body is still empty after transcription attempt and there are media
   // attachments (images, videos, stickers, documents), respond with a friendly message
   // and return early — do NOT pass empty content to the AI or menu router.
@@ -423,7 +452,7 @@ router.post(
     await sendReply(
       from,
       to,
-      "I received your voice note / image, but I can only process text messages for now. Please type your request.",
+      "I received your image, but you don't have an active trip right now. Start a trip first, then send photos as checkpoint evidence.",
     );
     res.set("Content-Type", "text/xml");
     res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
