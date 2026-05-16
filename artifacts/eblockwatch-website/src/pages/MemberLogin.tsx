@@ -200,7 +200,7 @@ export default function MemberLogin() {
             {/* ── OTP login ─────────────────────────────────────────────── */}
             {mode === "otp" && step === "phone" && (
               <form onSubmit={(e) => void requestOtp(e)}>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>WhatsApp Number</label>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Cell Phone Number</label>
                 <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
                   <div style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: "8px", padding: "10px 12px", fontSize: "14px", color: "#374151", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px" }}>
                     🇿🇦 +27
@@ -241,7 +241,7 @@ export default function MemberLogin() {
             {/* ── Password login ────────────────────────────────────────── */}
             {mode === "password" && (
               <form onSubmit={(e) => void loginWithPassword(e)}>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>WhatsApp Number</label>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Cell Phone Number</label>
                 <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
                   <div style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: "8px", padding: "10px 12px", fontSize: "14px", color: "#374151", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px" }}>
                     🇿🇦 +27
@@ -266,9 +266,9 @@ export default function MemberLogin() {
             {mode === "forgot" && forgotStep === "request" && (
               <form onSubmit={(e) => void sendForgotOtp(e)}>
                 <p style={{ fontSize: "13px", color: "#6b7280", marginTop: 0, marginBottom: "16px" }}>
-                  Enter your WhatsApp number and we'll send a reset code.
+                  Enter your cell phone number and we'll send a reset code.
                 </p>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>WhatsApp Number</label>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Cell Phone Number</label>
                 <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
                   <div style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: "8px", padding: "10px 12px", fontSize: "14px", color: "#374151", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px" }}>
                     🇿🇦 +27
