@@ -283,6 +283,17 @@ export async function sendMemberWelcomeEmail(
     </p>
   </div>
 
+  <!-- Big WhatsApp CTA -->
+  <div style="text-align:center;padding:16px 36px 28px;">
+    <a href="https://wa.me/27825611065?text=Hi" target="_blank" rel="noopener"
+      style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:18px 40px;border-radius:6px;letter-spacing:1px;font-family:Arial,sans-serif;">
+      💬 &nbsp;OPEN WHATSAPP NOW &nbsp;→
+    </a>
+    <p style="margin:12px 0 0;font-size:12px;color:#6b7280;font-family:Arial,sans-serif;">
+      Tap to open WhatsApp with +27 82 561 1065 pre-loaded. Just send <strong>Hi</strong> and Arnie will guide you in step by step.
+    </p>
+  </div>
+
   <!-- Divider -->
   <div style="margin:0 36px;border-top:2px solid #dcfce7;"></div>
 

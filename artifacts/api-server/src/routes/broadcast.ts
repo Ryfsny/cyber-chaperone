@@ -179,6 +179,17 @@ function buildEmailHtml(firstName: string, subject: string, body: string): strin
     ${htmlBody}
   </div>
 
+  <!-- WhatsApp activation CTA -->
+  <div style="background:#f0fdf4;border:2px solid #22c55e;margin:0 48px 32px;padding:24px 32px;text-align:center;border-radius:4px;">
+    <p style="margin:0 0 4px;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:#16a34a;font-family:Arial,sans-serif;">JOIN THE WHATSAPP SAFETY NETWORK</p>
+    <p style="margin:0 0 16px;font-size:14px;color:#374151;font-family:Arial,sans-serif;">Live trip monitoring · ICE escalation · 250 000 members watching over each other</p>
+    <a href="https://wa.me/27825611065?text=Hi" target="_blank" rel="noopener"
+      style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-size:13px;font-weight:bold;padding:14px 32px;border-radius:4px;letter-spacing:1px;font-family:Arial,sans-serif;">
+      💬 &nbsp;ACTIVATE ON WHATSAPP &nbsp;→
+    </a>
+    <p style="margin:10px 0 0;font-size:11px;color:#6b7280;font-family:Arial,sans-serif;">Tap, send "Hi", and Arnie will walk you through everything.</p>
+  </div>
+
   <!-- Signature -->
   <div style="background:#f0fdf4;padding:28px 48px;border-top:3px solid #22c55e;">
     <table cellpadding="0" cellspacing="0" border="0" style="width:100%;">

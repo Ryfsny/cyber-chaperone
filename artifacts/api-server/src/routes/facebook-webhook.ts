@@ -246,6 +246,21 @@ router.post("/webhook/facebook", async (req: Request, res: Response): Promise<vo
       };
 
       await handleMenuRouter(ctx);
+
+      // If the member just entered Cyber Chaperone / trip flow from Messenger,
+      // bridge them to WhatsApp — location pins and live tracking don't work here.
+      const trimmed = text.trim();
+      const isCCRequest = trimmed === "5" || /\b(cyber.?chap|chaperone|travel|trip|escort)\b/i.test(trimmed);
+      if (isCCRequest) {
+        await sendFacebookMessage(psid, [
+          `⚠️ *For full Cyber Chaperone protection, use WhatsApp.*`,
+          ``,
+          `Live location tracking and ICE escalation require WhatsApp — they do not work on Messenger.`,
+          ``,
+          `👉 Send "Hi" to: wa.me/27825611065`,
+          `Arnie will pick up exactly where we left off and activate your trip monitoring.`,
+        ].join("\n"));
+      }
     }
   }
 });
