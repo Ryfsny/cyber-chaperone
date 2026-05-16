@@ -916,6 +916,8 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
       `5. Travel with Cyber Chaperone 🛡️`,
       `6. eblockshop — safer products`,
       `7. Speak to a person`,
+      `8. Invite a Friend`,
+      `9. Getting Started Guide`,
       ``,
       `🚨 URGENT? Reply 10 and a person will be on it right away.`,
       ``,
@@ -943,6 +945,8 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
     `5️⃣  Travel with Cyber Chaperone`,
     `6️⃣  eblockshop`,
     `7️⃣  Speak to a person`,
+    `8️⃣  📣 Invite a Friend`,
+    `9️⃣  📖 Getting Started Guide`,
     ``,
     `🚨 EMERGENCY? Reply 10.`,
     isUnknown ? null : `Reply 0 to return to this menu at any time.`,
@@ -2670,6 +2674,79 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
       `📬 CONTACT REQUEST — ${name}`,
       `Known member: ${member?.isKnown ? "YES" : "NO"}`,
       `Next action: Member requests human contact. André notified directly.`,
+    ].join("\n"));
+    return true;
+  }
+
+  if (choice === "8") {
+    await saveMessage(from, to, body, messageSid, null);
+    const referralMsg = [
+      `📣 *Invite a Friend — forward this message!*`,
+      ``,
+      `─────────────────────────────`,
+      `Hey! I'm part of eblockwatch — South Africa's real human safety network with 250 000 members.`,
+      ``,
+      `André Snyman's team watches over you when you travel 🛡️`,
+      ``,
+      `✅ FREE to join`,
+      `✅ Live trip tracking on WhatsApp`,
+      `✅ ICE escalation if you don't arrive safely`,
+      `✅ 250 000 members looking out for each other`,
+      ``,
+      `Join me — just send "Hi" to:`,
+      `👉 wa.me/27825611065`,
+      ``,
+      `Or register at:`,
+      `👉 https://cyber-chaperone-r--ryfsny.replit.app/website/`,
+      `─────────────────────────────`,
+      ``,
+      `Forward this to anyone you want to keep safe.`,
+      `The more people in your network, the safer you all are. 💪`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n");
+    await sendWhatsApp(from, to, referralMsg);
+    return true;
+  }
+
+  if (choice === "9") {
+    await saveMessage(from, to, body, messageSid, null);
+    await sendWhatsApp(from, to, [
+      `📖 *Getting Started with eblockwatch*`,
+      ``,
+      `Here is your 5-step journey to safer living:`,
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `1️⃣  *Register* — it's free`,
+      `   Reply 0 → choose "Join eblockwatch"`,
+      `   Or visit: cyber-chaperone-r--ryfsny.replit.app/website/`,
+      ``,
+      `2️⃣  *Activate your membership*`,
+      `   Reply 3 from the main menu.`,
+      `   Individual R150/mo or Family R250/mo.`,
+      `   Payment is secure via Paystack — card, bank or EFT.`,
+      ``,
+      `3️⃣  *Travel with Cyber Chaperone*`,
+      `   Reply 5 and tell Arnie where you're going.`,
+      `   We watch your route. If you don't arrive — we act.`,
+      ``,
+      `4️⃣  *Set up your ICE contact*`,
+      `   Reply 4 → Update my profile.`,
+      `   We only contact them if we genuinely cannot reach you.`,
+      ``,
+      `5️⃣  *Invite a Friend*`,
+      `   Reply 8 to get a message you can forward to anyone.`,
+      `   The more people in your network, the safer you all are.`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      ``,
+      `At any time:`,
+      `• Reply 0 → Main Menu`,
+      `• Reply 10 → Emergency`,
+      `• Reply Hi → Start over`,
+      ``,
+      `You're in good hands. André and 250 000 members have your back. 🛡️`,
+      ``,
+      `Reply 0 for Main Menu.`,
     ].join("\n"));
     return true;
   }
