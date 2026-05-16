@@ -86,6 +86,7 @@ const FLOW_PROFILE_UPDATE = "PROFILE_UPDATE";
 const STEP_WAITING_FOR_ICE = "WAITING_FOR_ICE";
 const STEP_WAITING_FOR_PERSONAL_DETAILS = "WAITING_FOR_PERSONAL_DETAILS";
 const STEP_WAITING_FOR_HOME_ADDRESS = "WAITING_FOR_HOME_ADDRESS";
+const STEP_WAITING_FOR_PROFILE_FIELD = "WAITING_FOR_PROFILE_FIELD";
 const FLOW_EBLOCKWATCH_INFO = "EBLOCKWATCH_INFO";
 const FLOW_REGISTRATION = "REGISTRATION";
 const STEP_REG_FIRST_NAME = "REG_FIRST_NAME";
@@ -2032,6 +2033,19 @@ async function handleEblockwatchInfoChoice(ctx: MenuContext): Promise<void> {
 
 // ── Profile update handler ────────────────────────────────────────────────────
 
+function profileUpdatePrompt(name: string): string {
+  return [
+    `${name}, what needs updating? Just type it:`,
+    ``,
+    `• Name → Kieren Snyman`,
+    `• Email → kierens@tiscali.co.za`,
+    `• Home address → 12 Oak Street, Bryanston`,
+    `• ICE contact → ICE: Andre Snyman, 0825611065`,
+    ``,
+    `Reply 0 for Main Menu.`,
+  ].join("\n");
+}
+
 async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Promise<void> {
   const { from, to, body, member, messageSid } = ctx;
   const name = member?.displayName ?? from;
@@ -2043,6 +2057,100 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     await sendWhatsApp(from, to, mainMenuText(name, member));
+    return;
+  }
+
+  // ── Smart field update — user just types what needs changing ─────────────────
+  if (state.currentStep === STEP_WAITING_FOR_PROFILE_FIELD) {
+    const trimmed = body.trim();
+    const emailRaw = trimmed.match(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i)?.[0]?.toLowerCase() ?? null;
+    const isIce = /^ICE:/i.test(trimmed);
+    // Strip email out to get the name/address portion
+    const textOnly = trimmed
+      .replace(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i, "")
+      .trim();
+    const looksLikeName = textOnly.length >= 2 && /^[a-záàäéèêëíìîïóòôöúùûüýñçA-Z\s'-]+$/i.test(textOnly);
+    // Address: has digits, or has comma, or has common street words
+    const looksLikeAddress = !looksLikeName && !isIce && !emailRaw &&
+      /\d/.test(textOnly) || (/,/.test(textOnly) && textOnly.length > 5);
+
+    if (isIce) {
+      // Reuse the existing ICE handler by setting the step and re-entering
+      await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: STEP_WAITING_FOR_ICE });
+      // Synthetic re-entry — call handler directly with the ICE body
+      const icePattern = /^ICE:\s*(.+?),\s*(\+?[\d\s]+)$/i;
+      const match = trimmed.match(icePattern);
+      if (match) {
+        const iceName = match[1].trim();
+        const icePhone = match[2].replace(/\s/g, "");
+        try {
+          await db.update(membersTable).set({ iceContactName: iceName, iceContactPhone: icePhone }).where(eq(membersTable.whatsappNumber, from));
+        } catch { /* best-effort */ }
+        await resetConvState(from);
+        await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+        await sendWhatsApp(from, to, `${name}, ICE contact saved. ✅\n\n${iceName} — ${icePhone}\n\nReply 0 for Main Menu.`);
+        await sendOperatorMirror(to, `PROFILE UPDATE — ICE\nMember: ${name}\nICE: ${iceName} ${icePhone}`);
+      } else {
+        await sendWhatsApp(from, to, `${name}, please use this format:\n\nICE: Full Name, 0821234567\n\nReply 0 for Main Menu.`);
+      }
+      return;
+    }
+
+    if (emailRaw && looksLikeName) {
+      // Name + email together
+      const fullName = textOnly.replace(/\s+/g, " ");
+      const parts = fullName.split(/\s+/);
+      try {
+        await db.update(membersTable).set({ firstName: parts[0], lastName: parts.slice(1).join(" ") || undefined, displayName: fullName, email: emailRaw }).where(eq(membersTable.whatsappNumber, from));
+      } catch { /* best-effort */ }
+      await resetConvState(from);
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, `${fullName}, saved. ✅\n\nName: ${fullName}\nEmail: ${emailRaw}\n\nReply 0 for Main Menu.`);
+      await sendOperatorMirror(to, `PROFILE UPDATE — NAME+EMAIL\nMember: ${name}\nNew name: ${fullName}\nNew email: ${emailRaw}`);
+      return;
+    }
+
+    if (emailRaw) {
+      // Email only
+      try {
+        await db.update(membersTable).set({ email: emailRaw }).where(eq(membersTable.whatsappNumber, from));
+      } catch { /* best-effort */ }
+      await resetConvState(from);
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, `${name}, email saved. ✅\n\nEmail: ${emailRaw}\n\nReply 0 for Main Menu.`);
+      await sendOperatorMirror(to, `PROFILE UPDATE — EMAIL\nMember: ${name}\nNew email: ${emailRaw}`);
+      return;
+    }
+
+    if (looksLikeName) {
+      // Name only
+      const fullName = textOnly.replace(/\s+/g, " ");
+      const parts = fullName.split(/\s+/);
+      try {
+        await db.update(membersTable).set({ firstName: parts[0], lastName: parts.slice(1).join(" ") || undefined, displayName: fullName }).where(eq(membersTable.whatsappNumber, from));
+      } catch { /* best-effort */ }
+      await resetConvState(from);
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, `${fullName}, name saved. ✅\n\nReply 0 for Main Menu.`);
+      await sendOperatorMirror(to, `PROFILE UPDATE — NAME\nMember: ${name}\nNew name: ${fullName}`);
+      return;
+    }
+
+    if (looksLikeAddress) {
+      // Home address
+      const address = trimmed.slice(0, 200);
+      try {
+        await db.update(membersTable).set({ homeAddress: address }).where(eq(membersTable.whatsappNumber, from));
+      } catch { /* best-effort */ }
+      await resetConvState(from);
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, `${name}, home address saved. ✅\n\n${address}\n\nReply 0 for Main Menu.`);
+      await sendOperatorMirror(to, `PROFILE UPDATE — ADDRESS\nMember: ${name}\nNew address: ${address}`);
+      return;
+    }
+
+    // Cannot figure out what they sent — re-prompt
+    await sendWhatsApp(from, to, profileUpdatePrompt(name));
     return;
   }
 
@@ -2818,21 +2926,8 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
 
   if (choice === "4") {
     await saveMessage(from, to, body, messageSid, null);
-    await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: null });
-    await sendWhatsApp(from, to, [
-      `${name}, your profile helps the Situation Room support you properly.`,
-      ``,
-      `What would you like to update?`,
-      ``,
-      `1. My personal details`,
-      `2. My home location`,
-      `3. My vehicle details`,
-      `4. My ICE contact`,
-      `5. My family members`,
-      `6. My local network / conduit details`,
-      ``,
-      `Reply 0 for Main Menu.`,
-    ].join("\n"));
+    await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: STEP_WAITING_FOR_PROFILE_FIELD });
+    await sendWhatsApp(from, to, profileUpdatePrompt(name));
     return true;
   }
 
@@ -3322,22 +3417,9 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
         await sendWhatsApp(from, to, mainMenuText(name, member));
       }
     } else if (choice === "2") {
-      // Needs update — go to profile update flow
-      await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: null });
-      await sendWhatsApp(from, to, [
-        `${name}, let's update your profile.`,
-        ``,
-        `What would you like to update?`,
-        ``,
-        `1. My personal details`,
-        `2. My home location`,
-        `3. My vehicle details`,
-        `4. My ICE contact`,
-        `5. My family members`,
-        `6. My local network / conduit details`,
-        ``,
-        `Reply 0 for Main Menu.`,
-      ].join("\n"));
+      // Needs update — go straight to smart field update
+      await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: STEP_WAITING_FOR_PROFILE_FIELD });
+      await sendWhatsApp(from, to, profileUpdatePrompt(name));
     } else {
       // Unrecognised — re-send the confirmation
       await sendProfileConfirmation(from, to, name);
