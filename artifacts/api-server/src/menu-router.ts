@@ -95,6 +95,7 @@ const STEP_REG_PROVINCE = "REG_PROVINCE";
 const STEP_REG_HOME_ADDRESS = "REG_HOME_ADDRESS";
 const STEP_REG_ICE = "REG_ICE";
 const FLOW_SAFETY_PROFILE = "SAFETY_PROFILE";
+const FLOW_SHOP = "SHOP";
 const STEP_SAFETY_MOTHER_NAME = "SAFETY_MOTHER_NAME";
 const STEP_SAFETY_MOTHER_PHONE = "SAFETY_MOTHER_PHONE";
 const STEP_SAFETY_VEHICLE_PHOTO = "SAFETY_VEHICLE_PHOTO";
@@ -2646,13 +2647,8 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
 
   if (choice === "6") {
     await saveMessage(from, to, body, messageSid, null);
-    await sendWhatsApp(from, to, [
-      `${name}, eblockshop is where you find safer products to make you safer.`,
-      ``,
-      `Coming soon — we will notify you when it is ready.`,
-      ``,
-      `Reply 0 for Main Menu.`,
-    ].join("\n"));
+    await setConvState(from, { currentFlow: FLOW_SHOP, currentStep: null });
+    await sendWhatsApp(from, to, shopMenuText(name, member));
     return true;
   }
 
@@ -2691,6 +2687,150 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   }
 
   return false;
+}
+
+// ── eblockshop ────────────────────────────────────────────────────────────────
+
+const SHOP_PRODUCTS = [
+  {
+    key: "individual",
+    label: "🛡️ Cyber Chaperone Individual — R150/month",
+    desc: "Full route tracking, ICE escalation, priority response.",
+    planCode: "PLN_rnn4nj61oh0zy0c",
+    fallbackUrl: "https://paystack.com/pay/cyber-chaperone",
+  },
+  {
+    key: "family",
+    label: "👨‍👩‍👧 Cyber Chaperone Family — R250/month",
+    desc: "Up to 5 family members covered. Full suite.",
+    planCode: "PLN_wopagttz7e5quyw",
+    fallbackUrl: "https://paystack.com/pay/family-cyber-chaperone",
+  },
+];
+
+function shopMenuText(name: string, member: MemberInfo | null): string {
+  const tier = member?.membershipTier ?? null;
+  const isPaying = tier === "individual" || tier === "family";
+  const lines = [
+    `🛒 *eblockshop* — safer living, delivered to you`,
+    ``,
+    `Hi ${name}! Here's what's available:`,
+    ``,
+    `──────────────────`,
+    `1️⃣  ${SHOP_PRODUCTS[0].label}`,
+    `   ${SHOP_PRODUCTS[0].desc}`,
+    ``,
+    `2️⃣  ${SHOP_PRODUCTS[1].label}`,
+    `   ${SHOP_PRODUCTS[1].desc}`,
+    ``,
+    `3️⃣  📡 Bliksim Location Unit — coming soon`,
+    `   Compact GPS tracker for your vehicle or bag.`,
+    isPaying ? `   ✅ Unlocked for paying members — reply 3 to register interest.` : `   🔒 Available to Individual & Family members.`,
+    ``,
+    `──────────────────`,
+    `Reply 1, 2, or 3 to order.`,
+    `Reply 0 for Main Menu.`,
+  ];
+  return lines.join("\n");
+}
+
+async function generatePaystackLink(member: MemberInfo | null, planCode: string, fallback: string): Promise<string> {
+  const secret = process.env.PAYSTACK_SECRET_KEY ?? "";
+  if (!secret) return fallback;
+  try {
+    const payload: Record<string, unknown> = { plan: planCode, channels: ["card", "bank", "ussd", "mobile_money"] };
+    if (member?.email) payload.customer = { email: member.email };
+    if (member?.displayName) {
+      const [firstName, ...rest] = member.displayName.split(" ");
+      payload.metadata = {
+        custom_fields: [
+          { display_name: "First Name", variable_name: "first_name", value: firstName ?? "" },
+          { display_name: "Last Name", variable_name: "last_name", value: rest.join(" ") },
+        ],
+      };
+    }
+    const res = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json() as { status: boolean; data?: { authorization_url?: string } };
+    return data.data?.authorization_url ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function handleShopFlow(ctx: MenuContext): Promise<void> {
+  const { from, to, body, member, messageSid } = ctx;
+  const name = member?.displayName ?? from;
+  const choice = body.trim();
+
+  await saveMessage(from, to, body, messageSid, null);
+
+  if (choice === "0") {
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, mainMenuText(name, member));
+    return;
+  }
+
+  if (choice === "1" || choice === "2") {
+    const product = SHOP_PRODUCTS[parseInt(choice) - 1];
+    const url = await generatePaystackLink(member, product.planCode, product.fallbackUrl);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, [
+      `✅ Great choice, ${name}!`,
+      ``,
+      `*${product.label}*`,
+      `${product.desc}`,
+      ``,
+      `Tap the link below to complete your order securely:`,
+      `👉 ${url}`,
+      ``,
+      `Once payment is confirmed you'll get a WhatsApp confirmation within a few minutes.`,
+      ``,
+      `Questions? Reply *0* for Main Menu or message André directly on 0825611065.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (choice === "3") {
+    const isPaying = member?.membershipTier === "individual" || member?.membershipTier === "family";
+    if (isPaying) {
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, [
+        `📡 *Bliksim Location Unit*`,
+        ``,
+        `Thank you for your interest, ${name}!`,
+        ``,
+        `André will contact you directly to arrange your unit.`,
+        ``,
+        `Reply 0 for Main Menu.`,
+      ].join("\n"));
+      await sendOperatorMirror(to, [
+        `🛒 SHOP ORDER — Bliksim Location Unit`,
+        `Member: ${name} (${from})`,
+        `Tier: ${member?.membershipTier ?? "unknown"}`,
+        `Action: Contact member to arrange unit delivery.`,
+      ].join("\n"));
+    } else {
+      await sendWhatsApp(from, to, [
+        `📡 *Bliksim Location Unit*`,
+        ``,
+        `This product is available to Individual and Family members.`,
+        ``,
+        `Upgrade your membership first to unlock it:`,
+        `👉 https://paystack.com/pay/cyber-chaperone`,
+        ``,
+        `Reply 1 to order Individual, 2 for Family, or 0 for Main Menu.`,
+      ].join("\n"));
+    }
+    return;
+  }
+
+  // Unrecognised — repeat menu
+  await sendWhatsApp(from, to, shopMenuText(name, member));
 }
 
 // ── Main entry point ──────────────────────────────────────────────────────────
@@ -2838,6 +2978,11 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
 
   if (state.currentFlow === FLOW_MEMBERSHIP) {
     await handleMembershipChoice(ctx);
+    return { handled: true };
+  }
+
+  if (state.currentFlow === FLOW_SHOP) {
+    await handleShopFlow(ctx);
     return { handled: true };
   }
 
