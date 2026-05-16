@@ -442,6 +442,131 @@ function ResultsBox({ result }: { result: SyncResult }) {
   );
 }
 
+// ── Welcome Home Campaign panel ───────────────────────────────────────────────
+
+function WelcomeCampaignPanel() {
+  const [open, setOpen] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [done, setDone] = useState<{ sent: number; total: number } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function launch() {
+    setSending(true);
+    setErr(null);
+    try {
+      const res = await fetch(`${BASE}/api/broadcast/welcome-campaign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+        credentials: "include",
+      });
+      const data = await res.json() as { ok: boolean; queued?: boolean; jobId?: string; sent?: number; total?: number; error?: string };
+      if (!data.ok) { setErr(data.error ?? "Send failed"); return; }
+      if (data.queued && data.jobId) { setJobId(data.jobId); }
+      else { setDone({ sent: data.sent ?? 0, total: data.total ?? 0 }); }
+    } catch (e) { setErr(String(e)); }
+    finally { setSending(false); }
+  }
+
+  return (
+    <div className="shrink-0 border-b border-border" style={{ background: "linear-gradient(135deg, #1a1f2e 0%, #0f172a 100%)" }}>
+      {/* Header row */}
+      <button
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" />
+          <span className="text-xs font-bold uppercase tracking-widest text-white">Welcome Home Campaign</span>
+          <span className="text-[9px] text-[#22c55e] border border-[#22c55e]/50 px-2 py-0.5 rounded font-bold tracking-widest">READY TO SEND</span>
+        </div>
+        {open ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 grid grid-cols-5 gap-4">
+
+          {/* Left: iframe preview */}
+          <div className="col-span-3">
+            <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Email preview (sample)</div>
+            <div className="border border-white/10 rounded overflow-hidden bg-white" style={{ height: "360px" }}>
+              <iframe
+                src={`${BASE}/api/broadcast/welcome-preview`}
+                title="Welcome email preview"
+                style={{ width: "167%", height: "167%", border: "none", transformOrigin: "top left", transform: "scale(0.6)" }}
+              />
+            </div>
+          </div>
+
+          {/* Right: details + send */}
+          <div className="col-span-2 flex flex-col gap-3 pt-0.5">
+
+            <div>
+              <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Subject line</div>
+              <div className="text-xs text-white font-medium leading-snug">André here — welcome home, <span className="text-[#22c55e]">{"{name}"}</span>.</div>
+            </div>
+
+            <div>
+              <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Audience</div>
+              <div className="text-xs text-gray-400 leading-snug">All <span className="text-white font-semibold">active + verified</span> members with an email address</div>
+            </div>
+
+            <div>
+              <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">What it contains</div>
+              <ul className="space-y-1.5">
+                {[
+                  "Personal letter from André",
+                  "4 platform feature highlights",
+                  "3-step WhatsApp onboarding",
+                  "Direct WhatsApp activation CTA",
+                  "André's signature + social links",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-1.5 text-[11px] text-gray-400">
+                    <span className="text-[#22c55e] mt-px shrink-0">✓</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="mt-auto flex flex-col gap-2">
+              {!done && !jobId && (
+                <button
+                  onClick={launch}
+                  disabled={sending}
+                  className="flex items-center justify-center gap-2 bg-[#22c55e] hover:bg-[#16a34a] text-white text-[11px] font-bold uppercase tracking-widest px-4 py-3 rounded transition-colors disabled:opacity-50"
+                >
+                  {sending
+                    ? <><Loader2 className="w-3 h-3 animate-spin" />Sending…</>
+                    : <><Send className="w-3 h-3" />Launch Campaign</>}
+                </button>
+              )}
+
+              {jobId && !done && (
+                <ProgressBar jobId={jobId} onDone={(j) => setDone({ sent: j.sent, total: j.total })} />
+              )}
+
+              {done && (
+                <div className="border border-emerald-500/30 bg-emerald-500/10 rounded px-3 py-2.5 text-xs">
+                  <div className="font-bold text-emerald-400 flex items-center gap-1.5 mb-0.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Campaign complete
+                  </div>
+                  <div className="text-emerald-300/70">{done.sent} sent · {done.total} recipients</div>
+                </div>
+              )}
+
+              {err && (
+                <div className="text-[11px] text-red-400 border border-red-500/30 bg-red-500/5 rounded px-3 py-2 leading-snug">{err}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Member list panel ─────────────────────────────────────────────────────────
 
 function MemberListPanel({ filters, channel }: { filters: Filters; channel: Channel }) {
@@ -615,6 +740,8 @@ export default function Broadcast() {
           {isBusy ? <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Sending…</> : <><Send className="w-3 h-3 mr-1.5" />Send</>}
         </Button>
       </div>
+
+      <WelcomeCampaignPanel />
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
 

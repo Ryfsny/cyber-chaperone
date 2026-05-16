@@ -242,6 +242,241 @@ function buildEmailHtml(firstName: string, subject: string, body: string): strin
 </html>`;
 }
 
+// ── Welcome-back campaign email ───────────────────────────────────────────────
+
+function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string {
+  const safe = firstName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const wa = waNumber.replace(/\D/g, "");
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<title>Welcome home to eblockwatch</title>
+</head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,sans-serif;-webkit-text-size-adjust:100%;">
+
+<!-- Preheader (hidden preview text) -->
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;color:#f1f5f9;">
+  André here — 25 years on, what we've built for you is something else. You need to see this.
+</div>
+
+<div style="max-width:620px;margin:0 auto;background:#ffffff;">
+
+  <!-- ── Header ── -->
+  <div style="background:#1a1f2e;padding:32px 48px;text-align:center;">
+    <img src="https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif"
+      alt="eblockwatch" width="160" style="display:block;margin:0 auto;max-width:160px;" />
+    <div style="color:#6b7280;font-size:10px;letter-spacing:3px;margin-top:12px;text-transform:uppercase;font-family:Arial,sans-serif;">
+      South Africa's Safety Network &nbsp;·&nbsp; Est. 2001
+    </div>
+  </div>
+
+  <!-- ── Green bar ── -->
+  <div style="height:4px;background:linear-gradient(90deg,#16a34a,#22c55e,#16a34a);"></div>
+
+  <!-- ── Hero ── -->
+  <div style="background:#1a1f2e;padding:48px 48px 44px;text-align:center;">
+    <div style="display:inline-block;background:#22c55e;color:#ffffff;font-size:9px;font-weight:bold;letter-spacing:3px;text-transform:uppercase;padding:6px 18px;margin-bottom:22px;font-family:Arial,sans-serif;border-radius:2px;">
+      A PERSONAL MESSAGE FROM ANDRÉ
+    </div>
+    <h1 style="color:#ffffff;font-size:30px;font-weight:bold;margin:0 0 14px;line-height:1.25;font-family:Arial,sans-serif;">
+      ${safe}, welcome home.
+    </h1>
+    <p style="color:#94a3b8;font-size:15px;margin:0;line-height:1.7;font-family:Arial,sans-serif;max-width:420px;display:block;margin-left:auto;margin-right:auto;">
+      You've been with us a long time.<br>Here's what we built — together.
+    </p>
+  </div>
+
+  <!-- ── Green bar ── -->
+  <div style="height:2px;background:linear-gradient(90deg,#16a34a,#22c55e,#16a34a);"></div>
+
+  <!-- ── Letter from André ── -->
+  <div style="background:#ffffff;padding:44px 48px 36px;">
+    <p style="margin:0 0 22px;color:#1e293b;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">
+      Dear ${safe},
+    </p>
+    <p style="margin:0 0 22px;color:#1e293b;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">
+      Twenty-five years ago I started eblockwatch with one purpose: <strong>no South African faces danger alone.</strong>
+    </p>
+    <p style="margin:0 0 22px;color:#1e293b;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">
+      You joined us somewhere along that journey. In all that time, you trusted us with the most important thing there is — getting home safe. I have never taken that lightly.
+    </p>
+    <p style="margin:0 0 22px;color:#1e293b;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">
+      What I want to tell you today is this: <strong>what we've built for you has changed.</strong> Not the mission — the mission never changes. But the platform we have now is something I'm genuinely proud to put in front of you.
+    </p>
+    <p style="margin:0 0 0;color:#1e293b;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">
+      It's called Cyber Chaperone. It lives inside WhatsApp — the app already on your phone. It watches over every trip you take. And it costs you nothing extra — it's included in your membership, right now, today.
+    </p>
+  </div>
+
+  <!-- ── What we built ── -->
+  <div style="background:#f0fdf4;padding:40px 48px;">
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="color:#16a34a;font-size:10px;font-weight:bold;letter-spacing:3px;text-transform:uppercase;font-family:Arial,sans-serif;">WHAT'S WAITING FOR YOU</div>
+      <h2 style="color:#1a1f2e;font-size:20px;font-weight:bold;margin:8px 0 0;font-family:Arial,sans-serif;">Your safety network is live</h2>
+    </div>
+    <table cellpadding="0" cellspacing="0" border="0" style="width:100%;">
+      <tr>
+        <td style="width:50%;padding:0 8px 14px 0;vertical-align:top;">
+          <div style="background:#ffffff;border:1px solid #bbf7d0;border-radius:4px;padding:20px;">
+            <div style="font-size:24px;margin-bottom:10px;">🛡️</div>
+            <div style="color:#16a34a;font-size:10px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;font-family:Arial,sans-serif;margin-bottom:7px;">CYBER CHAPERONE</div>
+            <div style="color:#374151;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">Live trip monitoring from start to arrival. We watch every kilometre — silently, reliably, every time.</div>
+          </div>
+        </td>
+        <td style="width:50%;padding:0 0 14px 8px;vertical-align:top;">
+          <div style="background:#ffffff;border:1px solid #bbf7d0;border-radius:4px;padding:20px;">
+            <div style="font-size:24px;margin-bottom:10px;">🚨</div>
+            <div style="color:#16a34a;font-size:10px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;font-family:Arial,sans-serif;margin-bottom:7px;">ICE ESCALATION</div>
+            <div style="color:#374151;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">Your emergency contacts are activated automatically if something goes wrong. No delay. No manual steps.</div>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="width:50%;padding:0 8px 0 0;vertical-align:top;">
+          <div style="background:#ffffff;border:1px solid #bbf7d0;border-radius:4px;padding:20px;">
+            <div style="font-size:24px;margin-bottom:10px;">🤝</div>
+            <div style="color:#16a34a;font-size:10px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;font-family:Arial,sans-serif;margin-bottom:7px;">COMMUNITY NETWORK</div>
+            <div style="color:#374151;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">250 000 verified members across South Africa — watching over each other, every day.</div>
+          </div>
+        </td>
+        <td style="width:50%;padding:0 0 0 8px;vertical-align:top;">
+          <div style="background:#ffffff;border:1px solid #bbf7d0;border-radius:4px;padding:20px;">
+            <div style="font-size:24px;margin-bottom:10px;">💬</div>
+            <div style="color:#16a34a;font-size:10px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;font-family:Arial,sans-serif;margin-bottom:7px;">INSTANT RESPONSE</div>
+            <div style="color:#374151;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">Type <strong>10</strong> from anywhere and we respond. Immediately. No app, no delay, no voicemail.</div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- ── How to activate ── -->
+  <div style="background:#ffffff;padding:44px 48px 36px;">
+    <div style="text-align:center;margin-bottom:36px;">
+      <div style="color:#16a34a;font-size:10px;font-weight:bold;letter-spacing:3px;text-transform:uppercase;font-family:Arial,sans-serif;">HOW TO ACTIVATE</div>
+      <h2 style="color:#1a1f2e;font-size:20px;font-weight:bold;margin:8px 0 4px;font-family:Arial,sans-serif;">Three steps. Less than 60 seconds.</h2>
+      <p style="color:#64748b;font-size:13px;margin:0;font-family:Arial,sans-serif;">No app to download. No forms to fill in. Just WhatsApp.</p>
+    </div>
+
+    <!-- Step 1 -->
+    <table cellpadding="0" cellspacing="0" border="0" style="width:100%;margin-bottom:8px;">
+      <tr>
+        <td style="width:50px;vertical-align:top;">
+          <div style="width:42px;height:42px;background:#1a1f2e;border-radius:50%;text-align:center;line-height:42px;font-size:17px;font-weight:bold;color:#22c55e;font-family:Arial,sans-serif;">1</div>
+        </td>
+        <td style="vertical-align:top;padding-left:16px;padding-top:3px;">
+          <div style="font-weight:bold;color:#1a1f2e;font-size:15px;font-family:Arial,sans-serif;margin-bottom:5px;">Save this number</div>
+          <div style="color:#374151;font-size:14px;font-family:Arial,sans-serif;line-height:1.65;">
+            Add <strong style="color:#16a34a;font-size:16px;">+27 82 561 1065</strong> to your contacts as <em>eblockwatch</em>.<br>
+            <span style="color:#94a3b8;font-size:12px;">This is the number that watches over you.</span>
+          </div>
+        </td>
+      </tr>
+    </table>
+    <div style="border-left:2px solid #bbf7d0;margin:0 0 8px 20px;height:18px;"></div>
+
+    <!-- Step 2 -->
+    <table cellpadding="0" cellspacing="0" border="0" style="width:100%;margin-bottom:8px;">
+      <tr>
+        <td style="width:50px;vertical-align:top;">
+          <div style="width:42px;height:42px;background:#1a1f2e;border-radius:50%;text-align:center;line-height:42px;font-size:17px;font-weight:bold;color:#22c55e;font-family:Arial,sans-serif;">2</div>
+        </td>
+        <td style="vertical-align:top;padding-left:16px;padding-top:3px;">
+          <div style="font-weight:bold;color:#1a1f2e;font-size:15px;font-family:Arial,sans-serif;margin-bottom:5px;">Send "Hi"</div>
+          <div style="color:#374151;font-size:14px;font-family:Arial,sans-serif;line-height:1.65;">
+            Open WhatsApp, tap the number, send the word <strong style="color:#16a34a;">Hi</strong>.<br>
+            <span style="color:#94a3b8;font-size:12px;">Arnie — our system — responds instantly with your member menu.</span>
+          </div>
+        </td>
+      </tr>
+    </table>
+    <div style="border-left:2px solid #bbf7d0;margin:0 0 8px 20px;height:18px;"></div>
+
+    <!-- Step 3 -->
+    <table cellpadding="0" cellspacing="0" border="0" style="width:100%;margin-bottom:0;">
+      <tr>
+        <td style="width:50px;vertical-align:top;">
+          <div style="width:42px;height:42px;background:#22c55e;border-radius:50%;text-align:center;line-height:42px;font-size:17px;font-weight:bold;color:#ffffff;font-family:Arial,sans-serif;">3</div>
+        </td>
+        <td style="vertical-align:top;padding-left:16px;padding-top:3px;">
+          <div style="font-weight:bold;color:#1a1f2e;font-size:15px;font-family:Arial,sans-serif;margin-bottom:5px;">Start your first trip</div>
+          <div style="color:#374151;font-size:14px;font-family:Arial,sans-serif;line-height:1.65;">
+            Next time you're heading out — day or night — choose <strong>Cyber Chaperone</strong> from the menu. Tell us where you're going and when you'll arrive.<br>
+            <span style="color:#94a3b8;font-size:12px;">We'll watch every kilometre and close the trip when you're home safe.</span>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- ── CTA ── -->
+  <div style="background:#f0fdf4;border:2px solid #22c55e;margin:0 48px 36px;padding:32px;text-align:center;border-radius:4px;">
+    <p style="margin:0 0 6px;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:#16a34a;font-family:Arial,sans-serif;">READY? IT TAKES 30 SECONDS</p>
+    <p style="margin:0 0 22px;font-size:14px;color:#374151;font-family:Arial,sans-serif;line-height:1.65;">
+      Tap below to open WhatsApp. Send "Hi" and Arnie walks you through the rest.
+    </p>
+    <a href="https://wa.me/${wa}?text=Hi" target="_blank" rel="noopener"
+      style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-size:14px;font-weight:bold;padding:16px 40px;border-radius:4px;letter-spacing:1px;font-family:Arial,sans-serif;text-transform:uppercase;">
+      💬 &nbsp;ACTIVATE ON WHATSAPP &nbsp;→
+    </a>
+    <p style="margin:14px 0 0;font-size:11px;color:#6b7280;font-family:Arial,sans-serif;">
+      Or save <strong>+27 82 561 1065</strong> in your contacts and send "Hi" from WhatsApp now.
+    </p>
+  </div>
+
+  <!-- ── Signature ── -->
+  <div style="background:#f0fdf4;padding:28px 48px;border-top:3px solid #22c55e;">
+    <table cellpadding="0" cellspacing="0" border="0" style="width:100%;">
+      <tr>
+        <td style="width:60px;vertical-align:top;">
+          <div style="width:52px;height:52px;border-radius:50%;background:#1a1f2e;border:2px solid #22c55e;text-align:center;line-height:52px;">
+            <span style="color:#22c55e;font-weight:bold;font-size:20px;font-family:Arial,sans-serif;">A</span>
+          </div>
+        </td>
+        <td style="vertical-align:top;padding-left:16px;">
+          <div style="font-weight:bold;color:#1a1f2e;font-size:16px;font-family:Arial,sans-serif;">Andre Snyman</div>
+          <div style="color:#475569;font-size:12px;font-family:Arial,sans-serif;margin-top:3px;">Founder · eblockwatch · Cyber Chaperone</div>
+          <div style="color:#64748b;font-size:11px;font-family:Arial,sans-serif;margin-top:2px;">+27 82 561 1065 · <a href="mailto:info@eblockwatch.co.za" style="color:#16a34a;text-decoration:none;">info@eblockwatch.co.za</a></div>
+        </td>
+      </tr>
+    </table>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #bbf7d0;">
+      <p style="color:#64748b;font-size:13px;font-family:Georgia,'Times New Roman',serif;margin:0;font-style:italic;line-height:1.7;">
+        "I started eblockwatch in 2001 with one goal: make sure no South African faces danger alone. Twenty-five years on, that mission hasn't changed — but what we can do for you now has."
+      </p>
+    </div>
+  </div>
+
+  <!-- ── Social links ── -->
+  <div style="background:#1a1f2e;padding:24px 48px;text-align:center;">
+    <a href="https://www.facebook.com/eblockwatchnational" target="_blank" rel="noopener"
+      style="display:inline-block;background:#1877f2;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Facebook</a>
+    <a href="https://www.instagram.com/eblockwatch" target="_blank" rel="noopener"
+      style="display:inline-block;background:#e1306c;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Instagram</a>
+    <a href="https://eblockwatch.co.za" target="_blank" rel="noopener"
+      style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Website</a>
+    <a href="https://wa.me/${wa}" target="_blank" rel="noopener"
+      style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">WhatsApp</a>
+  </div>
+
+  <!-- ── Footer ── -->
+  <div style="background:#0f172a;padding:18px 48px;text-align:center;">
+    <p style="color:#475569;font-size:10px;margin:0;letter-spacing:1px;font-family:Arial,sans-serif;text-transform:uppercase;">
+      © 2026 eblockwatch (Pty) Ltd · South Africa · Protecting families since 2001
+    </p>
+    <p style="color:#334155;font-size:10px;margin:6px 0 0;font-family:Arial,sans-serif;">
+      You are receiving this as a long-standing eblockwatch member. Reply to unsubscribe.
+    </p>
+  </div>
+
+</div>
+</body>
+</html>`;
+}
+
 function makeJob(channel: BroadcastJob["channel"], total: number): BroadcastJob {
   const id = randomUUID();
   const job: BroadcastJob = { id, channel, total, sent: 0, failed: 0, done: false, startedAt: new Date().toISOString(), errors: [] };
@@ -457,6 +692,81 @@ router.post("/broadcast/email", async (req: Request, res: Response): Promise<voi
       void db.insert(messagesTable).values({ fromNumber: gmailUser, toNumber: m.email!, body: `[${subj}] ${emailBody}`, direction: "broadcast", channel: "email", status: "sent" }).catch(() => undefined);
     } catch (err) { results.push({ id: m.id, name: m.displayName, status: "failed", error: String(err) }); }
     await new Promise((r) => setTimeout(r, 200));
+  }
+  res.json({ ok: true, queued: false, sent: results.filter((r) => r.status === "sent").length, failed: results.filter((r) => r.status === "failed").length, total: results.length, results });
+});
+
+// ── GET /api/broadcast/welcome-preview ───────────────────────────────────────
+// Returns the welcome-back email HTML with a sample name for iframe preview.
+router.get("/broadcast/welcome-preview", (req: Request, res: Response): void => {
+  const name = (req.query["name"] as string | undefined) ?? "Kieren";
+  const html = buildWelcomeBackEmailHtml(name, BUSINESS_WA_NUM);
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(html);
+});
+
+// ── POST /api/broadcast/welcome-campaign ──────────────────────────────────────
+// Sends the welcome-back email to all active/verified members who have an email.
+router.post("/broadcast/welcome-campaign", async (req: Request, res: Response): Promise<void> => {
+  if (!nationalOnly(req, res)) return;
+
+  const t = makeEmailTransporter();
+  const gmailUser = process.env["GMAIL_USER"] ?? "";
+  if (!t || !gmailUser) { res.status(500).json({ error: "Gmail not configured." }); return; }
+
+  const members = await db
+    .select({ id: membersTable.id, firstName: membersTable.firstName, displayName: membersTable.displayName, email: membersTable.email })
+    .from(membersTable)
+    .where(
+      sql`(member_status = 'active' OR member_status = 'verified') AND email IS NOT NULL AND email != ''` as unknown as ReturnType<typeof eq>
+    );
+
+  const valid = members.filter((m) => m.email?.trim());
+  if (valid.length === 0) { res.json({ ok: true, queued: false, sent: 0, failed: 0, total: 0, results: [] }); return; }
+
+  const SUBJECT = (fn: string) => `André here — welcome home, ${fn}.`;
+
+  if (valid.length > 20) {
+    const job = makeJob("email", valid.length);
+    res.json({ ok: true, queued: true, total: valid.length, jobId: job.id });
+    (async () => {
+      for (const m of valid) {
+        const fn = m.firstName ?? m.displayName.split(" ")[0] ?? "Member";
+        try {
+          await t.sendMail({
+            from: `"Andre Snyman | eblockwatch" <${gmailUser}>`,
+            replyTo: "info@eblockwatch.co.za",
+            to: m.email!,
+            subject: SUBJECT(fn),
+            html: buildWelcomeBackEmailHtml(fn, BUSINESS_WA_NUM),
+            text: `Hi ${fn},\n\nWelcome home to eblockwatch.\n\nActivate on WhatsApp now — save +27 82 561 1065, send "Hi", and Arnie walks you through everything.\n\nAndre Snyman\nFounder · eblockwatch`,
+          });
+          job.sent++;
+          void db.insert(messagesTable).values({ fromNumber: gmailUser, toNumber: m.email!, body: `[${SUBJECT(fn)}] Welcome campaign`, direction: "broadcast", channel: "email", status: "sent" }).catch(() => undefined);
+        } catch (err) { job.failed++; if (job.errors.length < 50) job.errors.push({ name: m.displayName, error: String(err) }); }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      job.done = true;
+    })();
+    return;
+  }
+
+  const results: { id: number; name: string; status: "sent" | "failed"; error?: string }[] = [];
+  for (const m of valid) {
+    const fn = m.firstName ?? m.displayName.split(" ")[0] ?? "Member";
+    try {
+      await t.sendMail({
+        from: `"Andre Snyman | eblockwatch" <${gmailUser}>`,
+        replyTo: "info@eblockwatch.co.za",
+        to: m.email!,
+        subject: SUBJECT(fn),
+        html: buildWelcomeBackEmailHtml(fn, BUSINESS_WA_NUM),
+        text: `Hi ${fn},\n\nWelcome home to eblockwatch.\n\nActivate on WhatsApp now — save +27 82 561 1065, send "Hi", and Arnie walks you through everything.\n\nAndre Snyman\nFounder · eblockwatch`,
+      });
+      results.push({ id: m.id, name: m.displayName, status: "sent" });
+      void db.insert(messagesTable).values({ fromNumber: gmailUser, toNumber: m.email!, body: `[${SUBJECT(fn)}] Welcome campaign`, direction: "broadcast", channel: "email", status: "sent" }).catch(() => undefined);
+    } catch (err) { results.push({ id: m.id, name: m.displayName, status: "failed", error: String(err) }); }
+    await new Promise((r) => setTimeout(r, 250));
   }
   res.json({ ok: true, queued: false, sent: results.filter((r) => r.status === "sent").length, failed: results.filter((r) => r.status === "failed").length, total: results.length, results });
 });
