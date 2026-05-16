@@ -169,7 +169,7 @@ function buildEmailHtml(firstName: string, subject: string, body: string): strin
     <img src="https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif"
       alt="eblockwatch" width="160" style="display:block;margin:0 auto;max-width:160px;" />
     <div style="color:#9ca3af;font-size:10px;letter-spacing:3px;margin-top:14px;text-transform:uppercase;">
-      Cyber Chaperone &nbsp;·&nbsp; Est. 2001 &nbsp;·&nbsp; South Africa
+      eblockwatch Cyber Chaperone &nbsp;·&nbsp; Est. 2001 &nbsp;·&nbsp; South Africa
     </div>
   </div>
 
@@ -203,7 +203,7 @@ function buildEmailHtml(firstName: string, subject: string, body: string): strin
         </td>
         <td style="vertical-align:top;padding-left:16px;">
           <div style="font-weight:bold;color:#1a1f2e;font-size:16px;font-family:Arial,sans-serif;">Andre Snyman</div>
-          <div style="color:#475569;font-size:12px;font-family:Arial,sans-serif;margin-top:3px;">Founder · eblockwatch · Cyber Chaperone</div>
+          <div style="color:#475569;font-size:12px;font-family:Arial,sans-serif;margin-top:3px;">Founder · eblockwatch Cyber Chaperone</div>
           <div style="color:#64748b;font-size:11px;font-family:Arial,sans-serif;margin-top:2px;">+27 82 561 1065 · <a href="mailto:info@eblockwatch.co.za" style="color:#16a34a;text-decoration:none;">info@eblockwatch.co.za</a></div>
         </td>
       </tr>
@@ -279,7 +279,7 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
     <p style="margin:0 0 20px;color:#374151;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">Twenty-five years ago I started eblockwatch with one purpose: <strong style="color:#111827;">no South African faces danger alone.</strong></p>
     <p style="margin:0 0 20px;color:#374151;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">You joined us somewhere along that journey. In all that time, you trusted us with the most important thing there is — getting home safe. I have never taken that lightly.</p>
     <p style="margin:0 0 20px;color:#374151;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">What I want to tell you today is this: <strong style="color:#111827;">what we've built for you has changed.</strong> Not the mission — the mission never changes. But the platform we have now is something I'm genuinely proud to put in front of you.</p>
-    <p style="margin:0 0 0;color:#374151;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">It's called Cyber Chaperone. It lives inside WhatsApp — the app already on your phone. It watches over every trip you take. Included in your membership, right now, today.</p>
+    <p style="margin:0 0 0;color:#374151;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">It's called eblockwatch Cyber Chaperone. It lives inside WhatsApp — the app already on your phone. It watches over every trip you take. Included in your membership, right now, today.</p>
   </div>
 
   <!-- ── Divider ── -->
@@ -292,7 +292,7 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
       <tr>
         <td style="width:50%;padding:0 8px 12px 0;vertical-align:top;">
           <div style="border:1px solid #d1fae5;border-left:3px solid #22c55e;padding:16px 16px 16px 18px;">
-            <div style="font-weight:bold;color:#111827;font-size:13px;margin-bottom:5px;font-family:Arial,sans-serif;">🛡️ Cyber Chaperone</div>
+            <div style="font-weight:bold;color:#111827;font-size:13px;margin-bottom:5px;font-family:Arial,sans-serif;">🛡️ eblockwatch Cyber Chaperone</div>
             <div style="color:#4b5563;font-size:12px;line-height:1.6;font-family:Arial,sans-serif;">Live trip monitoring from start to arrival. We watch every kilometre with you.</div>
           </div>
         </td>
@@ -312,8 +312,8 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
         </td>
         <td style="width:50%;padding:0 0 0 8px;vertical-align:top;">
           <div style="border:1px solid #d1fae5;border-left:3px solid #22c55e;padding:16px 16px 16px 18px;">
-            <div style="font-weight:bold;color:#111827;font-size:13px;margin-bottom:5px;font-family:Arial,sans-serif;">💬 Cyber Chaperone</div>
-            <div style="color:#4b5563;font-size:12px;line-height:1.6;font-family:Arial,sans-serif;">Send <strong>10</strong> on WhatsApp. Your Cyber Chaperone and community are alerted and mobilise around you.</div>
+            <div style="font-weight:bold;color:#111827;font-size:13px;margin-bottom:5px;font-family:Arial,sans-serif;">💬 eblockwatch Cyber Chaperone</div>
+            <div style="color:#4b5563;font-size:12px;line-height:1.6;font-family:Arial,sans-serif;">Send <strong>10</strong> on WhatsApp. Your eblockwatch Cyber Chaperone and community are alerted and mobilise around you.</div>
           </div>
         </td>
       </tr>
@@ -359,7 +359,7 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
         </td>
         <td style="vertical-align:top;padding-left:14px;padding-top:4px;">
           <div style="font-weight:bold;color:#111827;font-size:14px;font-family:Arial,sans-serif;margin-bottom:3px;">Start your first trip</div>
-          <div style="color:#4b5563;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">Choose Cyber Chaperone from the menu. Tell us your destination and ETA. We track you all the way home.</div>
+          <div style="color:#4b5563;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">Choose eblockwatch Cyber Chaperone from the menu. Tell us your destination and ETA. We track you all the way home.</div>
         </td>
       </tr>
     </table>
@@ -990,7 +990,7 @@ function buildMigrationEmailHtml(firstName: string, portalUrl: string): string {
         <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
           <span style="color:#22c55e;font-weight:bold;font-size:18px;vertical-align:middle;">✓</span>
           <span style="font-size:14px;color:#1e293b;font-family:Arial,sans-serif;margin-left:10px;vertical-align:middle;">
-            <strong>Cyber Chaperone</strong> — real-time trip monitoring via WhatsApp. Start a trip, check in, and your operator watches over you the whole way.
+            <strong>eblockwatch Cyber Chaperone</strong> — real-time trip monitoring via WhatsApp. Start a trip, check in, and your operator watches over you the whole way.
           </span>
         </td>
       </tr>
@@ -1040,7 +1040,7 @@ function buildMigrationEmailHtml(firstName: string, portalUrl: string): string {
     <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0;">
 
     <p style="margin:0 0 10px;font-size:14px;line-height:1.7;color:#374151;font-family:Arial,sans-serif;">
-      <strong>Already on WhatsApp?</strong> You can also just send us a message — type <strong>Hi</strong> to <a href="https://wa.me/${BUSINESS_WA_NUM}" style="color:#16a34a;text-decoration:none;">+${BUSINESS_WA_NUM}</a> and the Cyber Chaperone menu will guide you straight in.
+      <strong>Already on WhatsApp?</strong> You can also just send us a message — type <strong>Hi</strong> to <a href="https://wa.me/${BUSINESS_WA_NUM}" style="color:#16a34a;text-decoration:none;">+${BUSINESS_WA_NUM}</a> and the eblockwatch Cyber Chaperone menu will guide you straight in.
     </p>
 
   </div>
@@ -1056,7 +1056,7 @@ function buildMigrationEmailHtml(firstName: string, portalUrl: string): string {
         </td>
         <td style="vertical-align:top;padding-left:16px;">
           <div style="font-weight:bold;color:#1a1f2e;font-size:16px;font-family:Arial,sans-serif;">Andre Snyman</div>
-          <div style="color:#475569;font-size:12px;font-family:Arial,sans-serif;margin-top:3px;">Founder · eblockwatch · Cyber Chaperone</div>
+          <div style="color:#475569;font-size:12px;font-family:Arial,sans-serif;margin-top:3px;">Founder · eblockwatch Cyber Chaperone</div>
           <div style="color:#64748b;font-size:11px;font-family:Arial,sans-serif;margin-top:2px;">+27 82 561 1065 · <a href="mailto:info@eblockwatch.co.za" style="color:#16a34a;text-decoration:none;">info@eblockwatch.co.za</a></div>
         </td>
       </tr>
