@@ -28,6 +28,8 @@ async function lookupFacebookMember(psid: string, displayName: string | null): P
         memberStatus: member.memberStatus,
         membershipTier: member.membershipTier ?? null,
         isKnown: member.memberStatus === "verified" || member.memberStatus === "active",
+        discType: (member.discType ?? null) as import("../disc-profiler.js").DiscDimension | null,
+        memberId: member.id,
       };
     }
   } catch {

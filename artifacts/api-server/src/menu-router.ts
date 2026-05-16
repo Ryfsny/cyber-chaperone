@@ -6,6 +6,9 @@ import { calculateGoogleMapsRoute } from "./google-maps-service.js";
 import { withMenu } from "./message-utils.js";
 import { sendOperatorEmail, sendMemberWelcomeEmail, type EmailCategory } from "./email-service.js";
 import { issueOtp, normalisePhone } from "./otp-store.js";
+import { recordDiscSignal, type DiscSignal } from "./disc-profiler.js";
+import { discVoice } from "./disc-voice.js";
+import type { DiscDimension } from "./disc-profiler.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -15,6 +18,8 @@ export interface MemberInfo {
   memberStatus: string;
   membershipTier: string | null;
   isKnown: boolean;
+  discType?: DiscDimension | null;
+  memberId?: number | null;
 }
 
 interface PendingTripData {
@@ -3006,7 +3011,7 @@ async function handleRegistrationStep(ctx: MenuContext, state: ConvState): Promi
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     const [row] = await db.select().from(membersTable).where(eq(membersTable.whatsappNumber, from)).limit(1);
     const member: MemberInfo | null = row
-      ? { displayName: row.displayName, role: row.role, memberStatus: row.memberStatus, membershipTier: row.membershipTier, isKnown: row.memberStatus === "active" || row.memberStatus === "verified" }
+      ? { displayName: row.displayName, role: row.role, memberStatus: row.memberStatus, membershipTier: row.membershipTier, isKnown: row.memberStatus === "active" || row.memberStatus === "verified", discType: row.discType as DiscDimension | null, memberId: row.id }
       : null;
     await sendWhatsApp(from, to, mainMenuText(row?.displayName ?? from, member));
     return;
@@ -3274,6 +3279,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   }
 
   if (choice === "1") {
+    if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_WHAT_IS");
     await saveMessage(from, to, body, messageSid, null);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     await sendWhatsApp(from, to, [
@@ -3292,12 +3298,14 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   }
 
   if (choice === "2") {
+    if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_MEMBERSHIP");
     await saveMessage(from, to, body, messageSid, null);
     await sendWhatsApp(from, to, membershipOptionsText(name, member?.membershipTier));
     return true;
   }
 
   if (choice === "3") {
+    if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_MEMBERSHIP");
     await saveMessage(from, to, body, messageSid, null);
     await setConvState(from, { currentFlow: FLOW_MEMBERSHIP, currentStep: null });
     await sendWhatsApp(from, to, membershipActivationText(name));
@@ -3305,12 +3313,14 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   }
 
   if (choice === "4") {
+    if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_PROFILE");
     await saveMessage(from, to, body, messageSid, null);
     await startSmartProfileUpdate(from, to, name);
     return true;
   }
 
   if (choice === "6") {
+    if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_SHOP");
     await saveMessage(from, to, body, messageSid, null);
     await setConvState(from, { currentFlow: FLOW_SHOP, currentStep: null });
     await sendWhatsApp(from, to, shopMenuText(name, member));
@@ -3318,6 +3328,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   }
 
   if (choice === "7") {
+    if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_SPEAK_PERSON");
     await saveMessage(from, to, body, messageSid, null);
     await setConvState(from, { currentFlow: FLOW_SPEAK_TO_PERSON, currentStep: null });
     await sendWhatsApp(from, to, [
@@ -3331,6 +3342,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   }
 
   if (choice === "8") {
+    if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_INVITE");
     await saveMessage(from, to, body, messageSid, null);
     const referralMsg = [
       `📣 *Invite a Friend — forward this message!*`,
@@ -3359,6 +3371,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   }
 
   if (choice === "9") {
+    if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_GETTING_STARTED");
     await saveMessage(from, to, body, messageSid, null);
     await sendWhatsApp(from, to, [
       `📖 *Getting Started with eblockwatch*`,
@@ -3784,6 +3797,7 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   // GLOBAL EMERGENCY "10" — fires before distress, flow routing, and all other handlers.
   // Any message that is exactly "10" triggers the FLOW 11 emergency sequence.
   if (/^10$/.test(trimmed)) {
+    if (member?.memberId) void recordDiscSignal(member.memberId, "EMERGENCY_10");
     const activeTrip = await findActiveTrip(from);
     await saveMessage(from, to, body, messageSid, activeTrip?.id ?? null);
     if (activeTrip) {

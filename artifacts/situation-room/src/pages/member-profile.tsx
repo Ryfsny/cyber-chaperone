@@ -43,6 +43,10 @@ interface MemberFull {
   motherPhone: string | null;
   vehicleDescription: string | null;
   vehiclePhotoUrls: string | null;
+  discType: string | null;
+  discBlend: string | null;
+  discConfidence: number | null;
+  discSignals: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -75,6 +79,61 @@ interface MemberTrip {
   iceEscalationStatus: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ── DISC helpers ───────────────────────────────────────────────────────────────
+const DISC_META: Record<string, { label: string; description: string; color: string; bg: string; border: string }> = {
+  D: { label: "D — Dominant", description: "Direct · Results-focused · Acts fast", color: "text-red-300", bg: "bg-red-900/40", border: "border-red-700" },
+  I: { label: "I — Influential", description: "Enthusiastic · Social · Inspiring", color: "text-yellow-300", bg: "bg-yellow-900/40", border: "border-yellow-700" },
+  S: { label: "S — Steady", description: "Patient · Loyal · Family-first", color: "text-green-300", bg: "bg-green-900/40", border: "border-green-700" },
+  C: { label: "C — Conscientious", description: "Analytical · Systematic · Thorough", color: "text-blue-300", bg: "bg-blue-900/40", border: "border-blue-700" },
+};
+
+function DiscBadge({ type, blend }: { type: string; blend: string | null }) {
+  const meta = DISC_META[type];
+  if (!meta) return null;
+  const blendMeta = blend ? DISC_META[blend] : null;
+  return (
+    <div className={`inline-flex items-center gap-2 border ${meta.border} ${meta.bg} px-3 py-2 rounded`}>
+      <span className={`text-lg font-black ${meta.color}`}>{type}</span>
+      {blend && blendMeta && (
+        <>
+          <span className="text-muted-foreground text-xs">/</span>
+          <span className={`text-base font-bold ${blendMeta.color} opacity-70`}>{blend}</span>
+        </>
+      )}
+      <div className="ml-1">
+        <div className={`text-xs font-bold ${meta.color}`}>{meta.label}</div>
+        <div className="text-[10px] text-muted-foreground">{meta.description}</div>
+      </div>
+    </div>
+  );
+}
+
+function DiscScoreBar({ signals }: { signals: string | null }) {
+  if (!signals) return null;
+  let scores: Record<string, number>;
+  try { scores = JSON.parse(signals); } catch { return null; }
+  const total = Object.values(scores).reduce((a, b) => a + b, 0);
+  if (total === 0) return null;
+  const dims = ["D", "I", "S", "C"] as const;
+  const colors = { D: "bg-red-500", I: "bg-yellow-500", S: "bg-green-500", C: "bg-blue-500" };
+  return (
+    <div className="space-y-1.5">
+      {dims.map((d) => {
+        const pct = total > 0 ? Math.round(((scores[d] ?? 0) / total) * 100) : 0;
+        return (
+          <div key={d} className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-muted-foreground w-3">{d}</span>
+            <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
+              <div className={`h-full ${colors[d]} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+            </div>
+            <span className="text-[10px] text-muted-foreground w-7 text-right">{pct}%</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -617,6 +676,30 @@ export default function MemberProfile() {
               <InfoRow label="Source batch" value={member.sourceBatch?.toUpperCase()} mono />
               <InfoRow label="Date registered" value={fmtDatetime(member.createdAt)} />
               <InfoRow label="Import status" value={member.importStatus} />
+            </SectionCard>
+
+            {/* DISC Personality Profile */}
+            <SectionCard title="DISC Personality Profile" icon={Users}>
+              {member.discType ? (
+                <div className="col-span-full space-y-3">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <DiscBadge type={member.discType} blend={member.discBlend} />
+                    {member.discConfidence != null && (
+                      <span className="text-xs text-muted-foreground">
+                        {member.discConfidence}% confidence
+                      </span>
+                    )}
+                  </div>
+                  <DiscScoreBar signals={member.discSignals} />
+                  <p className="text-xs text-muted-foreground/60 italic">
+                    Profile is inferred automatically from WhatsApp interaction patterns — never shown to the member.
+                  </p>
+                </div>
+              ) : (
+                <div className="col-span-full text-xs text-muted-foreground/50 italic">
+                  Profiling in progress — more interactions needed to determine type.
+                </div>
+              )}
             </SectionCard>
 
             {/* Facebook */}

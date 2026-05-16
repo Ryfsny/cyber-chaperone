@@ -40,6 +40,12 @@ export const membersTable = pgTable("members", {
   vehiclePhotoUrls: text("vehicle_photo_urls"),
   passwordHash: text("password_hash"),
   memberToken: uuid("member_token").defaultRandom().unique(),
+  // ── DISC personality profile ──────────────────────────────────────────────
+  discType: text("disc_type"),          // primary: D | I | S | C
+  discBlend: text("disc_blend"),        // secondary: D | I | S | C (the blend)
+  discSignals: text("disc_signals"),    // JSON: accumulated signal scores
+  discConfidence: integer("disc_confidence"), // 0–100 — how confident we are
+  // ─────────────────────────────────────────────────────────────────────────
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
