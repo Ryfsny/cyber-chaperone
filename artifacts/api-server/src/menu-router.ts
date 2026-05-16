@@ -249,7 +249,7 @@ async function getMemberDeepLink(whatsappNumber: string): Promise<string> {
       .select({ memberToken: membersTable.memberToken })
       .from(membersTable)
       .where(or(eq(membersTable.whatsappNumber, whatsappNumber), eq(membersTable.whatsappNumber, whatsappNumber.replace(/^whatsapp:/, ""))));
-    if (row?.memberToken) return `\n\n🔗 my.eblockwatch.com/me?token=${row.memberToken}`;
+    if (row?.memberToken) return `\n\n🔗 https://cyber-chaperone-r--ryfsny.replit.app/website/me?token=${row.memberToken}`;
   } catch { /* best-effort */ }
   return "";
 }
@@ -896,19 +896,19 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
 
   if (isOperator) {
     return [
-      `Hi ${name} 👋 Welcome back, operator.`,
+      `Hi ${name} 👋 Welcome back.`,
       ``,
-      `You're logged in as the eblockwatch Situation Room operator.`,
+      `You are connected to the eblockwatch Situation Room.`,
       ``,
       `1. What is eblockwatch?`,
       `2. Membership options`,
       `3. Activate my membership`,
       `4. Update my profile`,
       `5. Travel with Cyber Chaperone 🛡️`,
-      `6. eblockshop — safer products for you`,
-      `7. Speak to a human`,
+      `6. eblockshop — safer products`,
+      `7. Speak to a person`,
       ``,
-      `🚨 URGENT? Reply 10 — we will get a human on it right away.`,
+      `🚨 URGENT? Reply 10 and a person will be on it right away.`,
       ``,
       `Reply with a number to choose.`,
     ].join("\n");
@@ -920,25 +920,23 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
   );
   const isUnknown = !member || member.memberStatus === "unverified";
   return [
-    `🛡️🏘️ eblockwatch — Cyber Chaperone`,
+    `🛡️ eblockwatch — Cyber Chaperone`,
     ``,
-    `Hi ${name}, I'm AI Arnie, Andre Snyman's digital wingman. We are here to make you safer.`,
+    `Hi ${name}. This is Arnie, André Snyman's digital assistant.`,
     ``,
     statusLine,
     ``,
-    `Please choose an option:`,
-    ``,
-    isUnknown ? `0️⃣  Join eblockwatch — Register now (free)` : null,
+    isUnknown ? `0️⃣  Join eblockwatch — register now (free)` : null,
     `1️⃣  What is eblockwatch?`,
-    `2️⃣  Membership Options`,
+    `2️⃣  Membership options`,
     `3️⃣  Activate my membership`,
     `4️⃣  Update my profile`,
-    `5️⃣  Travel with Cyber Chaperone 🛡️`,
+    `5️⃣  Travel with Cyber Chaperone`,
     `6️⃣  eblockshop`,
-    `7️⃣  Contact a human`,
+    `7️⃣  Speak to a person`,
     ``,
     `🚨 EMERGENCY? Reply 10.`,
-    isUnknown ? null : `Reply 0️⃣ to return to this menu.`,
+    isUnknown ? null : `Reply 0 to return to this menu at any time.`,
   ].filter((l) => l !== null).join("\n");
 }
 
@@ -1963,12 +1961,12 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
       await resetConvState(from);
       await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
       await sendWhatsApp(from, to, [
-        `${name}, your ICE contact has been updated.`,
+        `${name}, your emergency contact has been saved. ✅`,
         ``,
         `Name: ${iceName}`,
         `Number: ${icePhone}`,
         ``,
-        `Your ICE contact is only contacted when escalation rules are met.`,
+        `We will only contact them if we genuinely cannot reach you.`,
         ``,
         `Reply 0 for Main Menu.`,
       ].join("\n"));
@@ -1983,11 +1981,13 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
     }
     // Format not matched
     await sendWhatsApp(from, to, [
-      `${name}, please send your ICE contact in this format:`,
+      `${name}, please send your emergency contact in this format:`,
       ``,
       `ICE: Full Name, 0821234567`,
       ``,
-      `Your ICE contact is only contacted when escalation rules are met.`,
+      `Example: ICE: Jane Snyman, 0825611065`,
+      ``,
+      `We only contact them if we genuinely cannot reach you.`,
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n"));
@@ -1998,11 +1998,15 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
     // ICE contact
     await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: STEP_WAITING_FOR_ICE });
     await sendWhatsApp(from, to, [
-      `${name}, please send your ICE contact like this:`,
+      `${name}, who should we contact if we cannot reach you?`,
+      ``,
+      `Please send your emergency contact in this format:`,
       ``,
       `ICE: Full Name, 0821234567`,
       ``,
-      `Your ICE contact is only contacted when escalation rules are met.`,
+      `Example: ICE: Jane Snyman, 0825611065`,
+      ``,
+      `We only contact them if we genuinely cannot reach you.`,
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n"));
