@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import {
   Plus, Shield, Bot, Users, BookUser,
   LogOut, Megaphone, MessagesSquare, Menu, X,
-  LayoutDashboard, Map, ScrollText, Send, ShieldCheck, Clock,
+  LayoutDashboard, Map, ScrollText, Send, ShieldCheck, Clock, CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
@@ -55,6 +55,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
       sub: role === "national" ? "All 92 000 members" : scopeSub(role, scope),
       icon: BookUser,
       show: true,
+    },
+    {
+      href: "/membership",
+      label: "Membership",
+      sub: "Paystack subscribers & plans",
+      icon: CreditCard,
+      show: isNational,
     },
     {
       href: "/broadcast",

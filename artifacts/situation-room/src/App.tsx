@@ -1,4 +1,5 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
+import Membership from "@/pages/membership";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -34,6 +35,7 @@ function Router() {
         <Route path="/responders" component={Responders} />
         <Route path="/members/:id" component={MemberProfile} />
         <Route path="/members" component={Members} />
+        <Route path="/membership" component={Membership} />
         <Route path="/broadcast" component={Broadcast} />
         <Route path="/operator/broadcast" component={OperatorBroadcast} />
         <Route path="/conversations" component={Conversations} />

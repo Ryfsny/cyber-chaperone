@@ -140,6 +140,7 @@ export async function sendRawEmail(
   html: string,
   text: string,
   to?: string,
+  cc?: string,
 ): Promise<void> {
   const t = getTransporter();
   if (!t) return;
@@ -148,6 +149,7 @@ export async function sendRawEmail(
       from: `"eblockwatch Cyber Chaperone" <${GMAIL_USER}>`,
       replyTo: "info@eblockwatch.co.za",
       to: to ?? OPERATOR_EMAIL,
+      ...(cc ? { cc } : {}),
       subject,
       text,
       html,
@@ -407,6 +409,7 @@ export async function sendMemberWelcomeEmail(
     html,
     text,
     toEmail,
+    OPERATOR_EMAIL,   // CC André's Gmail so he sees every welcome email sent
   );
 }
 
