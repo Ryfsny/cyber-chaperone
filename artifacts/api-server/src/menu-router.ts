@@ -983,6 +983,9 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
     ``,
     `🚨 EMERGENCY? Reply 10.`,
     isUnknown ? null : `Reply 0 to return to this menu at any time.`,
+    ``,
+    `📺 New to eblockwatch? Watch this:`,
+    `https://www.facebook.com/share/v/1ACByM44QZ/?mibextid=wwXIfr`,
   ].filter((l) => l !== null).join("\n");
 }
 
