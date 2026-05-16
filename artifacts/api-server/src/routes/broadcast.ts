@@ -365,11 +365,18 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
     </table>
   </div>
 
-  <!-- ── CTA button ── -->
+  <!-- ── CTA: WhatsApp round icon ── -->
   <div style="padding:0 48px 40px;text-align:center;">
-    <a href="https://wa.me/${wa}?text=Hi" target="_blank" rel="noopener"
-      style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:18px 48px;border-radius:4px;font-family:Arial,sans-serif;">
-      💬 &nbsp;Open WhatsApp &amp; send Hi
+    <a href="https://wa.me/${wa}?text=Hi" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block;">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/120px-WhatsApp.svg.png"
+        alt="WhatsApp" width="80" height="80"
+        style="display:block;margin:0 auto;border-radius:50%;border:none;" />
+      <div style="margin-top:14px;color:#111827;font-size:15px;font-weight:bold;font-family:Arial,sans-serif;">
+        Activate your eblockwatch Cyber Chaperone membership
+      </div>
+      <div style="margin-top:6px;display:inline-block;background:#22c55e;color:#ffffff;font-size:13px;font-weight:bold;padding:10px 28px;border-radius:4px;font-family:Arial,sans-serif;">
+        Tap here to get started
+      </div>
     </a>
     <p style="margin:14px 0 0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">Save +27 82 561 1065 · send "Hi" · Arnie does the rest</p>
   </div>
