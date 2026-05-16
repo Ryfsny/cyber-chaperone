@@ -2046,17 +2046,23 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
     return;
   }
 
-  // Personal details step — waiting for "NAME: ... EMAIL: ..." message
+  // Personal details step — accepts plain text or structured NAME:/EMAIL: format
   if (state.currentStep === STEP_WAITING_FOR_PERSONAL_DETAILS) {
     const trimmed = body.trim();
-    const nameMatch = trimmed.match(/NAME:\s*(.+)/i);
-    const emailMatch = trimmed.match(/EMAIL:\s*(\S+)/i);
-    if (nameMatch) {
-      const fullName = nameMatch[1].trim();
+    // Extract email anywhere in the message (look for @ sign)
+    const emailRaw = trimmed.match(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i)?.[0]?.toLowerCase() ?? null;
+    // Remove email from the text to get the name portion
+    const nameSource = trimmed
+      .replace(/EMAIL:\s*\S+/i, "")
+      .replace(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i, "")
+      .replace(/NAME:\s*/i, "")
+      .trim();
+    const isLikelyName = nameSource.length >= 2 && /^[a-záàäéèêëíìîïóòôöúùûüýñçA-Z\s'-]+$/i.test(nameSource);
+    if (isLikelyName) {
+      const fullName = nameSource.replace(/\s+/g, " ");
       const parts = fullName.split(/\s+/);
       const firstName = parts[0] ?? fullName;
       const lastName = parts.slice(1).join(" ") || null;
-      const email = emailMatch ? emailMatch[1].trim().toLowerCase() : null;
       try {
         await db
           .update(membersTable)
@@ -2064,7 +2070,7 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
             firstName,
             lastName: lastName ?? undefined,
             displayName: fullName,
-            ...(email ? { email } : {}),
+            ...(emailRaw ? { email: emailRaw } : {}),
           })
           .where(eq(membersTable.whatsappNumber, from));
       } catch {
@@ -2076,7 +2082,7 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
         `${fullName}, your personal details have been saved. ✅`,
         ``,
         `Name: ${fullName}`,
-        email ? `Email: ${email}` : null,
+        emailRaw ? `Email: ${emailRaw}` : null,
         ``,
         `Reply 0 for Main Menu.`,
       ].filter((l) => l !== null).join("\n"));
@@ -2084,18 +2090,18 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
         `PROFILE UPDATE — PERSONAL DETAILS`,
         `Member: ${name}`,
         `New name: ${fullName}`,
-        email ? `New email: ${email}` : `Email: not provided`,
+        emailRaw ? `New email: ${emailRaw}` : `Email: not provided`,
       ].join("\n"));
       return;
     }
-    // Format not matched
+    // Cannot parse — ask again simply
     await sendWhatsApp(from, to, [
-      `${name}, please send your name (and email if you want to update it) like this:`,
+      `${name}, just type your full name and we will save it.`,
       ``,
-      `NAME: Kieren Snyman`,
-      `EMAIL: kierens@example.com`,
+      `Example: Kieren Snyman`,
       ``,
-      `You can leave out the EMAIL line if you only want to update your name.`,
+      `If you also want to update your email, add it on the same line:`,
+      `Kieren Snyman kierens@tiscali.co.za`,
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n"));
