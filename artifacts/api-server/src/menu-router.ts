@@ -2058,6 +2058,32 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
       .replace(/NAME:\s*/i, "")
       .trim();
     const isLikelyName = nameSource.length >= 2 && /^[a-záàäéèêëíìîïóòôöúùûüýñçA-Z\s'-]+$/i.test(nameSource);
+    // Email-only: save email without touching the name
+    if (!isLikelyName && emailRaw) {
+      try {
+        await db
+          .update(membersTable)
+          .set({ email: emailRaw })
+          .where(eq(membersTable.whatsappNumber, from));
+      } catch {
+        // best-effort
+      }
+      await resetConvState(from);
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, [
+        `${name}, your email has been saved. ✅`,
+        ``,
+        `Email: ${emailRaw}`,
+        ``,
+        `Reply 0 for Main Menu.`,
+      ].join("\n"));
+      await sendOperatorMirror(to, [
+        `PROFILE UPDATE — EMAIL ONLY`,
+        `Member: ${name}`,
+        `New email: ${emailRaw}`,
+      ].join("\n"));
+      return;
+    }
     if (isLikelyName) {
       const fullName = nameSource.replace(/\s+/g, " ");
       const parts = fullName.split(/\s+/);
