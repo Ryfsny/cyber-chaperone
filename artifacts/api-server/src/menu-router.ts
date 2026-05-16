@@ -84,6 +84,8 @@ const FLOW_MEMBERSHIP = "MEMBERSHIP";
 const STEP_WAITING_FOR_PAYMENT_CONFIRMATION = "WAITING_FOR_PAYMENT_CONFIRMATION";
 const FLOW_PROFILE_UPDATE = "PROFILE_UPDATE";
 const STEP_WAITING_FOR_ICE = "WAITING_FOR_ICE";
+const STEP_WAITING_FOR_PERSONAL_DETAILS = "WAITING_FOR_PERSONAL_DETAILS";
+const STEP_WAITING_FOR_HOME_ADDRESS = "WAITING_FOR_HOME_ADDRESS";
 const FLOW_EBLOCKWATCH_INFO = "EBLOCKWATCH_INFO";
 const FLOW_REGISTRATION = "REGISTRATION";
 const STEP_REG_FIRST_NAME = "REG_FIRST_NAME";
@@ -2044,6 +2046,92 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
     return;
   }
 
+  // Personal details step — waiting for "NAME: ... EMAIL: ..." message
+  if (state.currentStep === STEP_WAITING_FOR_PERSONAL_DETAILS) {
+    const trimmed = body.trim();
+    const nameMatch = trimmed.match(/NAME:\s*(.+)/i);
+    const emailMatch = trimmed.match(/EMAIL:\s*(\S+)/i);
+    if (nameMatch) {
+      const fullName = nameMatch[1].trim();
+      const parts = fullName.split(/\s+/);
+      const firstName = parts[0] ?? fullName;
+      const lastName = parts.slice(1).join(" ") || null;
+      const email = emailMatch ? emailMatch[1].trim().toLowerCase() : null;
+      try {
+        await db
+          .update(membersTable)
+          .set({
+            firstName,
+            lastName: lastName ?? undefined,
+            displayName: fullName,
+            ...(email ? { email } : {}),
+          })
+          .where(eq(membersTable.whatsappNumber, from));
+      } catch {
+        // best-effort
+      }
+      await resetConvState(from);
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, [
+        `${fullName}, your personal details have been saved. ✅`,
+        ``,
+        `Name: ${fullName}`,
+        email ? `Email: ${email}` : null,
+        ``,
+        `Reply 0 for Main Menu.`,
+      ].filter((l) => l !== null).join("\n"));
+      await sendOperatorMirror(to, [
+        `PROFILE UPDATE — PERSONAL DETAILS`,
+        `Member: ${name}`,
+        `New name: ${fullName}`,
+        email ? `New email: ${email}` : `Email: not provided`,
+      ].join("\n"));
+      return;
+    }
+    // Format not matched
+    await sendWhatsApp(from, to, [
+      `${name}, please send your name (and email if you want to update it) like this:`,
+      ``,
+      `NAME: Kieren Snyman`,
+      `EMAIL: kierens@example.com`,
+      ``,
+      `You can leave out the EMAIL line if you only want to update your name.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    return;
+  }
+
+  // Home address step — waiting for a plain-text address
+  if (state.currentStep === STEP_WAITING_FOR_HOME_ADDRESS) {
+    const address = body.trim().slice(0, 200);
+    try {
+      await db
+        .update(membersTable)
+        .set({ homeAddress: address })
+        .where(eq(membersTable.whatsappNumber, from));
+    } catch {
+      // best-effort
+    }
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, [
+      `${name}, your home address has been saved. ✅`,
+      ``,
+      `Address: ${address}`,
+      ``,
+      `The Situation Room will use this as your starting point when you begin a trip.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    await sendOperatorMirror(to, [
+      `PROFILE UPDATE — HOME ADDRESS`,
+      `Member: ${name}`,
+      `New address: ${address}`,
+    ].join("\n"));
+    return;
+  }
+
   // ICE contact step — waiting for "ICE: Name, Number" message
   if (state.currentStep === STEP_WAITING_FOR_ICE) {
     const icePattern = /^ICE:\s*(.+?),\s*(\+?[\d\s]+)$/i;
@@ -2133,19 +2221,50 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
     return;
   }
 
-  // Options 1, 2, 3, 5, 6 — not yet built, direct to human
-  const optionLabels: Record<string, string> = {
-    "1": "personal details",
-    "2": "home location",
+  if (choice === "1") {
+    // Personal details
+    await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: STEP_WAITING_FOR_PERSONAL_DETAILS });
+    await sendWhatsApp(from, to, [
+      `${name}, let's update your personal details.`,
+      ``,
+      `Please send your name (and email if you want to update it) like this:`,
+      ``,
+      `NAME: Kieren Snyman`,
+      `EMAIL: kierens@example.com`,
+      ``,
+      `You can leave out the EMAIL line if you only want to update your name.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (choice === "2") {
+    // Home location
+    await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: STEP_WAITING_FOR_HOME_ADDRESS });
+    await sendWhatsApp(from, to, [
+      `${name}, what is your home address?`,
+      ``,
+      `Please send your full home address, for example:`,
+      ``,
+      `12 Oak Street, Bryanston, Sandton, 2021`,
+      ``,
+      `The Situation Room will use this as your starting point when you begin a trip.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    return;
+  }
+
+  // Options 3, 5, 6 — connect to a human
+  const humanHandoffOptions: Record<string, string> = {
     "3": "vehicle details",
     "5": "family members",
     "6": "local network / conduit details",
   };
-  if (optionLabels[choice]) {
+  if (humanHandoffOptions[choice]) {
     await sendWhatsApp(from, to, [
-      `${name}, updating your ${optionLabels[choice]} directly is coming soon.`,
-      ``,
-      `For now, reply 7 from the Main Menu to request a human who can assist you.`,
+      `${name}, to update your ${humanHandoffOptions[choice]}, reply 7 from the Main Menu and a person will assist you directly.`,
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n"));
