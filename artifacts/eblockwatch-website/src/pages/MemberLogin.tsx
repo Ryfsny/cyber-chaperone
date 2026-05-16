@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { WA_LINK_HI } from "../wa-config";
 import { useLocation } from "wouter";
 
 const LOGO = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif";
@@ -379,7 +380,7 @@ export default function MemberLogin() {
               Can't get in? Reach us directly:
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <a href="https://wa.me/27825611065?text=Hi" target="_blank" rel="noopener noreferrer"
+              <a href={WA_LINK_HI} target="_blank" rel="noopener noreferrer"
                 style={{ display: "flex", alignItems: "center", gap: "10px", background: "#25d366", color: "#fff", textDecoration: "none", borderRadius: "10px", padding: "12px 18px", fontSize: "14px", fontWeight: 700, fontFamily: "Montserrat, sans-serif" }}>
                 <WhatsAppIcon />
                 WhatsApp Andre

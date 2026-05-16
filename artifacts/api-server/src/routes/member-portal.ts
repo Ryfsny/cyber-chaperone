@@ -46,7 +46,7 @@ function requireMemberAuth(req: Request, res: Response, next: NextFunction): voi
 async function sendOtpWhatsApp(phone: string, code: string): Promise<void> {
   const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
   await client.messages.create({
-    from: "whatsapp:+27825611065",
+    from: process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+27825611065",
     to: `whatsapp:${phone}`,
     body: `Your eblockwatch login code is: *${code}*\n\nThis code expires in 10 minutes. Do not share it with anyone.\n\n— eblockwatch`,
   });

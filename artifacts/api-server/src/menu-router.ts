@@ -342,6 +342,10 @@ async function sendOperatorMirror(twilioNumber: string, body: string, emailCateg
 // to +27825611065 regardless of environment configuration.
 const FOUNDER_WHATSAPP = "whatsapp:+27825611065";
 
+// Public-facing WhatsApp number members message — switches to the dedicated
+// Twilio business number the moment TWILIO_WHATSAPP_NUMBER env var is updated.
+const BUSINESS_WA_NUM = (process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+27825611065").replace("whatsapp:+", "");
+
 async function sendEmergencyAlert(
   twilioNumber: string,
   memberName: string,
@@ -2694,7 +2698,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
       `✅ 250 000 members looking out for each other`,
       ``,
       `Join me — just send "Hi" to:`,
-      `👉 wa.me/27825611065`,
+      `👉 wa.me/${BUSINESS_WA_NUM}`,
       ``,
       `Or register at:`,
       `👉 https://cyber-chaperone-r--ryfsny.replit.app/website/`,

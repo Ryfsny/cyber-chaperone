@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import AiArnieChat from "../components/AiArnieChat";
+import { WA_LINK, WA_LINK_HI, WA_LINK_REG } from "../wa-config";
 
 const LOGO = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif";
 const HERO_IMG = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/674fef222ea8a7e01faa8d21_E-Block%20Watch%20hero.avif";
@@ -183,7 +184,7 @@ export default function HomePage() {
                 Register for Free
               </button>
               <a
-                href="https://wa.me/27825611065"
+                href={WA_LINK}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="ebw-btn-green"
@@ -262,7 +263,7 @@ export default function HomePage() {
               Have a safety question? AI Arnie is available 24/7 to guide you through Cyber Chaperone, explain how trips work, and give you peace of mind before you travel.
             </p>
             <a
-              href="https://wa.me/27825611065"
+              href={WA_LINK_HI}
               target="_blank"
               rel="noopener noreferrer"
               className="ebw-btn-green"
@@ -431,7 +432,7 @@ export default function HomePage() {
               </p>
               <p style={{ color: "#4b5563", marginBottom: "24px", fontSize: "15px" }}>Want to get started right away?</p>
               <a
-                href="https://wa.me/27825611065?text=Hi%20I%20just%20registered%20for%20Cyber%20Chaperone"
+                href={WA_LINK_REG}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="ebw-btn-green"

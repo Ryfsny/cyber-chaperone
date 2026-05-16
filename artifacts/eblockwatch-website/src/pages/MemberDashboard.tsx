@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { WA_LINK_HI } from "../wa-config";
 import { useLocation } from "wouter";
 
 const LOGO = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif";
@@ -601,7 +602,7 @@ export default function MemberDashboard() {
         <div style={{ background: "#fff", borderRadius: "14px", border: "1px solid #e5e7eb", padding: "20px 24px" }}>
           <h2 style={{ margin: "0 0 16px", fontSize: "15px", fontWeight: 700, color: "#111827", fontFamily: "Montserrat, sans-serif" }}>Quick Actions</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            <a href="https://wa.me/27825611065?text=Hi" target="_blank" rel="noopener noreferrer"
+            <a href={WA_LINK_HI} target="_blank" rel="noopener noreferrer"
               style={{ display: "flex", alignItems: "center", gap: "12px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "10px", padding: "14px 16px", textDecoration: "none", color: "#166534" }}>
               <WhatsAppIcon />
               <div>

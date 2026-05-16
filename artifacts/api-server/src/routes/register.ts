@@ -5,7 +5,7 @@ import twilio from "twilio";
 
 const router: IRouter = Router();
 
-const SYSTEM_WA = "whatsapp:+27825611065";
+const SYSTEM_WA = process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+27825611065";
 
 function toWaNumber(mobile: string): string | null {
   const m = String(mobile).replace(/\s+/g, "").replace(/[^0-9+]/g, "");

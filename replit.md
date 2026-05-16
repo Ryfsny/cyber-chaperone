@@ -97,6 +97,24 @@ This is the single source of truth. Everything happens here.
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 
+## WhatsApp Number Cutover (when Twilio issues a dedicated business number)
+
+Two permanent roles — never confuse them:
+
+| Role | Env var | Current value | Changes? |
+|---|---|---|---|
+| **Business number** (members message this, Arnie replies from this) | `TWILIO_WHATSAPP_NUMBER` | `whatsapp:+27825611065` | YES — update when Twilio number arrives |
+| **Founder's personal phone** (operator mirrors, ICE CC, WingWoman CC, emergencies) | hardcoded `FOUNDER_WHATSAPP` | `whatsapp:+27825611065` | NO — always André's personal phone |
+
+**When the Twilio number arrives, do exactly this:**
+1. Update `TWILIO_WHATSAPP_NUMBER` secret → `whatsapp:+{new number}` (e.g. `whatsapp:+27xxxxxxxxx`)
+2. Update `VITE_WHATSAPP_NUMBER` env var on the eblockwatch-website → `{new number digits only}` (e.g. `27xxxxxxxxx`)
+3. Restart both workflows
+4. Update Twilio webhook URL to: `https://cyber-chaperone-r--ryfsny.replit.app/api/webhook/twilio`
+5. Done — all emails, WhatsApp links, OTPs, and menus switch automatically
+
+**What does NOT need to change:** `FOUNDER_WHATSAPP` (André's personal mirrors), the webhook route itself, Paystack, Facebook, or any other config.
+
 ## Secrets Required
 
 - `TWILIO_ACCOUNT_SID` — Twilio Account SID

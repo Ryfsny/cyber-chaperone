@@ -209,7 +209,7 @@ router.post("/webhook/facebook", async (req: Request, res: Response): Promise<vo
             ``,
             `━━━━━━━━━━━━━━━━━━━━`,
             `📱 *Get the full experience on WhatsApp:*`,
-            `Just send "Hi" to wa.me/27825611065`,
+            `Just send "Hi" to wa.me/${(process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+27825611065").replace("whatsapp:+", "")}`,
             `Arnie (André's digital assistant) will guide you through everything — step by step.`,
             `━━━━━━━━━━━━━━━━━━━━`,
             ``,
@@ -257,7 +257,7 @@ router.post("/webhook/facebook", async (req: Request, res: Response): Promise<vo
           ``,
           `Live location tracking and ICE escalation require WhatsApp — they do not work on Messenger.`,
           ``,
-          `👉 Send "Hi" to: wa.me/27825611065`,
+          `👉 Send "Hi" to: wa.me/${(process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+27825611065").replace("whatsapp:+", "")}`,
           `Arnie will pick up exactly where we left off and activate your trip monitoring.`,
         ].join("\n"));
       }

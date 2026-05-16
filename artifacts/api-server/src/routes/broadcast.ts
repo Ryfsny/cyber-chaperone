@@ -8,6 +8,8 @@ import { isNationalAdmin } from "../middleware/require-auth.js";
 
 const router: IRouter = Router();
 
+const BUSINESS_WA_NUM = (process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+27825611065").replace("whatsapp:+", "");
+
 function nationalOnly(req: Request, res: Response): boolean {
   if (!isNationalAdmin(req)) {
     res.status(403).json({ error: "Forbidden. National admin access required." });
@@ -183,7 +185,7 @@ function buildEmailHtml(firstName: string, subject: string, body: string): strin
   <div style="background:#f0fdf4;border:2px solid #22c55e;margin:0 48px 32px;padding:24px 32px;text-align:center;border-radius:4px;">
     <p style="margin:0 0 4px;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:#16a34a;font-family:Arial,sans-serif;">JOIN THE WHATSAPP SAFETY NETWORK</p>
     <p style="margin:0 0 16px;font-size:14px;color:#374151;font-family:Arial,sans-serif;">Live trip monitoring · ICE escalation · 250 000 members watching over each other</p>
-    <a href="https://wa.me/27825611065?text=Hi" target="_blank" rel="noopener"
+    <a href="https://wa.me/${BUSINESS_WA_NUM}?text=Hi" target="_blank" rel="noopener"
       style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-size:13px;font-weight:bold;padding:14px 32px;border-radius:4px;letter-spacing:1px;font-family:Arial,sans-serif;">
       💬 &nbsp;ACTIVATE ON WHATSAPP &nbsp;→
     </a>
@@ -223,7 +225,7 @@ function buildEmailHtml(firstName: string, subject: string, body: string): strin
       style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Website</a>
     <a href="https://cyber-chaperone-r--ryfsny.replit.app/website/" target="_blank" rel="noopener"
       style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Member Portal</a>
-    <a href="https://wa.me/27825611065" target="_blank" rel="noopener"
+    <a href="https://wa.me/${BUSINESS_WA_NUM}" target="_blank" rel="noopener"
       style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">WhatsApp</a>
   </div>
 
@@ -794,7 +796,7 @@ function buildMigrationEmailHtml(firstName: string, portalUrl: string): string {
     <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0;">
 
     <p style="margin:0 0 10px;font-size:14px;line-height:1.7;color:#374151;font-family:Arial,sans-serif;">
-      <strong>Already on WhatsApp?</strong> You can also just send us a message — type <strong>Hi</strong> to <a href="https://wa.me/27825611065" style="color:#16a34a;text-decoration:none;">+27 82 561 1065</a> and the Cyber Chaperone menu will guide you straight in.
+      <strong>Already on WhatsApp?</strong> You can also just send us a message — type <strong>Hi</strong> to <a href="https://wa.me/${BUSINESS_WA_NUM}" style="color:#16a34a;text-decoration:none;">+${BUSINESS_WA_NUM}</a> and the Cyber Chaperone menu will guide you straight in.
     </p>
 
   </div>
@@ -832,7 +834,7 @@ function buildMigrationEmailHtml(firstName: string, portalUrl: string): string {
       style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Website</a>
     <a href="${portalUrl}" target="_blank" rel="noopener"
       style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">Member Portal</a>
-    <a href="https://wa.me/27825611065" target="_blank" rel="noopener"
+    <a href="https://wa.me/${BUSINESS_WA_NUM}" target="_blank" rel="noopener"
       style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:2px;padding:10px 18px;margin:4px;font-family:Arial,sans-serif;text-transform:uppercase;border-radius:4px;">WhatsApp</a>
   </div>
 

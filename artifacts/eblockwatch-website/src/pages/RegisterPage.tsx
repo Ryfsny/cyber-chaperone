@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { WA_LINK_REG } from "../wa-config";
 
 const LOGO = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif";
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
@@ -181,7 +182,7 @@ export default function RegisterPage() {
               </p>
               <p style={{ color: "#4b5563", marginBottom: "24px", fontSize: "15px" }}>Want to get started right away?</p>
               <a
-                href="https://wa.me/27825611065?text=Hi%20I%20just%20registered%20for%20Cyber%20Chaperone"
+                href={WA_LINK_REG}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="ebw-btn-green"
