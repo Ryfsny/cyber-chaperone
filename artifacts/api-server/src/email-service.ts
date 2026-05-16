@@ -220,7 +220,7 @@ export async function sendMemberWelcomeEmail(
   whatsappNumber: string,
 ): Promise<void> {
   const display = firstName || "there";
-  const waNum = (process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+27825611065").replace("whatsapp:+", "");
+  const waNum = process.env["MEMBER_WA_NUMBER"] ?? "27825611065";
   const waLink = `https://wa.me/${waNum}`;
   const html = `<!DOCTYPE html>
 <html lang="en">

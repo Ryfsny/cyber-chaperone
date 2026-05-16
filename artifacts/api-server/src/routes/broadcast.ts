@@ -8,7 +8,7 @@ import { isNationalAdmin } from "../middleware/require-auth.js";
 
 const router: IRouter = Router();
 
-const BUSINESS_WA_NUM = (process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+27825611065").replace("whatsapp:+", "");
+const BUSINESS_WA_NUM = process.env["MEMBER_WA_NUMBER"] ?? "27825611065";
 
 function nationalOnly(req: Request, res: Response): boolean {
   if (!isNationalAdmin(req)) {
