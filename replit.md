@@ -37,12 +37,6 @@ This is the single source of truth. Everything happens here.
 - **Twilio webhook**: `POST https://cyber-chaperone-r--ryfsny.replit.app/api/webhook/twilio`
 - **Facebook webhook**: `POST https://cyber-chaperone-r--ryfsny.replit.app/api/webhook/facebook`
 
-## ⚠️ PUBLISH BLOCKER (as of 2026-05-11 night)
-
-**Production database is frozen.** The Replit schema migration cannot run against it, so every publish attempt silently cancels before a build starts. All code is ready and waiting.
-
-**Fix:** Replit support must unfreeze the production DB for repl `861f57c8-8edb-426d-bcdf-9ec68d1de62b`. Support email drafted — see bottom of this file. Once unfrozen: click Publish → approve schema screen → done in 2 minutes.
-
 ## Route Security Map
 
 ### Public (no auth)
@@ -197,36 +191,5 @@ All 8 menu router scenarios and full end-to-end WhatsApp → Situation Room flow
 
 - `lib/api-zod/src/index.ts` only exports from `./generated/api` — orval config has `indexFiles: false`
 - Secrets are never logged — pino serializers strip sensitive headers
-- Production schema managed by Replit Publish flow — diffs dev vs prod and applies automatically (pending DB unfreeze)
+- Production schema managed by Replit Publish flow — diffs dev vs prod and applies automatically
 - Pre-existing typecheck errors in `voice-service.ts`, `register.ts`, `broadcast.ts` — do not fix these
-
----
-
-## Support Email Draft (send to get publish unblocked)
-
-**To:** support@replit.com
-**Subject:** Production database frozen — blocking publish for repl 861f57c8-8edb-426d-bcdf-9ec68d1de62b
-
-Hi Replit Support,
-
-My production database is frozen and blocking every publish attempt. The publish cancels silently before a build even starts — no new build is created in the build history.
-
-**Account:** ryfsny
-**Repl ID:** 861f57c8-8edb-426d-bcdf-9ec68d1de62b
-**Production URL:** https://cyber-chaperone-r--ryfsny.replit.app
-**Project:** Cyber Chaperone Main Project
-
-**What happens:** I click Publish, a schema changes screen appears (new columns being added), I approve it — but no build is ever triggered and the publish silently fails every time.
-
-**Error from agent tool when querying production DB:**
-"The production database for repl 861f57c8-8edb-426d-bcdf-9ec68d1de62b is frozen. Unfreeze it first."
-
-**New columns waiting to be applied to production:**
-- `messages.direction` (text, default 'inbound')
-- `members.paystack_customer_id`, `paystack_subscription_code`, `paystack_status`, `paystack_plan_code`, `paystack_paid_at`
-
-Please unfreeze the production database so the schema migration can run during the next publish.
-
-Thank you,
-Andre Snyman
-eblockwatch / Cyber Chaperone
