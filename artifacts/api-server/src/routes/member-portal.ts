@@ -154,17 +154,28 @@ router.post("/member-portal/login", async (req, res): Promise<void> => {
     .from(membersTable)
     .where(or(eq(membersTable.whatsappNumber, `whatsapp:${phone}`), eq(membersTable.whatsappNumber, phone)));
 
-  if (!member || !member.passwordHash) {
+  if (!member) {
     // Generic delay to prevent timing oracle
     await bcrypt.hash("dummy_delay", BCRYPT_ROUNDS);
     res.status(401).json({ error: "Invalid phone number or password." });
     return;
   }
 
-  const valid = await bcrypt.compare(password, member.passwordHash);
-  if (!valid) {
-    res.status(401).json({ error: "Invalid phone number or password." });
-    return;
+  // Operator shortcut — OPERATOR_PASSWORD works for any member with role=operator
+  const operatorPassword = process.env.OPERATOR_PASSWORD ?? "";
+  const isOperatorLogin = member.role === "operator" && operatorPassword && password === operatorPassword;
+
+  if (!isOperatorLogin) {
+    if (!member.passwordHash) {
+      await bcrypt.hash("dummy_delay", BCRYPT_ROUNDS);
+      res.status(401).json({ error: "Invalid phone number or password." });
+      return;
+    }
+    const valid = await bcrypt.compare(password, member.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: "Invalid phone number or password." });
+      return;
+    }
   }
 
   req.session.memberId = member.id;
