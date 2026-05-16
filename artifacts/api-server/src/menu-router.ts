@@ -4,7 +4,7 @@ import twilio from "twilio";
 import { enrichTripWithRoute, calculateRouteInfo, reverseGeocodeCoords, reverseGeocodeStreetAddress, minutesToSastTime, type RouteInfo } from "./route-service.js";
 import { calculateGoogleMapsRoute } from "./google-maps-service.js";
 import { withMenu } from "./message-utils.js";
-import { sendOperatorEmail, type EmailCategory } from "./email-service.js";
+import { sendOperatorEmail, sendMemberWelcomeEmail, type EmailCategory } from "./email-service.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -2465,6 +2465,11 @@ async function handleRegistrationStep(ctx: MenuContext, state: ConvState): Promi
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n"));
+
+    // Send branded welcome email to the member (non-blocking, best-effort)
+    if (email) {
+      void sendMemberWelcomeEmail(email, firstName, from);
+    }
 
     await sendOperatorMirror(to, [
       `🆕 NEW WHATSAPP REGISTRATION`,
