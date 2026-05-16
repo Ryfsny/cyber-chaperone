@@ -385,14 +385,14 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
   <div style="background:#f9fafb;padding:28px 48px;border-top:1px solid #e5e7eb;">
     <table cellpadding="0" cellspacing="0" border="0">
       <tr>
-        <td style="width:48px;vertical-align:top;">
-          <div style="width:42px;height:42px;border-radius:50%;background:#111827;text-align:center;line-height:42px;">
-            <span style="color:#22c55e;font-weight:bold;font-size:17px;font-family:Arial,sans-serif;">A</span>
-          </div>
+        <td style="width:60px;vertical-align:top;">
+          <img src="https://cyber-chaperone-r--ryfsny.replit.app/website/andre-snyman.png"
+            alt="Andre Snyman" width="52" height="52"
+            style="display:block;width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid #22c55e;" />
         </td>
-        <td style="vertical-align:top;padding-left:14px;">
+        <td style="vertical-align:top;padding-left:14px;padding-top:4px;">
           <div style="font-weight:bold;color:#111827;font-size:14px;font-family:Arial,sans-serif;">Andre Snyman</div>
-          <div style="color:#6b7280;font-size:12px;font-family:Arial,sans-serif;margin-top:2px;">Founder · eblockwatch · Est. 2001</div>
+          <div style="color:#6b7280;font-size:12px;font-family:Arial,sans-serif;margin-top:2px;">Founder · eblockwatch Cyber Chaperone · Est. 2001</div>
           <div style="color:#9ca3af;font-size:11px;font-family:Arial,sans-serif;margin-top:2px;">+27 82 561 1065 · <a href="mailto:info@eblockwatch.co.za" style="color:#16a34a;text-decoration:none;">info@eblockwatch.co.za</a></div>
         </td>
       </tr>
