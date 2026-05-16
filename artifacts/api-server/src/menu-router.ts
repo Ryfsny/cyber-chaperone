@@ -126,6 +126,7 @@ const STEP_REG_ICE = "REG_ICE";
 const FLOW_SAFETY_PROFILE = "SAFETY_PROFILE";
 const FLOW_SHOP = "SHOP";
 const FLOW_PROFILE_CONFIRM = "PROFILE_CONFIRM";
+const FLOW_SPEAK_TO_PERSON = "SPEAK_TO_PERSON";
 const STEP_SAFETY_MOTHER_NAME = "SAFETY_MOTHER_NAME";
 const STEP_SAFETY_MOTHER_PHONE = "SAFETY_MOTHER_PHONE";
 const STEP_SAFETY_VEHICLE_PHOTO = "SAFETY_VEHICLE_PHOTO";
@@ -3259,25 +3260,19 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
 
   if (choice === "1") {
     await saveMessage(from, to, body, messageSid, null);
-    await setConvState(from, { currentFlow: FLOW_EBLOCKWATCH_INFO, currentStep: null });
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     await sendWhatsApp(from, to, [
       `${name}, eblockwatch is a trusted human support network built around real people, real relationships, and looking after people properly.`,
       ``,
-      `For more than 25 years, Andre Snyman has built trusted relationships with members across South Africa. That is what gives eblockwatch its strength.`,
+      `For more than 25 years, André Snyman has built trusted relationships with members across South Africa. That is what gives eblockwatch its strength.`,
       ``,
       `When something goes wrong, eblockwatch uses those relationships and networks to connect the right people, in the right place, at the right time, with the right solutions to your predicament.`,
       ``,
       `This is not just a page or a group. It is a real network.`,
       ``,
       `When you register, the relationship starts, and each member makes the spine of eblockwatch stronger.`,
-      ``,
-      `1. Membership Options`,
-      `2. Update my profile`,
-      `3. Travel with Cyber Chaperone`,
-      `4. eblockshop — safer products to make you safer`,
-      ``,
-      `Reply 0 for Main Menu.`,
     ].join("\n"));
+    await sendWhatsApp(from, to, mainMenuText(name, member));
     return true;
   }
 
@@ -3309,22 +3304,13 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
 
   if (choice === "7") {
     await saveMessage(from, to, body, messageSid, null);
+    await setConvState(from, { currentFlow: FLOW_SPEAK_TO_PERSON, currentStep: null });
     await sendWhatsApp(from, to, [
-      `${name}, André Snyman will get back to you. 👋`,
+      `${name}, I'll get André's attention right away. 👋`,
       ``,
-      `💬 WhatsApp him directly: wa.me/27825611065`,
-      `📱 Or message: 0825611065`,
+      `Please type your message or question below and I'll pass it on directly. You can also share a voice note — I'll forward it.`,
       ``,
-      `⚠️ André manages 250 000 members — please WhatsApp rather than call unless it's truly urgent.`,
-      `📞 If it IS urgent, call 0825611065 directly or reply *10* now.`,
-      ``,
-      `Reply 0️⃣ for Main Menu.`,
-    ].join("\n"));
-    await sendContactRequestToFounder(to, name, from);
-    await sendOperatorMirror(to, [
-      `📬 CONTACT REQUEST — ${name}`,
-      `Known member: ${member?.isKnown ? "YES" : "NO"}`,
-      `Next action: Member requests human contact. André notified directly.`,
+      `Reply 0 to cancel and go back to the Main Menu.`,
     ].join("\n"));
     return true;
   }
@@ -3395,9 +3381,9 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
       `• Reply Hi → Start over`,
       ``,
       `You're in good hands. André and 250 000 members have your back. 🛡️`,
-      ``,
-      `Reply 0 for Main Menu.`,
     ].join("\n"));
+    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     return true;
   }
 
@@ -3414,6 +3400,41 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   }
 
   return false;
+}
+
+// ── Speak to a person — collect query then escalate ───────────────────────────
+
+async function handleSpeakToPersonFlow(ctx: MenuContext): Promise<void> {
+  const { from, to, body, member, messageSid } = ctx;
+  const name = member?.displayName ?? from;
+  const trimmed = body.trim();
+
+  await saveMessage(from, to, body, messageSid, null);
+
+  if (trimmed === "0") {
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, mainMenuText(name, member));
+    return;
+  }
+
+  // Any message is treated as their query — escalate to André
+  await resetConvState(from);
+  await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+  await sendWhatsApp(from, to, [
+    `✅ Got it, ${name}. I'm passing your message to André now.`,
+    ``,
+    `He'll come back to you directly on WhatsApp as soon as he can.`,
+    ``,
+    `⚠️ If this is urgent, reply *10* and it will be escalated immediately.`,
+  ].join("\n"));
+  await sendContactRequestToFounder(to, name, from);
+  await sendOperatorMirror(to, [
+    `📬 SPEAK TO A PERSON — ${name}`,
+    `Known member: ${member?.isKnown ? "YES" : "NO"}`,
+    `Message: ${trimmed}`,
+    `Next action: André to reply directly on WhatsApp.`,
+  ].join("\n"));
 }
 
 // ── eblockshop ────────────────────────────────────────────────────────────────
@@ -3438,30 +3459,42 @@ const SHOP_PRODUCTS = [
 function shopMenuText(name: string, member: MemberInfo | null): string {
   const tier = member?.membershipTier ?? null;
   const isPaying = tier === "individual" || tier === "family";
+  const isFamily = tier === "family";
   const lines = [
-    `🛒 *eblockshop* — safer living, delivered to you`,
+    `🛒 *eblockshop* — Safer Living, Delivered`,
     ``,
-    `Hi ${name}! Here's what's available:`,
+    `${name}, everything in eblockshop is designed to make you and your family safer. Every purchase supports the eblockwatch network.`,
     ``,
-    `──────────────────`,
-    `1️⃣  ${SHOP_PRODUCTS[0].label}`,
-    `   ${SHOP_PRODUCTS[0].desc}`,
+    `━━━━━━━━━━━━━━━━━━━━`,
+    `1️⃣  🛡️ *Cyber Chaperone Individual* — R150/month`,
+    `   Live trip monitoring · ICE escalation · Priority response`,
+    `   Someone always knows you're okay.`,
+    isPaying && !isFamily ? `   ✅ You're already on this plan.` : ``,
     ``,
-    `2️⃣  ${SHOP_PRODUCTS[1].label}`,
-    `   ${SHOP_PRODUCTS[1].desc}`,
+    `2️⃣  👨‍👩‍👧 *Cyber Chaperone Family* — R250/month`,
+    `   Your whole household covered — up to 5 members.`,
+    `   Separate ICE contacts per person. Full suite.`,
+    isFamily ? `   ✅ You're already on this plan.` : ``,
     ``,
-    `3️⃣  📡 Bliksim Location Unit — coming soon`,
-    `   Compact GPS tracker for your vehicle or bag.`,
-    isPaying ? `   ✅ Unlocked for paying members — reply 3 to register interest.` : `   🔒 Available to Individual & Family members.`,
+    `3️⃣  📡 *Bliksim Location Unit* — R799 once-off`,
+    `   Compact GPS tracker for your vehicle, bag or loved one.`,
+    `   Silent panic button + live location feed to the Situation Room.`,
+    isPaying ? `   ✅ Unlocked for you — reply 3 to order.` : `   🔒 Available to Individual & Family members.`,
     ``,
-    `──────────────────`,
-    `4️⃣  💬 Need help? Speak to our team`,
-    `   Kriszti will assist with admin, sales & purchases.`,
+    `4️⃣  🎽 *eblockwatch Branded Gear* — from R199`,
+    `   Cap, hoodie, reflective vest — wear the network.`,
+    `   Every item sold funds community safety patrols.`,
     ``,
-    `──────────────────`,
-    `Reply 1, 2, 3, or 4.`,
-    `Reply 0 for Main Menu.`,
-  ];
+    `5️⃣  🧰 *Safety Starter Kit* — R349`,
+    `   Reflective triangle · First-aid basics · Whistle · Window breaker`,
+    `   Built for South African roads.`,
+    ``,
+    `━━━━━━━━━━━━━━━━━━━━`,
+    `6️⃣  💬 *Questions? Talk to our team*`,
+    `   Kriszti handles all orders, admin & purchases.`,
+    ``,
+    `Reply 1–6 to choose, or 0 for Main Menu.`,
+  ].filter((l) => l !== "");
   return lines.join("\n");
 }
 
@@ -3609,17 +3642,65 @@ async function handleShopFlow(ctx: MenuContext): Promise<void> {
   }
 
   if (choice === "4") {
+    // Branded gear — notify operator
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, [
+      `🎽 *eblockwatch Branded Gear*`,
+      ``,
+      `Great choice, ${name}! Our team will send you the current gear catalogue and pricing.`,
+      ``,
+      `Kriszti will be in touch shortly — she'll sort out sizes, colours and delivery.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    await sendToWingWoman(to, member, from, "Branded gear order interest").catch(() => undefined);
+    await sendOperatorMirror(to, [
+      `🛒 SHOP — Branded Gear interest`,
+      `Member: ${name} (${from})`,
+      `Action: Send gear catalogue + arrange order.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (choice === "5") {
+    // Safety Starter Kit — notify operator
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, [
+      `🧰 *Safety Starter Kit — R349*`,
+      ``,
+      `Good thinking, ${name}! The Safety Starter Kit includes:`,
+      ``,
+      `✅ Reflective triangle`,
+      `✅ Basic first-aid essentials`,
+      `✅ Emergency whistle`,
+      `✅ Window breaker / seatbelt cutter`,
+      ``,
+      `Kriszti will contact you to confirm your delivery address and arrange payment.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    await sendToWingWoman(to, member, from, "Safety Starter Kit order — R349").catch(() => undefined);
+    await sendOperatorMirror(to, [
+      `🛒 SHOP — Safety Starter Kit order`,
+      `Member: ${name} (${from})`,
+      `Price: R349`,
+      `Action: Confirm delivery address and arrange payment.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (choice === "6") {
+    // Talk to the team
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     await sendWhatsApp(from, to, [
       `💬 Connecting you to our team, ${name}!`,
       ``,
-      `Kriszti — André's personal assistant — will be in touch shortly to help you with your query.`,
-      ``,
-      `She handles admin, sales, and product purchases.`,
+      `Kriszti — André's personal assistant — will be in touch shortly to help you.`,
+      `She handles all orders, admin, and purchases.`,
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n"));
-    await sendToWingWoman(to, member, from, "Admin / sales / purchase assistance (eblockshop)").catch(() => undefined);
+    await sendToWingWoman(to, member, from, "General shop enquiry").catch(() => undefined);
     return;
   }
 
@@ -3802,6 +3883,11 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
 
   if (state.currentFlow === FLOW_EBLOCKWATCH_INFO) {
     await handleEblockwatchInfoChoice(ctx);
+    return { handled: true };
+  }
+
+  if (state.currentFlow === FLOW_SPEAK_TO_PERSON) {
+    await handleSpeakToPersonFlow(ctx);
     return { handled: true };
   }
 
