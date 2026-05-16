@@ -159,6 +159,54 @@ export async function sendRawEmail(
   }
 }
 
+// ── Communication ledger — log every message to Gmail (threaded per member) ──
+/**
+ * Logs a single inbound or outbound message to André's Gmail inbox.
+ * Subject is stable per phone number so Gmail auto-threads all messages
+ * with a given member into one conversation.
+ * Fire-and-forget — never throws, never blocks the webhook pipeline.
+ */
+export async function logMessageToGmail(
+  memberPhone: string,
+  memberName: string,
+  direction: "inbound" | "outbound",
+  body: string,
+  platform: "whatsapp" | "facebook" | "sms" = "whatsapp",
+): Promise<void> {
+  const t = getTransporter();
+  if (!t) return;
+  const cleanPhone = memberPhone.replace(/^whatsapp:|^sms:|^fb:/, "");
+  const stamp = new Date().toLocaleString("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    dateStyle: "short",
+    timeStyle: "medium",
+  });
+  const arrow   = direction === "inbound"  ? "⬅️" : "➡️";
+  const bgColor = direction === "inbound"  ? "#f0fdf4" : "#eff6ff";
+  const label   = direction === "inbound"  ? "FROM MEMBER" : "TO MEMBER";
+  const platTag = platform.toUpperCase();
+  try {
+    await t.sendMail({
+      from:    `"eblockwatch Comms" <${GMAIL_USER}>`,
+      to:      OPERATOR_EMAIL,
+      subject: `[eblockwatch] ${cleanPhone}`,
+      text:    `${arrow} ${label} [${platTag}] ${stamp}\n${memberName || cleanPhone}\n\n${body}`,
+      html: [
+        `<div style="font-family:sans-serif;max-width:560px">`,
+        `<p style="margin:0 0 4px 0">`,
+        `  <strong>${arrow} ${label}</strong>`,
+        `  &nbsp;<span style="color:#888;font-size:12px">${platTag} · ${stamp}</span>`,
+        `</p>`,
+        `<p style="margin:0 0 8px 0;color:#555;font-size:12px">${escapeHtml(memberName || cleanPhone)} · ${escapeHtml(cleanPhone)}</p>`,
+        `<div style="background:${bgColor};border-left:3px solid #22c55e;padding:10px 14px;`,
+        `border-radius:4px;font-size:14px;white-space:pre-wrap;word-break:break-word">`,
+        escapeHtml(body),
+        `</div></div>`,
+      ].join(""),
+    });
+  } catch { /* best-effort — never crash the server */ }
+}
+
 // ── Member welcome / registration email ──────────────────────────────────────
 /**
  * Sent to a new member's email address immediately after they complete

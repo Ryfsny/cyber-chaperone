@@ -4,6 +4,7 @@ import { db, messagesTable, membersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { sendFacebookMessage, getFacebookUserName } from "../facebook-service.js";
 import { handleMenuRouter, type MenuContext, type MemberInfo } from "../menu-router.js";
+import { logMessageToGmail } from "../email-service.js";
 
 const router: Router = Router();
 
@@ -163,6 +164,15 @@ router.post("/webhook/facebook", async (req: Request, res: Response): Promise<vo
       } catch (err) {
         req.log.error({ err }, "Facebook: failed to store inbound message");
       }
+
+      // Gmail communication ledger — log every inbound Facebook message
+      void logMessageToGmail(
+        fromNumber,
+        senderName || `fb:${psid}`,
+        "inbound",
+        text || "[non-text message]",
+        "facebook",
+      );
 
       // Non-text messages (stickers, images, etc.) — acknowledge and return
       if (!text) {

@@ -5,7 +5,7 @@ import twilio from "twilio";
 import { assessRisk } from "./ai.js";
 import { handleMenuRouter, handleSafetyVehiclePhoto } from "../menu-router.js";
 import { withMenu } from "../message-utils.js";
-import { sendOperatorEmail, type EmailCategory } from "../email-service.js";
+import { sendOperatorEmail, logMessageToGmail, type EmailCategory } from "../email-service.js";
 import { reverseGeocodeStreetAddress } from "../route-service.js";
 import { isVoiceNote, downloadTwilioMedia, transcribeVoiceNote } from "../voice-service.js";
 import { callOperatorClaude } from "../operator-ai-service.js";
@@ -549,6 +549,15 @@ router.post(
     // ── Member lookup — runs on every inbound message ───────────────────────
     const member = await lookupMember(from);
     const memberLabel = member?.isKnown ? member.displayName : from;
+
+    // ── Gmail communication ledger — log every inbound WhatsApp message ───────
+    void logMessageToGmail(
+      from,
+      member?.displayName ?? from,
+      "inbound",
+      body,
+      "whatsapp",
+    );
     req.log.info(
       { from, isKnownMember: member?.isKnown ?? false, displayName: member?.displayName ?? null },
       "member-lookup",

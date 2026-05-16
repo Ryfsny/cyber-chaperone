@@ -265,6 +265,14 @@ async function sendWhatsApp(from: string, to: string, body: string): Promise<voi
     const deepLink = await getMemberDeepLink(from);
     const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
     await client.messages.create({ from: to, to: from, body: body + deepLink });
+    // Persist outbound message so member-profile shows full 2-way conversation
+    void db.insert(messagesTable).values({
+      fromNumber: to,   // Twilio / system number
+      toNumber:   from, // member's WhatsApp number
+      body,
+      messageSid: null,
+      direction:  "outbound",
+    }).catch(() => { /* best-effort */ });
   } catch {
     // Never break the webhook
   }
