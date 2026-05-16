@@ -649,8 +649,11 @@ router.get("/broadcast/welcome-preview", (req: Request, res: Response): void => 
 });
 
 // ── POST /api/broadcast/welcome-campaign ──────────────────────────────────────
-// Sends the welcome-back email to the first 50 active/verified members who have an email.
-// André is CC'd on the very first and very last email so he knows when it started and finished.
+// Sends the welcome-back email to the next 50 unsent active/verified members.
+// Tracks every send in the messages table so re-running automatically continues
+// from where the last batch left off — no manual offset needed.
+// André is CC'd on the very first and very last email of each batch.
+// Standard post-batch workflow: check Gmail for bounces next day → SMS bounced members.
 router.post("/broadcast/welcome-campaign", async (req: Request, res: Response): Promise<void> => {
   if (!nationalOnly(req, res)) return;
 
@@ -659,27 +662,40 @@ router.post("/broadcast/welcome-campaign", async (req: Request, res: Response): 
   if (!t || !gmailUser) { res.status(500).json({ error: "Gmail not configured." }); return; }
 
   const ANDRE_CC = "ryfsny@yebo.co.za";
-  const LIMIT = 50;
+  const BATCH_SIZE = 50;
+  const CAMPAIGN_MARKER = "Welcome campaign";
 
-  const members = await db
+  // Find already-contacted emails so we never double-send
+  const alreadySentRows = await db
+    .select({ toNumber: messagesTable.toNumber })
+    .from(messagesTable)
+    .where(
+      sql`direction = 'broadcast' AND channel = 'email' AND body LIKE ${`%${CAMPAIGN_MARKER}%`}` as unknown as ReturnType<typeof eq>
+    );
+  const alreadySent = new Set(alreadySentRows.map((r) => r.toNumber?.toLowerCase()));
+
+  // Next unsent batch — ordered by member id so batches are stable day to day
+  const candidates = await db
     .select({ id: membersTable.id, firstName: membersTable.firstName, displayName: membersTable.displayName, email: membersTable.email })
     .from(membersTable)
     .where(
       sql`(member_status = 'active' OR member_status = 'verified') AND email IS NOT NULL AND email != ''` as unknown as ReturnType<typeof eq>
     )
-    .orderBy(membersTable.id)
-    .limit(LIMIT);
+    .orderBy(membersTable.id);
 
-  const valid = members.filter((m) => m.email?.trim());
-  if (valid.length === 0) { res.json({ ok: true, queued: false, sent: 0, failed: 0, total: 0, results: [] }); return; }
+  const valid = candidates.filter((m) => m.email?.trim() && !alreadySent.has(m.email!.toLowerCase())).slice(0, BATCH_SIZE);
+
+  if (valid.length === 0) {
+    res.json({ ok: true, queued: false, sent: 0, failed: 0, total: 0, message: "All eligible members have already been contacted." });
+    return;
+  }
 
   const SUBJECT = (fn: string) => `André here — welcome home, ${fn}.`;
-  const TEXT = (fn: string) => `Hi ${fn},\n\nWelcome home to eblockwatch.\n\nActivate on WhatsApp now — save +27 82 561 1065, send "Hi", and Arnie walks you through everything.\n\nAndre Snyman\nFounder · eblockwatch`;
+  const TEXT    = (fn: string) => `Hi ${fn},\n\nWelcome home to eblockwatch.\n\nActivate on WhatsApp now — save +27 82 561 1065, send "Hi", and Arnie walks you through everything.\n\nAndre Snyman\nFounder · eblockwatch`;
 
   const lastIdx = valid.length - 1;
-
   const job = makeJob("email", valid.length);
-  res.json({ ok: true, queued: true, total: valid.length, jobId: job.id });
+  res.json({ ok: true, queued: true, total: valid.length, jobId: job.id, alreadySentCount: alreadySent.size });
 
   (async () => {
     for (let i = 0; i < valid.length; i++) {
@@ -698,8 +714,19 @@ router.post("/broadcast/welcome-campaign", async (req: Request, res: Response): 
           text: TEXT(fn),
         });
         job.sent++;
-        void db.insert(messagesTable).values({ fromNumber: gmailUser, toNumber: m.email!, body: `[${SUBJECT(fn)}] Welcome campaign`, direction: "broadcast", channel: "email", status: "sent" }).catch(() => undefined);
-      } catch (err) { job.failed++; if (job.errors.length < 50) job.errors.push({ name: m.displayName, error: String(err) }); }
+        // Await the log write so it persists even if the server restarts
+        await db.insert(messagesTable).values({
+          fromNumber: gmailUser,
+          toNumber: m.email!,
+          body: `[${CAMPAIGN_MARKER}] ${SUBJECT(fn)}`,
+          direction: "broadcast",
+          channel: "email",
+          status: "sent",
+        }).catch(() => undefined);
+      } catch (err) {
+        job.failed++;
+        if (job.errors.length < 50) job.errors.push({ name: m.displayName, error: String(err) });
+      }
       await new Promise((r) => setTimeout(r, 400));
     }
     job.done = true;

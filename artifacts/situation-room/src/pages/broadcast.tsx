@@ -509,7 +509,7 @@ function WelcomeCampaignPanel() {
 
             <div>
               <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Audience</div>
-              <div className="text-xs text-gray-400 leading-snug">First <span className="text-white font-semibold">50 members</span> (by join date) with an email · André CC'd on #1 and #50</div>
+              <div className="text-xs text-gray-400 leading-snug"><span className="text-white font-semibold">Next 50 unsent members</span> (auto-continues from last batch) · André CC'd on #1 and #50</div>
             </div>
 
             <div>
@@ -550,9 +550,10 @@ function WelcomeCampaignPanel() {
               {done && (
                 <div className="border border-emerald-500/30 bg-emerald-500/10 rounded px-3 py-2.5 text-xs">
                   <div className="font-bold text-emerald-400 flex items-center gap-1.5 mb-0.5">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Campaign complete
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Batch complete
                   </div>
-                  <div className="text-emerald-300/70">{done.sent} sent · {done.total} recipients</div>
+                  <div className="text-emerald-300/70">{done.sent} sent · {done.total} in this batch</div>
+                  <div className="text-emerald-300/50 mt-1">Next batch ready tomorrow · Check Gmail for bounces → SMS those members</div>
                 </div>
               )}
 

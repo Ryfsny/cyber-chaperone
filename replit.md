@@ -179,6 +179,32 @@ Ignore ONLY when `req.body.MessageStatus` is present and truthy. Never block on 
 
 **Facebook Messenger / Instagram DMs** — not yet integrated. Requires Meta Business API (separate from Twilio). See below if planning.
 
+## Welcome Home Campaign — Standard Process (locked 2026-05-16)
+
+**Philosophy: when email fails, immediately follow up on the next best channel.**
+
+### Per-batch workflow (run from Situation Room → Broadcast → Welcome Home Campaign)
+1. Click **Launch Campaign** — sends the next 50 unsent members automatically (system skips anyone already contacted in a prior batch)
+2. André is CC'd on email #1 and #50 of every batch — confirms start and finish
+3. Wait 24 hours for bounce notifications to arrive in Gmail
+
+### Post-batch bounce recovery
+4. Check Gmail for bounce notifications (look for MAILER-DAEMON, "Delivery failed", "Undeliverable")
+5. For each bounced address: run the individual SMS route from Situation Room → SMS Broadcast, asking the member for their current email address
+6. When a member replies with a new address: update the `email` field in the Members registry
+7. NULL out the old dead address immediately (already done for batch 1)
+
+### Batch 1 summary (2026-05-16)
+- 50 emails attempted · ~34 delivered · 16 hard bounced (dead ISP domains: iafrica, mweb, telkomsa, iburst, xsinet etc) · 3 delayed
+- All 16 bounced members individually SMS'd asking for current email address
+- All 16 dead email addresses cleared from DB ✓
+- Next batch: members 51–100 (by join order) — launch tomorrow from Situation Room
+
+### Technical notes
+- Sends tracked in `messages` table (`direction='broadcast'`, `channel='email'`, `body LIKE '%Welcome campaign%'`)
+- Re-running the route automatically picks up the next 50 unsent — no manual offset needed
+- If the server restarts mid-batch, already-sent members are safe (awaited DB write before next send)
+
 ## System Audit — 2026-05-11 (41/41 green)
 
 All 41 moving parts verified green. One publish blocker (frozen prod DB — see above). Last successful production build: 2026-05-10. Code staged and ready to deploy the moment the DB is unfrozen.
