@@ -948,21 +948,84 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
   ].filter((l) => l !== null).join("\n");
 }
 
+// ── Shared membership tier text ───────────────────────────────────────────────
+// Used across all menu paths: info screen, activation flow, and upgrade prompts.
+// Each tier has a one-line payoff line + what it ADDS over the tier below.
+
+function membershipOptionsText(name: string, currentTier?: string | null): string {
+  const isPaying = currentTier === "individual" || currentTier === "family";
+  const isFamily = currentTier === "family";
+
+  const statusLine = isFamily
+    ? `You are on the Family plan — full household protection active.`
+    : isPaying
+      ? `You are on the Individual plan — your route is being watched.`
+      : `You are on Entry Level (free). Upgrading adds real layers of protection.`;
+
+  return [
+    `${name}, here are your eblockwatch membership options.`,
+    ``,
+    `──────────────────`,
+    `🆓  ENTRY LEVEL  |  Free`,
+    `Your first step into the eblockwatch family.`,
+    ``,
+    `✔ Community safety alerts`,
+    `✔ Basic trip monitoring`,
+    `✔ WhatsApp network access`,
+    ``,
+    `──────────────────`,
+    `🛡️  INDIVIDUAL  |  R150/month`,
+    `A dedicated layer of protection — just for you.`,
+    ``,
+    `Everything in Entry, plus:`,
+    `✔ Live route & ETA tracking`,
+    `✔ Operator watches your journey`,
+    `✔ Auto-escalation to your ICE contact`,
+    `✔ Red Alert if distress is detected`,
+    ``,
+    `→ paystack.shop/pay/cyber-chaperone`,
+    ``,
+    `──────────────────`,
+    `👨‍👩‍👧  FAMILY  |  R250/month`,
+    `The same protection for your whole household.`,
+    ``,
+    `Everything in Individual, plus:`,
+    `✔ Up to 5 family members covered`,
+    `✔ Separate ICE contacts per member`,
+    ``,
+    `→ paystack.shop/pay/family-cyber-chaperone`,
+    ``,
+    `──────────────────`,
+    statusLine,
+    ``,
+    `Reply 3 to activate or upgrade.`,
+    `Reply 0 for Main Menu.`,
+  ].join("\n");
+}
+
 function membershipActivationText(name: string): string {
   return [
-    `${name}, let's get your membership activated. 🛡️`,
+    `${name}, choose your plan.`,
     ``,
-    `1. Entry Level — free`,
-    `   Stay connected to the eblockwatch network at no cost.`,
+    `──────────────────`,
+    `1️⃣  ENTRY LEVEL  |  Free`,
+    `   Your first step into the eblockwatch family.`,
     ``,
-    `2. Cyber Chaperone Individual — R150/month`,
-    `   Priority response, ICE escalation, full route tracking.`,
-    `   Pay now → https://paystack.shop/pay/cyber-chaperone`,
+    `──────────────────`,
+    `2️⃣  INDIVIDUAL  |  R150/month`,
+    `   A dedicated layer of protection — just for you.`,
+    `   + Live route & ETA tracking`,
+    `   + Operator watches your journey`,
+    `   + Auto-escalation to your ICE contact`,
+    `   + Red Alert if distress is detected`,
     ``,
-    `3. Cyber Chaperone Family — R250/month`,
-    `   Cover your whole family (up to 5 members). Full suite.`,
-    `   Pay now → https://paystack.shop/pay/family-cyber-chaperone`,
+    `──────────────────`,
+    `3️⃣  FAMILY  |  R250/month`,
+    `   Full protection for your whole household (up to 5).`,
+    `   + Everything in Individual`,
+    `   + Separate ICE contacts per member`,
     ``,
+    `──────────────────`,
     `Reply 1, 2, or 3 to choose your plan.`,
     `Reply 0 for Main Menu.`,
   ].join("\n");
@@ -1844,18 +1907,7 @@ async function handleEblockwatchInfoChoice(ctx: MenuContext): Promise<void> {
     // Membership Options — same as main menu option 2
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, [
-      `${name}, here are your eblockwatch membership options.`,
-      ``,
-      `• Entry Level — your starting point in eblockwatch`,
-      `• Single Membership — R150/month`,
-      `• Family Membership — R250/month`,
-      ``,
-      `The stronger your membership, the stronger your support layer.`,
-      ``,
-      `Reply 3 to activate your membership.`,
-      `Reply 0 for Main Menu.`,
-    ].join("\n"));
+    await sendWhatsApp(from, to, membershipOptionsText(name, member?.membershipTier));
     return;
   }
 
@@ -2561,29 +2613,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
 
   if (choice === "2") {
     await saveMessage(from, to, body, messageSid, null);
-    const tier = member?.membershipTier;
-    const isFreeTier = !tier || tier.toLowerCase().includes("entry") || tier.toLowerCase().includes("free");
-    await sendWhatsApp(from, to, [
-      `${name}, here are your eblockwatch membership options.`,
-      ``,
-      `🟢 Entry Level — free`,
-      `   Basic trip monitoring and community safety access.`,
-      ``,
-      `⭐ Cyber Chaperone Individual — R150/month`,
-      `   Priority response, ICE escalation, route tracking.`,
-      `   👉 https://paystack.shop/pay/cyber-chaperone`,
-      ``,
-      `👨‍👩‍👧‍👦 Cyber Chaperone Family — R250/month`,
-      `   Cover up to 5 family members. Full suite.`,
-      `   👉 https://paystack.shop/pay/family-cyber-chaperone`,
-      ``,
-      isFreeTier
-        ? `You are currently on the free tier. Upgrading gives your family a stronger safety net.`
-        : `Your current plan: ${tier}. Thank you for your support!`,
-      ``,
-      `Reply 3 to activate or upgrade your membership now.`,
-      `Reply 0 for Main Menu.`,
-    ].join("\n"));
+    await sendWhatsApp(from, to, membershipOptionsText(name, member?.membershipTier));
     return true;
   }
 
