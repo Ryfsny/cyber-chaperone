@@ -261,6 +261,45 @@ async function sendWhatsApp(from: string, to: string, body: string): Promise<voi
   }
 }
 
+// Logo URL served from the public website artifact
+const EBLOCKWATCH_LOGO_URL = "https://cyber-chaperone-r--ryfsny.replit.app/website/eblockwatch-logo.png";
+
+// Send the eblockwatch logo as a standalone image message (WhatsApp only — skips Facebook)
+async function sendWhatsAppLogo(from: string, to: string): Promise<void> {
+  if (from.startsWith("fb:")) return;
+  try {
+    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    await client.messages.create({ from: to, to: from, mediaUrl: [EBLOCKWATCH_LOGO_URL] });
+  } catch {
+    // Non-critical — never block the menu
+  }
+}
+
+// Send a soft contact-request notification directly to André (+27825611065)
+async function sendContactRequestToFounder(
+  twilioNumber: string,
+  memberName: string,
+  memberPhone: string,
+): Promise<void> {
+  const e164 = memberPhone.replace(/^whatsapp:\+?/, "");
+  const msg = [
+    `📬 CONTACT REQUEST — ${memberName}`,
+    `📞 ${memberPhone.replace("whatsapp:", "")}`,
+    ``,
+    `Reply or WhatsApp them directly:`,
+    `👉 wa.me/${e164}`,
+  ].join("\n");
+
+  if (memberPhone !== FOUNDER_WHATSAPP) {
+    try {
+      const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+      await client.messages.create({ from: twilioNumber, to: FOUNDER_WHATSAPP, body: msg });
+    } catch {
+      // Best-effort
+    }
+  }
+}
+
 async function sendOperatorMirror(twilioNumber: string, body: string, emailCategory?: EmailCategory): Promise<void> {
   const operatorNumber = process.env.OPERATOR_WHATSAPP_NUMBER;
   const mode = (process.env.OPERATOR_MIRROR_MODE ?? "off").toLowerCase();
@@ -870,25 +909,27 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
     member?.memberStatus ?? "unknown",
     member?.membershipTier ?? null,
   );
-  const isUnknown = !member;
+  const isUnknown = !member || member.memberStatus === "unverified";
   return [
+    `🛡️🏘️ eblockwatch — Cyber Chaperone`,
+    ``,
     `Hi ${name}, I'm AI Arnie, Andre Snyman's digital wingman. We are here to make you safer.`,
     ``,
     statusLine,
     ``,
     `Please choose an option:`,
     ``,
-    isUnknown ? `0. Join eblockwatch — Register now (free)` : null,
-    `1. What is eblockwatch?`,
-    `2. Membership Options`,
-    `3. Activate my membership`,
-    `4. Update my profile`,
-    `5. Travel with Cyber Chaperone`,
-    `6. eblockshop`,
-    `7. Request contact from a human`,
+    isUnknown ? `0️⃣  Join eblockwatch — Register now (free)` : null,
+    `1️⃣  What is eblockwatch?`,
+    `2️⃣  Membership Options`,
+    `3️⃣  Activate my membership`,
+    `4️⃣  Update my profile`,
+    `5️⃣  Travel with Cyber Chaperone 🛡️`,
+    `6️⃣  eblockshop`,
+    `7️⃣  Contact a human`,
     ``,
-    `EMERGENCY? Reply 10.`,
-    isUnknown ? null : `Reply 0 to return to this menu.`,
+    `🚨 EMERGENCY? Reply 10.`,
+    isUnknown ? null : `Reply 0️⃣ to return to this menu.`,
   ].filter((l) => l !== null).join("\n");
 }
 
@@ -2252,14 +2293,16 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
     return true;
   }
 
-  // Register — new members who haven't been added yet
-  if (choice === "0" && !member) {
+  // Register — new members (unknown or Facebook auto-created as unverified)
+  if (choice === "0" && (!member || member.memberStatus === "unverified")) {
     await saveMessage(from, to, body, messageSid, null);
     await setConvState(from, { currentFlow: FLOW_REGISTRATION, currentStep: STEP_REG_FIRST_NAME, pendingTripData: {} });
     await sendWhatsApp(from, to, [
-      `Welcome to eblockwatch! 👋`,
+      `🛡️🏘️ Welcome to eblockwatch! 👋`,
       ``,
-      `Let's get you registered so Andre and the team know who you are.`,
+      `Let's get you registered so André and the team know who you are.`,
+      ``,
+      `It takes about 2 minutes and it's completely free.`,
       ``,
       `What is your first name?`,
       ``,
@@ -2361,12 +2404,22 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
 
   if (choice === "7") {
     await saveMessage(from, to, body, messageSid, null);
-    await sendWhatsApp(from, to, `${name}, a human from eblockwatch will contact you.\n\nIf this is urgent, reply 10.\n\nReply 0 for Main Menu.`);
+    await sendWhatsApp(from, to, [
+      `${name}, André Snyman will get back to you. 👋`,
+      ``,
+      `💬 WhatsApp him directly: wa.me/27825611065`,
+      `📱 Or message: 0825611065`,
+      ``,
+      `⚠️ André manages 250 000 members — please WhatsApp rather than call unless it's truly urgent.`,
+      `📞 If it IS urgent, call 0825611065 directly or reply *10* now.`,
+      ``,
+      `Reply 0️⃣ for Main Menu.`,
+    ].join("\n"));
+    await sendContactRequestToFounder(to, name, from);
     await sendOperatorMirror(to, [
-      `CYBER CHAPERONE — CONTACT REQUEST`,
-      `Member: ${name}`,
+      `📬 CONTACT REQUEST — ${name}`,
       `Known member: ${member?.isKnown ? "YES" : "NO"}`,
-      `Next action: Member requests human contact.`,
+      `Next action: Member requests human contact. André notified directly.`,
     ].join("\n"));
     return true;
   }
@@ -2438,6 +2491,7 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   if (isMenuOverride) {
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsAppLogo(from, to);
     await sendWhatsApp(from, to, mainMenuText(name, member));
     await saveMessage(from, to, body, messageSid, null);
     log.info({ from, body: trimmed, handler: "GLOBAL_MENU_OVERRIDE" }, "menu-router: MENU_OVERRIDE triggered");

@@ -176,19 +176,44 @@ router.post("/webhook/facebook", async (req: Request, res: Response): Promise<vo
       // Look up member record (by fb:psid)
       const member = await lookupFacebookMember(psid, senderName);
 
+      // For first-time Facebook contacts (unverified = auto-created, never interacted before),
+      // prepend a sales-funnel intro to the very first reply Arnie sends them.
+      const isFirstContact = member?.memberStatus === "unverified";
+      let salesIntroSent = false;
+
       // Build a platform-aware outbound sender so the menu router replies to Messenger
       const sendReply = async (body: string): Promise<void> => {
+        let messageToSend = body;
+
+        if (isFirstContact && !salesIntroSent) {
+          salesIntroSent = true;
+          const displayName = senderName ? senderName.split(" ")[0] : "there";
+          messageToSend = [
+            `🛡️🏘️ Hey ${displayName}! Welcome to eblockwatch.`,
+            ``,
+            `We protect South Africans with a real human safety network — not just an app.`,
+            `250 000 members trust André Snyman and the eblockwatch community.`,
+            ``,
+            `✅ Joining is free and takes 2 minutes.`,
+            `💬 Full safety features (live trip tracking, ICE escalation) work on WhatsApp.`,
+            ``,
+            `━━━━━━━━━━━━━━━━━━━━`,
+            ``,
+            messageToSend,
+          ].join("\n");
+        }
+
         // Store the outbound reply in the messages table
         try {
           await db.insert(messagesTable).values({
             fromNumber: toNumber,
             toNumber:   fromNumber,
-            body,
+            body:       messageToSend,
             messageSid: null,
             direction:  "outbound",
           });
         } catch { /* non-critical */ }
-        await sendFacebookMessage(psid, body);
+        await sendFacebookMessage(psid, messageToSend);
       };
 
       // Build context and hand off to the full menu router
