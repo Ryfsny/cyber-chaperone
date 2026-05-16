@@ -96,6 +96,7 @@ const STEP_REG_HOME_ADDRESS = "REG_HOME_ADDRESS";
 const STEP_REG_ICE = "REG_ICE";
 const FLOW_SAFETY_PROFILE = "SAFETY_PROFILE";
 const FLOW_SHOP = "SHOP";
+const FLOW_PROFILE_CONFIRM = "PROFILE_CONFIRM";
 const STEP_SAFETY_MOTHER_NAME = "SAFETY_MOTHER_NAME";
 const STEP_SAFETY_MOTHER_PHONE = "SAFETY_MOTHER_PHONE";
 const STEP_SAFETY_VEHICLE_PHOTO = "SAFETY_VEHICLE_PHOTO";
@@ -902,6 +903,45 @@ function membershipStatusLine(memberStatus: string, membershipTier: string | nul
   if (membershipTier) return `You're on a ${membershipTier}.`;
   if (memberStatus === "pending") return `Your eblockwatch membership is being confirmed.`;
   return `Your eblockwatch membership status is not confirmed yet.`;
+}
+
+async function sendProfileConfirmation(from: string, to: string, name: string): Promise<void> {
+  const [row] = await db.select({
+    displayName: membersTable.displayName,
+    email: membersTable.email,
+    memberStatus: membersTable.memberStatus,
+    membershipTier: membersTable.membershipTier,
+    iceContactName: membersTable.iceContactName,
+    iceContactPhone: membersTable.iceContactPhone,
+    suburb: membersTable.suburb,
+    city: membersTable.city,
+  }).from(membersTable).where(eq(membersTable.whatsappNumber, from)).limit(1);
+
+  const tierLabel = row?.membershipTier === "individual" ? "Individual (R150/mo)"
+    : row?.membershipTier === "family" ? "Family (R250/mo)"
+    : "Free";
+  const ice = row?.iceContactName && row?.iceContactPhone
+    ? `${row.iceContactName} — ${row.iceContactPhone}`
+    : "Not set";
+  const location = [row?.suburb, row?.city].filter(Boolean).join(", ") || "Not set";
+
+  await sendWhatsApp(from, to, [
+    `👋 Welcome back, ${name}!`,
+    ``,
+    `Here is what we have on file for you:`,
+    ``,
+    `📛 Name: ${row?.displayName ?? name}`,
+    `📧 Email: ${row?.email ?? "Not set"}`,
+    `📍 Location: ${location}`,
+    `🛡️ Membership: ${tierLabel}`,
+    `🆘 ICE contact: ${ice}`,
+    ``,
+    `Is this correct?`,
+    ``,
+    `1 ✅ Yes, all correct`,
+    `2 ✏️ I need to update something`,
+    `0 Skip — go to Main Menu`,
+  ].join("\n"));
 }
 
 function mainMenuText(name: string, member: MemberInfo | null): string {
@@ -3032,10 +3072,16 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   const isMenuOverride = GLOBAL_MENU_OVERRIDE.test(trimmed) || JOIN_PREFIX.test(trimmed);
   if (isMenuOverride) {
     await resetConvState(from);
-    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsAppLogo(from, to);
-    await sendWhatsApp(from, to, mainMenuText(name, member));
     await saveMessage(from, to, body, messageSid, null);
+    if (member?.isKnown) {
+      await setConvState(from, { currentFlow: FLOW_PROFILE_CONFIRM });
+      await sendWhatsAppLogo(from, to);
+      await sendProfileConfirmation(from, to, name);
+    } else {
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsAppLogo(from, to);
+      await sendWhatsApp(from, to, mainMenuText(name, member));
+    }
     log.info({ from, body: trimmed, handler: "GLOBAL_MENU_OVERRIDE" }, "menu-router: MENU_OVERRIDE triggered");
     return { handled: true };
   }
@@ -3108,9 +3154,14 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   // 3. Main menu reset trigger (belt-and-suspenders after GLOBAL_MENU_OVERRIDE)
   if (MAIN_MENU_TRIGGER.test(trimmed)) {
     await resetConvState(from);
-    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, mainMenuText(name, member));
     await saveMessage(from, to, body, messageSid, null);
+    if (member?.isKnown) {
+      await setConvState(from, { currentFlow: FLOW_PROFILE_CONFIRM });
+      await sendProfileConfirmation(from, to, name);
+    } else {
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, mainMenuText(name, member));
+    }
     log.info({ from, handler: "MAIN_MENU_TRIGGER" }, "menu-router: main menu trigger");
     return { handled: true };
   }
@@ -3118,6 +3169,41 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   // 4. Conversation state routing
   const state = await getConvState(from);
   log.info({ from, currentFlow: state.currentFlow, currentStep: state.currentStep }, "Menu router: conv state");
+
+  if (state.currentFlow === FLOW_PROFILE_CONFIRM) {
+    const choice = trimmed;
+    await saveMessage(from, to, body, messageSid, null);
+    if (choice === "1" || choice === "0") {
+      // Confirmed or skip — go to main menu
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      if (choice === "1") {
+        await sendWhatsApp(from, to, `✅ Great — your details are confirmed.\n\n`+ mainMenuText(name, member));
+      } else {
+        await sendWhatsApp(from, to, mainMenuText(name, member));
+      }
+    } else if (choice === "2") {
+      // Needs update — go to profile update flow
+      await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: null });
+      await sendWhatsApp(from, to, [
+        `${name}, let's update your profile.`,
+        ``,
+        `What would you like to update?`,
+        ``,
+        `1. My personal details`,
+        `2. My home location`,
+        `3. My vehicle details`,
+        `4. My ICE contact`,
+        `5. My family members`,
+        `6. My local network / conduit details`,
+        ``,
+        `Reply 0 for Main Menu.`,
+      ].join("\n"));
+    } else {
+      // Unrecognised — re-send the confirmation
+      await sendProfileConfirmation(from, to, name);
+    }
+    return { handled: true };
+  }
 
   if (state.currentFlow === FLOW_REGISTRATION) {
     await handleRegistrationStep(ctx, state);
