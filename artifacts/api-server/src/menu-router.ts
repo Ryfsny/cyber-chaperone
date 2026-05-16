@@ -39,6 +39,8 @@ interface PendingTripData {
   safetyVehiclePhotos?: string[];
   // Profile wizard accumulated changes
   wizardChanges?: Record<string, string | null>;
+  // Which profile field is being updated in the A-E lettered menu
+  profileField?: string;
 }
 
 interface ConvState {
@@ -89,6 +91,8 @@ const STEP_WAITING_FOR_ICE = "WAITING_FOR_ICE";
 const STEP_WAITING_FOR_PERSONAL_DETAILS = "WAITING_FOR_PERSONAL_DETAILS";
 const STEP_WAITING_FOR_HOME_ADDRESS = "WAITING_FOR_HOME_ADDRESS";
 const STEP_WAITING_FOR_PROFILE_FIELD = "WAITING_FOR_PROFILE_FIELD";
+const STEP_PROFILE_MENU = "PROFILE_MENU";
+const STEP_PROFILE_VALUE = "PROFILE_VALUE";
 const FLOW_PROFILE_WIZARD = "PROFILE_WIZARD";
 const STEP_WIZARD_NAME = "WIZARD_NAME";
 const STEP_WIZARD_EMAIL = "WIZARD_EMAIL";
@@ -2135,18 +2139,16 @@ async function startSmartProfileUpdate(from: string, to: string, name: string): 
   const lines = [
     `${name}, here's what we have for you:`,
     ``,
-    `• Name: ${p?.displayName ?? none}`,
-    `• Email: ${p?.email ?? none}`,
-    `• Mobile: ${mobile}`,
-    `• Home address: ${address}`,
-    `• ICE contact: ${ice}`,
+    `A. Name:    ${p?.displayName ?? none}`,
+    `B. Email:   ${p?.email ?? none}`,
+    `C. Mobile:  ${mobile}`,
+    `D. Address: ${address}`,
+    `E. ICE:     ${ice}`,
     ``,
-    `What would you like to update?`,
-    `Just type your new value — email, address, name, or ICE contact.`,
-    ``,
+    `Type A, B, C, D or E to update that field.`,
     `Reply 0 for Main Menu.`,
   ];
-  await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: STEP_WAITING_FOR_PROFILE_FIELD });
+  await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: STEP_PROFILE_MENU });
   await sendWhatsApp(from, to, lines.join("\n"));
 }
 
@@ -2306,18 +2308,122 @@ function profileUpdatePrompt(name: string): string {
 async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Promise<void> {
   const { from, to, body, member, messageSid } = ctx;
   const name = member?.displayName ?? from;
-  const choice = body.trim();
+  const trimmedBody = body.trim();
+  const letter = trimmedBody.toUpperCase();
 
   await saveMessage(from, to, body, messageSid, null);
 
-  if (choice === "0") {
+  if (trimmedBody === "0") {
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     await sendWhatsApp(from, to, mainMenuText(name, member));
     return;
   }
 
-  // ── Smart field update — user just types what needs changing ─────────────────
+  // ── Step 1: User picked a letter from the A-E profile menu ───────────────────
+  if (state.currentStep === STEP_PROFILE_MENU) {
+    const prompts: Record<string, { field: string; q: string }> = {
+      A: { field: "name",    q: `What is your full name?` },
+      B: { field: "email",   q: `What is your email address?` },
+      C: { field: "mobile",  q: `What is your mobile number?` },
+      D: { field: "address", q: `What is your home address?\n(e.g. 5 College Road, Bryanston)` },
+      E: { field: "ice",     q: `Who is your emergency contact?\n\nType their name and number:\nJane Smith, 0821234567` },
+    };
+    const entry = prompts[letter];
+    if (entry) {
+      await setConvState(from, {
+        currentFlow: FLOW_PROFILE_UPDATE,
+        currentStep: STEP_PROFILE_VALUE,
+        pendingTripData: { profileField: entry.field },
+      });
+      await sendWhatsApp(from, to, entry.q);
+      return;
+    }
+    // Unrecognised — re-show the menu
+    await startSmartProfileUpdate(from, to, name);
+    return;
+  }
+
+  // ── Step 2: User typed the new value for the chosen field ────────────────────
+  if (state.currentStep === STEP_PROFILE_VALUE) {
+    const field = state.pendingTripData?.profileField;
+
+    if (field === "name") {
+      const parts = trimmedBody.split(/\s+/);
+      await db.update(membersTable).set({
+        firstName: parts[0],
+        lastName: parts.slice(1).join(" ") || undefined,
+        displayName: trimmedBody,
+      }).where(eq(membersTable.whatsappNumber, from));
+      await resetConvState(from);
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, `✅ Name saved: ${trimmedBody}\n\nReply 0 for Main Menu.`);
+      await sendOperatorMirror(to, `PROFILE — NAME\nMember: ${name} → ${trimmedBody}`);
+      return;
+    }
+
+    if (field === "email") {
+      const emailRaw = trimmedBody.match(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i)?.[0]?.toLowerCase();
+      if (!emailRaw) {
+        await sendWhatsApp(from, to, `That doesn't look like a valid email. Please try again.\n\nReply 0 for Main Menu.`);
+        return;
+      }
+      await db.update(membersTable).set({ email: emailRaw }).where(eq(membersTable.whatsappNumber, from));
+      await resetConvState(from);
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, `✅ Email saved: ${emailRaw}\n\nReply 0 for Main Menu.`);
+      await sendOperatorMirror(to, `PROFILE — EMAIL\nMember: ${name}\nEmail: ${emailRaw}`);
+      return;
+    }
+
+    if (field === "mobile") {
+      const mobile = trimmedBody.replace(/\s/g, "");
+      await db.update(membersTable).set({ mobile }).where(eq(membersTable.whatsappNumber, from));
+      await resetConvState(from);
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, `✅ Mobile saved: ${mobile}\n\nReply 0 for Main Menu.`);
+      await sendOperatorMirror(to, `PROFILE — MOBILE\nMember: ${name}\nMobile: ${mobile}`);
+      return;
+    }
+
+    if (field === "address") {
+      const address = trimmedBody.slice(0, 200);
+      const parts = address.split(",").map((s: string) => s.trim());
+      await db.update(membersTable).set({
+        homeAddress: parts[0] ?? address,
+        ...(parts[1] ? { suburb: parts[1] } : {}),
+        ...(parts[2] ? { city: parts[2] } : {}),
+      }).where(eq(membersTable.whatsappNumber, from));
+      await resetConvState(from);
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, `✅ Address saved: ${address}\n\nReply 0 for Main Menu.`);
+      await sendOperatorMirror(to, `PROFILE — ADDRESS\nMember: ${name}\nAddress: ${address}`);
+      return;
+    }
+
+    if (field === "ice") {
+      const cleaned = trimmedBody.replace(/^ICE:\s*/i, "");
+      const match = cleaned.match(/^(.+?),\s*(\+?[\d\s]+)$/);
+      if (match) {
+        const iceName = match[1].trim();
+        const icePhone = match[2].replace(/\s/g, "");
+        await db.update(membersTable).set({ iceContactName: iceName, iceContactPhone: icePhone }).where(eq(membersTable.whatsappNumber, from));
+        await resetConvState(from);
+        await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+        await sendWhatsApp(from, to, `✅ ICE contact saved:\n${iceName} — ${icePhone}\n\nWe only contact them if we genuinely cannot reach you.\n\nReply 0 for Main Menu.`);
+        await sendOperatorMirror(to, `PROFILE — ICE\nMember: ${name}\nICE: ${iceName} ${icePhone}`);
+      } else {
+        await sendWhatsApp(from, to, `Please type their name and number:\n\nJane Smith, 0821234567\n\nReply 0 for Main Menu.`);
+      }
+      return;
+    }
+
+    // Unknown field — restart
+    await startSmartProfileUpdate(from, to, name);
+    return;
+  }
+
+  // ── Legacy steps (kept for in-flight sessions) ────────────────────────────────
   if (state.currentStep === STEP_WAITING_FOR_PROFILE_FIELD) {
     const trimmed = body.trim();
     const emailRaw = trimmed.match(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i)?.[0]?.toLowerCase() ?? null;
