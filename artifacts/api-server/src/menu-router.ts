@@ -564,7 +564,19 @@ async function createTrip(
   await sendWhatsApp(
     from,
     to,
-    `Your trip is now active.${cpLine}${nearbyLine}\n\nReply ARRIVED when you reach ${destination}.\n\nReply 0 for Main Menu.`,
+    [
+      `✅ *You are now under Cyber Chaperone protection.*`,
+      ``,
+      `${name}, we have your route to *${destination}* locked in.`,
+      `From this moment we are watching. You will not face anything alone.`,
+      cpLine ? cpLine.trim() : null,
+      nearbyLine ? nearbyLine.trim() : null,
+      ``,
+      `When you arrive, reply *ARRIVED* — that closes your trip.`,
+      ``,
+      `🚨 Any time: reply *10* if you need a human right now.`,
+      `Reply 0 for Main Menu.`,
+    ].filter((l) => l !== null).join("\n"),
   );
 
   await sendWhatsApp(from, to, mainMenuText(name, member));
@@ -968,21 +980,19 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
 
   if (isOperator) {
     return [
-      `Hi ${name} 👋 Welcome back.`,
+      `${name} 👋 Situation Room — you're in.`,
       ``,
-      `You are connected to the eblockwatch Situation Room.`,
+      `1️⃣  What is eblockwatch?`,
+      `2️⃣  Membership options`,
+      `3️⃣  Activate my membership`,
+      `4️⃣  Update my profile`,
+      `5️⃣  Travel with Cyber Chaperone 🛡️`,
+      `6️⃣  eblockshop`,
+      `7️⃣  Speak to a person`,
+      `8️⃣  📣 Invite a Friend`,
+      `9️⃣  📖 Getting Started Guide`,
       ``,
-      `1. What is eblockwatch?`,
-      `2. Membership options`,
-      `3. Activate my membership`,
-      `4. Update my profile`,
-      `5. Travel with Cyber Chaperone 🛡️`,
-      `6. eblockshop — safer products`,
-      `7. Speak to a person`,
-      `8. Invite a Friend`,
-      `9. Getting Started Guide`,
-      ``,
-      `🚨 URGENT? Reply 10 and a person will be on it right away.`,
+      `🚨 URGENT? Reply 10 — a real person will be on it immediately.`,
       ``,
       `Reply with a number to choose.`,
     ].join("\n");
@@ -994,13 +1004,14 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
   );
   const isUnknown = !member || member.memberStatus === "unverified";
   return [
-    `🛡️ eblockwatch — Cyber Chaperone`,
+    `🛡️ *eblockwatch — Cyber Chaperone*`,
     ``,
-    `Hi ${name}. This is Arnie, André Snyman's digital assistant.`,
+    `Hi ${name}. I'm Arnie — André Snyman's digital assistant.`,
+    `We have one job: get you there safely, every time.`,
     ``,
     statusLine,
     ``,
-    isUnknown ? `0️⃣  Join eblockwatch — register now (free)` : null,
+    isUnknown ? `0️⃣  Join eblockwatch — register now (it's free)` : null,
     `1️⃣  What is eblockwatch?`,
     `2️⃣  Membership options`,
     `3️⃣  Activate my membership`,
@@ -1011,10 +1022,10 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
     `8️⃣  📣 Invite a Friend`,
     `9️⃣  📖 Getting Started Guide`,
     ``,
-    `🚨 EMERGENCY? Reply 10.`,
-    isUnknown ? null : `Reply 0 to return to this menu at any time.`,
+    `🚨 *EMERGENCY? Reply 10* — we will get the world to save you.`,
+    isUnknown ? null : `Reply 0 to come back to this menu any time.`,
     ``,
-    `📺 New to eblockwatch? Watch this:`,
+    `📺 New here? See what we do:`,
     `https://www.facebook.com/share/v/1ACByM44QZ/?mibextid=wwXIfr`,
   ].filter((l) => l !== null).join("\n");
 }
@@ -1325,17 +1336,18 @@ async function handleDistress(ctx: MenuContext, activeTrip: Awaited<ReturnType<t
   }
 
   await sendWhatsApp(from, to, [
-    `${memberLabel}, we are on it. 🆘`,
+    `🆘 *${memberLabel} — we are on it.*`,
     ``,
-    `Andre has been notified and the Situation Room is on alert. You are not alone.`,
+    `André has been woken up. The Situation Room is on alert right now.`,
+    `You are not alone. We will get the world to you.`,
     ``,
-    `Please reply with one number:`,
+    `Tell us what's happening:`,
     ``,
     `1. 🚨 I am in danger`,
     `2. 🚗 I have broken down`,
-    `3. I am lost`,
-    `4. Medical issue`,
-    `5. Call me`,
+    `3. 🗺️ I am lost`,
+    `4. 🏥 Medical emergency`,
+    `5. 📞 Call me now`,
     ``,
     `Reply 0 for Main Menu.`,
   ].join("\n"));
@@ -1379,9 +1391,12 @@ async function handleArrival(ctx: MenuContext, activeTrip: Awaited<ReturnType<ty
   await resetConvState(from);
 
   await sendWhatsApp(from, to, [
-    `${memberLabel}, welcome home. 🏡`,
+    `🏡 *${memberLabel} — welcome home.*`,
     ``,
-    `Your trip is closed. You travelled safely and Andre is glad you made it.`,
+    `Trip closed. You made it safely.`,
+    `André and the team are glad you're home.`,
+    ``,
+    `This is what eblockwatch is for — we start the journey together and we end it together.`,
     ``,
     `Reply 0 for Main Menu.`,
   ].join("\n"));

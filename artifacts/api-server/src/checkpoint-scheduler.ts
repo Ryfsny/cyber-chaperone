@@ -25,16 +25,14 @@ async function sendWhatsApp(to: string, body: string): Promise<void> {
 
 function buildStopPingPrompt(name: string, destination: string): string {
   return [
-    `${name} 👋 Cyber Chaperone here.`,
+    `${name} 👋 This is Cyber Chaperone — André's Situation Room.`,
     ``,
-    `You mentioned stopping about 30 minutes ago on your way to ${destination}.`,
-    `Just checking in — are you safe?`,
+    `You stopped about 30 minutes ago on your way to *${destination}*.`,
+    `We are still watching. Are you safe?`,
     ``,
-    `Please reply:`,
-    ``,
-    `1. ✅ I'm okay and back on the road`,
-    `2. 🛑 Still stopped — I'll be a while longer`,
-    `3. 🆘 I need help`,
+    `1. ✅ I'm good — back on the road`,
+    `2. 🛑 Still stopped — give me more time`,
+    `3. 🆘 I need help right now`,
     ``,
     `Reply 0 for Main Menu.`,
   ].join("\n");
@@ -43,28 +41,25 @@ function buildStopPingPrompt(name: string, destination: string): string {
 function buildPrompt(name: string, label: string, destination: string, isPreArrival: boolean): string {
   if (isPreArrival) {
     return [
-      `${name} 👋 Cyber Chaperone here.`,
+      `${name} 👋 Cyber Chaperone — you should be close to *${destination}* now.`,
       ``,
-      `You should be close to ${destination} now. We are watching over you.`,
-      ``,
-      `Please reply:`,
+      `We haven't stopped watching. Just confirm you're okay.`,
       ``,
       `1. ✅ I have arrived safely`,
-      `2. 🕐 I am delayed`,
+      `2. 🕐 Running a little late`,
       `3. 🆘 I need help`,
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n");
   }
   return [
-    `${name} 👋 Cyber Chaperone — ${label}.`,
+    `${name} 👋 Cyber Chaperone checkpoint — *${label}*.`,
     ``,
-    `You are on your way to ${destination}. We've got your back. Just a quick check-in.`,
+    `You're on your way to *${destination}*. We are still with you.`,
+    `Quick check-in — one reply is all we need.`,
     ``,
-    `Please reply:`,
-    ``,
-    `1. ✅ I am okay`,
-    `2. 🕐 I am delayed`,
+    `1. ✅ I'm okay`,
+    `2. 🕐 I'm delayed`,
     `3. 📍 Send my location pin`,
     `4. 🆘 I need help`,
     ``,

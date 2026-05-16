@@ -203,6 +203,78 @@ function fmtAgo(min: number): string {
   return m > 0 ? `${h}h ${m}m ago` : `${h}h ago`;
 }
 
+/** Parse the member's ETA string into a Date, or null if unparseable. */
+function parseEtaDate(eta: string | null | undefined): Date | null {
+  if (!eta) return null;
+  // Try direct ISO first
+  const d = new Date(eta);
+  if (!isNaN(d.getTime())) return d;
+  // Try HH:MM format — assume today
+  const m = eta.match(/^(\d{1,2}):(\d{2})$/);
+  if (m) {
+    const now = new Date();
+    const candidate = new Date(now);
+    candidate.setHours(parseInt(m[1], 10), parseInt(m[2], 10), 0, 0);
+    // If the time has already passed today, assume tomorrow
+    if (candidate.getTime() < now.getTime() - 60_000) {
+      candidate.setDate(candidate.getDate() + 1);
+    }
+    return candidate;
+  }
+  return null;
+}
+
+/** Live ETA countdown that ticks every second. */
+function EtaCountdown({ eta, status }: { eta: string | null | undefined; status: string }) {
+  const [, forceUpdate] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => forceUpdate((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const etaDate = parseEtaDate(eta);
+  if (!etaDate) return <span className="text-muted-foreground text-[10px]">No ETA set</span>;
+
+  const diffMs = etaDate.getTime() - Date.now();
+  const overdue = diffMs < 0;
+  const absDiff = Math.abs(diffMs);
+  const h = Math.floor(absDiff / 3_600_000);
+  const m = Math.floor((absDiff % 3_600_000) / 60_000);
+  const s = Math.floor((absDiff % 60_000) / 1_000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  const displayTime = h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+
+  if (overdue) {
+    return (
+      <div className="text-right">
+        <span className="text-[10px] font-mono font-bold text-red-400 animate-pulse">
+          +{displayTime} OVERDUE
+        </span>
+      </div>
+    );
+  }
+
+  const isClose = diffMs < 15 * 60_000; // less than 15 min
+  const colorClass = status === "red"
+    ? "text-red-400"
+    : isClose
+    ? "text-amber-400"
+    : "text-green-400";
+
+  return (
+    <div className="text-right">
+      <span className={`text-[11px] font-mono font-bold tabular-nums ${colorClass}`}>
+        {displayTime}
+      </span>
+      <div className="text-[9px] text-muted-foreground uppercase tracking-wider">
+        {overdue ? "overdue" : "remaining"}
+      </div>
+    </div>
+  );
+}
+
 function tripCheckinRef(trip: Trip): string {
   return (trip.lastMemberCheckinTime as string | null) ?? trip.updatedAt;
 }
@@ -229,10 +301,11 @@ function LiveTripsTable({ trips, isLoading }: { trips: Trip[]; isLoading: boolea
   return (
     <div className="flex-1 overflow-auto">
       {/* Column header */}
-      <div className="sticky top-0 z-10 grid grid-cols-[20px_1fr_1fr_120px_40px] gap-3 px-4 py-2 bg-card border-b border-border text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
+      <div className="sticky top-0 z-10 grid grid-cols-[20px_1fr_1fr_110px_110px_36px] gap-3 px-4 py-2 bg-card border-b border-border text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
         <span />
         <span>Traveler</span>
         <span>Route</span>
+        <span className="text-right">ETA countdown</span>
         <span className="text-right">Last check-in</span>
         <span className="text-right">Msgs</span>
       </div>
@@ -260,7 +333,7 @@ function LiveTripsTable({ trips, isLoading }: { trips: Trip[]; isLoading: boolea
               <Link key={trip.id} href={`/trips/${trip.id}`} className="block group">
                 <div
                   className={cn(
-                    "grid grid-cols-[20px_1fr_1fr_120px_40px] gap-3 items-center px-4 py-3 border-b border-border transition-colors group-hover:bg-secondary",
+                    "grid grid-cols-[20px_1fr_1fr_110px_110px_36px] gap-3 items-center px-4 py-3 border-b border-border transition-colors group-hover:bg-secondary",
                     overdue ? "bg-red-500/8" : "bg-card",
                   )}
                 >
@@ -288,6 +361,11 @@ function LiveTripsTable({ trips, isLoading }: { trips: Trip[]; isLoading: boolea
                         ETA {trip.originalMemberEta}
                       </div>
                     )}
+                  </div>
+
+                  {/* ETA countdown */}
+                  <div className="shrink-0">
+                    <EtaCountdown eta={trip.originalMemberEta} status={trip.status} />
                   </div>
 
                   {/* Check-in time */}

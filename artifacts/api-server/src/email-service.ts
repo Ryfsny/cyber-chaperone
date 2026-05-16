@@ -253,13 +253,19 @@ export async function sendMemberWelcomeEmail(
   <!-- Greeting -->
   <div style="padding:32px 36px 0;">
     <p style="margin:0 0 14px;font-size:16px;font-weight:bold;color:#1a1f2e;">Hi ${escapeHtml(display)},</p>
-    <p style="margin:0 0 14px;font-size:14px;color:#374151;line-height:1.75;">
-      André Snyman and the eblockwatch team now have your WhatsApp number on record.
-      Your membership is active and you are part of a trusted community that looks out for each other every day.
+    <p style="margin:0 0 14px;font-size:14px;color:#374151;line-height:1.8;">
+      Welcome to the eblockwatch family. I'm André Snyman and I started this network in 2001 with one goal —
+      make sure no South African faces danger alone. 25 years on, that mission hasn't changed.
     </p>
-    <p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.75;">
-      The next step is to <strong>complete your Safety Profile</strong>. This takes about 2 minutes on WhatsApp
-      and gives André the information he needs to monitor your safety when you travel.
+    <p style="margin:0 0 14px;font-size:14px;color:#374151;line-height:1.8;">
+      We will treat you and your family like our own. We can't save the world,
+      but we will most definitely get the world to save you.
+    </p>
+    <p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.8;">
+      Right now you're at entry level — and that's exactly where it starts. The more you interact with us,
+      the more we get to know you, and the better we look after you.
+      Your first step is to <strong>complete your Safety Profile</strong> on WhatsApp —
+      it takes 2 minutes and it's the information we need to have your back when you're on the road.
     </p>
   </div>
 

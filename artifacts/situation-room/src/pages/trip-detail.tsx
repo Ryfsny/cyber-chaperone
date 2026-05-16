@@ -17,7 +17,7 @@ import {
 } from "@workspace/api-client-react";
 import type { CaseParticipant, Responder, Trip } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
-import { ArrowLeft, Loader2, Save, Activity, XCircle, Users, Shield, Camera } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Activity, XCircle, Users, Shield, Camera, FileText } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
