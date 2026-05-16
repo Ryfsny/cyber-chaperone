@@ -2366,34 +2366,31 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
         lastName: parts.slice(1).join(" ") || undefined,
         displayName: trimmedBody,
       }).where(eq(membersTable.whatsappNumber, from));
-      await resetConvState(from);
-      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-      await sendWhatsApp(from, to, `✅ Name saved: ${trimmedBody}\n\nReply 0 for Main Menu.`);
       await sendOperatorMirror(to, `PROFILE — NAME\nMember: ${name} → ${trimmedBody}`);
+      await sendWhatsApp(from, to, `✅ Name updated to: *${trimmedBody}*`);
+      await startSmartProfileUpdate(from, to, trimmedBody);
       return;
     }
 
     if (field === "email") {
       const emailRaw = trimmedBody.match(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i)?.[0]?.toLowerCase();
       if (!emailRaw) {
-        await sendWhatsApp(from, to, `That doesn't look like a valid email. Please try again.\n\nReply 0 for Main Menu.`);
+        await sendWhatsApp(from, to, `That doesn't look like a valid email. Please try again, or reply 0 for Main Menu.`);
         return;
       }
       await db.update(membersTable).set({ email: emailRaw }).where(eq(membersTable.whatsappNumber, from));
-      await resetConvState(from);
-      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-      await sendWhatsApp(from, to, `✅ Email saved: ${emailRaw}\n\nReply 0 for Main Menu.`);
       await sendOperatorMirror(to, `PROFILE — EMAIL\nMember: ${name}\nEmail: ${emailRaw}`);
+      await sendWhatsApp(from, to, `✅ Email updated to: *${emailRaw}*`);
+      await startSmartProfileUpdate(from, to, name);
       return;
     }
 
     if (field === "mobile") {
       const mobile = trimmedBody.replace(/\s/g, "");
       await db.update(membersTable).set({ mobile }).where(eq(membersTable.whatsappNumber, from));
-      await resetConvState(from);
-      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-      await sendWhatsApp(from, to, `✅ Mobile saved: ${mobile}\n\nReply 0 for Main Menu.`);
       await sendOperatorMirror(to, `PROFILE — MOBILE\nMember: ${name}\nMobile: ${mobile}`);
+      await sendWhatsApp(from, to, `✅ Mobile updated to: *${mobile}*`);
+      await startSmartProfileUpdate(from, to, name);
       return;
     }
 
@@ -2405,10 +2402,9 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
         ...(parts[1] ? { suburb: parts[1] } : {}),
         ...(parts[2] ? { city: parts[2] } : {}),
       }).where(eq(membersTable.whatsappNumber, from));
-      await resetConvState(from);
-      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-      await sendWhatsApp(from, to, `✅ Address saved: ${address}\n\nReply 0 for Main Menu.`);
       await sendOperatorMirror(to, `PROFILE — ADDRESS\nMember: ${name}\nAddress: ${address}`);
+      await sendWhatsApp(from, to, `✅ Address updated to: *${address}*`);
+      await startSmartProfileUpdate(from, to, name);
       return;
     }
 
@@ -2419,12 +2415,11 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
         const iceName = match[1].trim();
         const icePhone = match[2].replace(/\s/g, "");
         await db.update(membersTable).set({ iceContactName: iceName, iceContactPhone: icePhone }).where(eq(membersTable.whatsappNumber, from));
-        await resetConvState(from);
-        await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-        await sendWhatsApp(from, to, `✅ ICE contact saved:\n${iceName} — ${icePhone}\n\nWe only contact them if we genuinely cannot reach you.\n\nReply 0 for Main Menu.`);
         await sendOperatorMirror(to, `PROFILE — ICE\nMember: ${name}\nICE: ${iceName} ${icePhone}`);
+        await sendWhatsApp(from, to, `✅ ICE contact updated:\n*${iceName}* — ${icePhone}\n\nWe only contact them if we genuinely cannot reach you.`);
+        await startSmartProfileUpdate(from, to, name);
       } else {
-        await sendWhatsApp(from, to, `Please type their name and number:\n\nJane Smith, 0821234567\n\nReply 0 for Main Menu.`);
+        await sendWhatsApp(from, to, `Please type their name and number like this:\n\nJane Smith, 0821234567\n\nOr reply 0 for Main Menu.`);
       }
       return;
     }
