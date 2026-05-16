@@ -264,9 +264,8 @@ async function sendWhatsApp(from: string, to: string, body: string): Promise<voi
     return;
   }
   try {
-    const deepLink = await getMemberDeepLink(from);
     const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-    await client.messages.create({ from: to, to: from, body: body + deepLink });
+    await client.messages.create({ from: to, to: from, body });
     // Persist outbound message so member-profile shows full 2-way conversation
     void db.insert(messagesTable).values({
       fromNumber: to,   // Twilio / system number
@@ -3075,11 +3074,9 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     await saveMessage(from, to, body, messageSid, null);
     if (member?.isKnown) {
       await setConvState(from, { currentFlow: FLOW_PROFILE_CONFIRM });
-      await sendWhatsAppLogo(from, to);
       await sendProfileConfirmation(from, to, name);
     } else {
       await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-      await sendWhatsAppLogo(from, to);
       await sendWhatsApp(from, to, mainMenuText(name, member));
     }
     log.info({ from, body: trimmed, handler: "GLOBAL_MENU_OVERRIDE" }, "menu-router: MENU_OVERRIDE triggered");
