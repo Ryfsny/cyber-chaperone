@@ -62,6 +62,7 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
+WINGWOMAN_WHATSAPP_NUMBER = "+27716845443"
 
 [userenv.development]
 FACEBOOK_PAGE_ID = "702172440242622"

@@ -2728,7 +2728,11 @@ function shopMenuText(name: string, member: MemberInfo | null): string {
     isPaying ? `   ✅ Unlocked for paying members — reply 3 to register interest.` : `   🔒 Available to Individual & Family members.`,
     ``,
     `──────────────────`,
-    `Reply 1, 2, or 3 to order.`,
+    `4️⃣  💬 Need help? Speak to our team`,
+    `   Kriszti will assist with admin, sales & purchases.`,
+    ``,
+    `──────────────────`,
+    `Reply 1, 2, 3, or 4.`,
     `Reply 0 for Main Menu.`,
   ];
   return lines.join("\n");
@@ -2759,6 +2763,54 @@ async function generatePaystackLink(member: MemberInfo | null, planCode: string,
   } catch {
     return fallback;
   }
+}
+
+async function sendToWingWoman(
+  twilioFrom: string,
+  member: MemberInfo | null,
+  memberPhone: string,
+  topic: string,
+): Promise<void> {
+  const wingwomanNumber = process.env.WINGWOMAN_WHATSAPP_NUMBER ?? "";
+  if (!wingwomanNumber) return;
+
+  const name = member?.displayName ?? memberPhone;
+  const tier = member?.membershipTier ?? "entry / unknown";
+
+  const alert = [
+    `🤝 *WingWoman Alert* — Member needs help`,
+    ``,
+    `Member: ${name}`,
+    `Phone: ${memberPhone}`,
+    `Membership: ${tier}`,
+    `Topic: ${topic}`,
+    ``,
+    `WhatsApp them directly: wa.me/${memberPhone.replace(/\D/g, "")}`,
+    ``,
+    `André is CC'd on this notification.`,
+  ].join("\n");
+
+  const mirror = [
+    `👀 *WingWoman CC* — Kriszti notified`,
+    ``,
+    `Member: ${name} (${memberPhone})`,
+    `Topic: ${topic}`,
+    `Kriszti: +27716845443`,
+  ].join("\n");
+
+  const client = (await import("twilio")).default(
+    process.env.TWILIO_ACCOUNT_SID,
+    process.env.TWILIO_AUTH_TOKEN,
+  );
+
+  await Promise.all([
+    client.messages.create({
+      from: twilioFrom,
+      to: `whatsapp:${wingwomanNumber}`,
+      body: alert,
+    }),
+    sendOperatorMirror(twilioFrom, mirror),
+  ]);
 }
 
 async function handleShopFlow(ctx: MenuContext): Promise<void> {
@@ -2826,6 +2878,21 @@ async function handleShopFlow(ctx: MenuContext): Promise<void> {
         `Reply 1 to order Individual, 2 for Family, or 0 for Main Menu.`,
       ].join("\n"));
     }
+    return;
+  }
+
+  if (choice === "4") {
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, [
+      `💬 Connecting you to our team, ${name}!`,
+      ``,
+      `Kriszti — André's personal assistant — will be in touch shortly to help you with your query.`,
+      ``,
+      `She handles admin, sales, and product purchases.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    await sendToWingWoman(to, member, from, "Admin / sales / purchase assistance (eblockshop)").catch(() => undefined);
     return;
   }
 
