@@ -37,6 +37,8 @@ interface PendingTripData {
   safetyMotherName?: string;
   safetyMotherPhone?: string;
   safetyVehiclePhotos?: string[];
+  // Profile wizard accumulated changes
+  wizardChanges?: Record<string, string | null>;
 }
 
 interface ConvState {
@@ -87,6 +89,25 @@ const STEP_WAITING_FOR_ICE = "WAITING_FOR_ICE";
 const STEP_WAITING_FOR_PERSONAL_DETAILS = "WAITING_FOR_PERSONAL_DETAILS";
 const STEP_WAITING_FOR_HOME_ADDRESS = "WAITING_FOR_HOME_ADDRESS";
 const STEP_WAITING_FOR_PROFILE_FIELD = "WAITING_FOR_PROFILE_FIELD";
+const FLOW_PROFILE_WIZARD = "PROFILE_WIZARD";
+const STEP_WIZARD_NAME = "WIZARD_NAME";
+const STEP_WIZARD_EMAIL = "WIZARD_EMAIL";
+const STEP_WIZARD_MOBILE = "WIZARD_MOBILE";
+const STEP_WIZARD_ADDRESS = "WIZARD_ADDRESS";
+const STEP_WIZARD_SUBURB = "WIZARD_SUBURB";
+const STEP_WIZARD_CITY = "WIZARD_CITY";
+const STEP_WIZARD_PROVINCE = "WIZARD_PROVINCE";
+const STEP_WIZARD_ICE = "WIZARD_ICE";
+const WIZARD_STEP_ORDER = [
+  STEP_WIZARD_NAME,
+  STEP_WIZARD_EMAIL,
+  STEP_WIZARD_MOBILE,
+  STEP_WIZARD_ADDRESS,
+  STEP_WIZARD_SUBURB,
+  STEP_WIZARD_CITY,
+  STEP_WIZARD_PROVINCE,
+  STEP_WIZARD_ICE,
+] as const;
 const FLOW_EBLOCKWATCH_INFO = "EBLOCKWATCH_INFO";
 const FLOW_REGISTRATION = "REGISTRATION";
 const STEP_REG_FIRST_NAME = "REG_FIRST_NAME";
@@ -2033,6 +2054,216 @@ async function handleEblockwatchInfoChoice(ctx: MenuContext): Promise<void> {
 
 // ── Profile update handler ────────────────────────────────────────────────────
 
+// ── Profile wizard ────────────────────────────────────────────────────────────
+
+async function fetchMemberProfile(whatsappNumber: string) {
+  const rows = await db.select({
+    displayName: membersTable.displayName,
+    email: membersTable.email,
+    mobile: membersTable.mobile,
+    homeAddress: membersTable.homeAddress,
+    suburb: membersTable.suburb,
+    city: membersTable.city,
+    province: membersTable.province,
+    iceContactName: membersTable.iceContactName,
+    iceContactPhone: membersTable.iceContactPhone,
+  }).from(membersTable).where(eq(membersTable.whatsappNumber, whatsappNumber)).limit(1);
+  return rows[0] ?? null;
+}
+
+const WIZARD_LABELS: Record<string, string> = {
+  [STEP_WIZARD_NAME]:     "Full name",
+  [STEP_WIZARD_EMAIL]:    "Email address",
+  [STEP_WIZARD_MOBILE]:   "Mobile number",
+  [STEP_WIZARD_ADDRESS]:  "Street address",
+  [STEP_WIZARD_SUBURB]:   "Suburb",
+  [STEP_WIZARD_CITY]:     "City",
+  [STEP_WIZARD_PROVINCE]: "Province",
+  [STEP_WIZARD_ICE]:      "ICE emergency contact",
+};
+
+function wizardStepMessage(step: string, current: string | null | undefined, stepNum: number): string {
+  const total = WIZARD_STEP_ORDER.length;
+  const val = current?.trim() ? current.trim() : "(not set)";
+  const hint = step === STEP_WIZARD_ICE ? `\nFormat: ICE: Andre Snyman, 0825611065` : "";
+  return [
+    `Step ${stepNum} of ${total} — ${WIZARD_LABELS[step] ?? step}`,
+    ``,
+    `Current: ${val}`,
+    hint,
+    ``,
+    `Type a new value, or send NEXT to keep it.`,
+    `Reply 0 to cancel.`,
+  ].join("\n");
+}
+
+function wizardCurrentValue(step: string, profile: Awaited<ReturnType<typeof fetchMemberProfile>>): string | null {
+  if (!profile) return null;
+  const map: Record<string, string | null | undefined> = {
+    [STEP_WIZARD_NAME]:     profile.displayName,
+    [STEP_WIZARD_EMAIL]:    profile.email,
+    [STEP_WIZARD_MOBILE]:   profile.mobile,
+    [STEP_WIZARD_ADDRESS]:  profile.homeAddress,
+    [STEP_WIZARD_SUBURB]:   profile.suburb,
+    [STEP_WIZARD_CITY]:     profile.city,
+    [STEP_WIZARD_PROVINCE]: profile.province,
+    [STEP_WIZARD_ICE]:      profile.iceContactName
+      ? `${profile.iceContactName}, ${profile.iceContactPhone ?? ""}`
+      : null,
+  };
+  return map[step] ?? null;
+}
+
+async function startProfileWizard(from: string, to: string, name: string): Promise<void> {
+  const profile = await fetchMemberProfile(from);
+  await setConvState(from, {
+    currentFlow: FLOW_PROFILE_WIZARD,
+    currentStep: STEP_WIZARD_NAME,
+    pendingTripData: { wizardChanges: {} },
+  });
+  await sendWhatsApp(from, to, wizardStepMessage(STEP_WIZARD_NAME, profile?.displayName, 1));
+}
+
+async function handleProfileWizardStep(ctx: MenuContext, state: ConvState): Promise<void> {
+  const { from, to, body, member, messageSid } = ctx;
+  const name = member?.displayName ?? from;
+  const trimmed = body.trim();
+
+  await saveMessage(from, to, body, messageSid, null);
+
+  if (trimmed === "0") {
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, mainMenuText(name, member));
+    return;
+  }
+
+  const step = state.currentStep ?? STEP_WIZARD_NAME;
+  const stepNum = WIZARD_STEP_ORDER.indexOf(step as typeof WIZARD_STEP_ORDER[number]) + 1;
+  const changes: Record<string, string | null> = {
+    ...(state.pendingTripData?.wizardChanges ?? {}),
+  };
+  const isSkip = /^(next|skip|keep|ok|yes|-)$/i.test(trimmed);
+  let valid = true;
+
+  if (!isSkip) {
+    switch (step) {
+      case STEP_WIZARD_NAME: {
+        if (trimmed.length >= 2 && /[a-z]/i.test(trimmed)) {
+          const parts = trimmed.split(/\s+/);
+          changes.displayName = trimmed;
+          changes.firstName = parts[0];
+          changes.lastName = parts.slice(1).join(" ") || null;
+        } else { valid = false; }
+        break;
+      }
+      case STEP_WIZARD_EMAIL: {
+        const email = trimmed.match(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i)?.[0]?.toLowerCase() ?? null;
+        if (email) { changes.email = email; } else { valid = false; }
+        break;
+      }
+      case STEP_WIZARD_MOBILE: {
+        const digits = trimmed.replace(/\D/g, "");
+        if (digits.length >= 9) { changes.mobile = digits; } else { valid = false; }
+        break;
+      }
+      case STEP_WIZARD_ADDRESS: {
+        if (trimmed.length >= 3) { changes.homeAddress = trimmed; } else { valid = false; }
+        break;
+      }
+      case STEP_WIZARD_SUBURB:
+        if (trimmed.length >= 2) { changes.suburb = trimmed; } else { valid = false; }
+        break;
+      case STEP_WIZARD_CITY:
+        if (trimmed.length >= 2) { changes.city = trimmed; } else { valid = false; }
+        break;
+      case STEP_WIZARD_PROVINCE:
+        if (trimmed.length >= 2) { changes.province = trimmed; } else { valid = false; }
+        break;
+      case STEP_WIZARD_ICE: {
+        const m = /^(?:ICE:\s*)?(.+?),\s*(\+?[\d\s]{9,})$/i.exec(trimmed);
+        if (m) {
+          changes.iceContactName = m[1].trim();
+          changes.iceContactPhone = m[2].replace(/\s/g, "");
+        } else { valid = false; }
+        break;
+      }
+    }
+  }
+
+  if (!valid) {
+    const profile = await fetchMemberProfile(from);
+    await sendWhatsApp(from, to,
+      `Please try again — could not read that.\n\n` +
+      wizardStepMessage(step, wizardCurrentValue(step, profile), stepNum)
+    );
+    return;
+  }
+
+  // Store changes so far
+  await setConvState(from, {
+    pendingTripData: { wizardChanges: changes },
+  });
+
+  const nextStep = WIZARD_STEP_ORDER[stepNum] ?? null; // stepNum is 1-based, array is 0-based so stepNum = next index
+
+  if (nextStep) {
+    const profile = await fetchMemberProfile(from);
+    await setConvState(from, { currentStep: nextStep });
+    await sendWhatsApp(from, to, wizardStepMessage(nextStep, wizardCurrentValue(nextStep, profile), stepNum + 1));
+  } else {
+    // All steps done — save everything at once
+    const set: {
+      displayName?: string; firstName?: string; lastName?: string;
+      email?: string | null; mobile?: string | null;
+      homeAddress?: string | null; suburb?: string | null;
+      city?: string | null; province?: string | null;
+      iceContactName?: string | null; iceContactPhone?: string | null;
+    } = {};
+    if (changes.displayName != null) { set.displayName = changes.displayName; set.firstName = changes.firstName ?? changes.displayName; set.lastName = changes.lastName ?? ""; }
+    if ("email"          in changes) set.email          = changes.email;
+    if ("mobile"         in changes) set.mobile         = changes.mobile;
+    if ("homeAddress"    in changes) set.homeAddress    = changes.homeAddress;
+    if ("suburb"         in changes) set.suburb         = changes.suburb;
+    if ("city"           in changes) set.city           = changes.city;
+    if ("province"       in changes) set.province       = changes.province;
+    if ("iceContactName" in changes) { set.iceContactName = changes.iceContactName; set.iceContactPhone = changes.iceContactPhone; }
+
+    if (Object.keys(set).length > 0) {
+      try {
+        await db.update(membersTable).set(set).where(eq(membersTable.whatsappNumber, from));
+      } catch { /* best-effort */ }
+    }
+
+    const displayLabels: Record<string, string> = {
+      displayName: "Name", email: "Email", mobile: "Mobile",
+      homeAddress: "Address", suburb: "Suburb", city: "City",
+      province: "Province", iceContactName: "ICE contact",
+    };
+    const summaryLines = Object.entries(changes)
+      .filter(([k]) => displayLabels[k])
+      .map(([k, v]) => `• ${displayLabels[k]}: ${v ?? "(cleared)"}`);
+
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+
+    const finalName = changes.displayName ?? name;
+    if (summaryLines.length > 0) {
+      await sendWhatsApp(from, to, [
+        `✅ All done, ${finalName}!`,
+        ``,
+        `Here is what was updated:`,
+        ...summaryLines,
+        ``,
+        `Reply 0 for Main Menu.`,
+      ].join("\n"));
+      await sendOperatorMirror(to, [`PROFILE WIZARD COMPLETE`, `Member: ${name}`, ...summaryLines].join("\n"));
+    } else {
+      await sendWhatsApp(from, to, `${name}, nothing was changed.\n\nReply 0 for Main Menu.`);
+    }
+  }
+}
+
 function profileUpdatePrompt(name: string): string {
   return [
     `${name}, what needs updating? Just type it:`,
@@ -2926,8 +3157,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
 
   if (choice === "4") {
     await saveMessage(from, to, body, messageSid, null);
-    await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: STEP_WAITING_FOR_PROFILE_FIELD });
-    await sendWhatsApp(from, to, profileUpdatePrompt(name));
+    await startProfileWizard(from, to, name);
     return true;
   }
 
@@ -3417,9 +3647,8 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
         await sendWhatsApp(from, to, mainMenuText(name, member));
       }
     } else if (choice === "2") {
-      // Needs update — go straight to smart field update
-      await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: STEP_WAITING_FOR_PROFILE_FIELD });
-      await sendWhatsApp(from, to, profileUpdatePrompt(name));
+      // Needs update — start the profile wizard
+      await startProfileWizard(from, to, name);
     } else {
       // Unrecognised — re-send the confirmation
       await sendProfileConfirmation(from, to, name);
@@ -3444,6 +3673,11 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
 
   if (state.currentFlow === FLOW_EBLOCKWATCH_INFO) {
     await handleEblockwatchInfoChoice(ctx);
+    return { handled: true };
+  }
+
+  if (state.currentFlow === FLOW_PROFILE_WIZARD) {
+    await handleProfileWizardStep(ctx, state);
     return { handled: true };
   }
 
