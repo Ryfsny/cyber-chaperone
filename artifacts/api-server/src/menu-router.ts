@@ -2116,24 +2116,33 @@ function wizardCurrentValue(step: string, profile: Awaited<ReturnType<typeof fet
 
 async function startSmartProfileUpdate(from: string, to: string, name: string): Promise<void> {
   const p = await fetchMemberProfile(from);
+
+  // Auto-populate mobile from WhatsApp number if not yet saved
+  const waNumber = from.replace(/^whatsapp:/, "");
+  if (!p?.mobile && waNumber) {
+    try {
+      await db.update(membersTable).set({ mobile: waNumber }).where(eq(membersTable.whatsappNumber, from));
+    } catch { /* best-effort */ }
+  }
+  const mobile = p?.mobile ?? waNumber;
+
   const none = "(not set)";
   const ice = p?.iceContactName
     ? `${p.iceContactName}${p.iceContactPhone ? ` (${p.iceContactPhone})` : ""}`
     : none;
+  const address = [p?.homeAddress, p?.suburb, p?.city].filter(Boolean).join(", ") || none;
+
   const lines = [
     `${name}, here's what we have for you:`,
     ``,
     `• Name: ${p?.displayName ?? none}`,
     `• Email: ${p?.email ?? none}`,
-    `• Mobile: ${p?.mobile ?? none}`,
-    `• Address: ${p?.homeAddress ?? none}`,
-    `• Suburb: ${p?.suburb ?? none}`,
+    `• Mobile: ${mobile}`,
+    `• Home address: ${address}`,
     `• ICE contact: ${ice}`,
     ``,
-    `Just type what you'd like to change, e.g.:`,
-    `  kierens@tiscali.co.za`,
-    `  12 Oak St, Bryanston`,
-    `  ICE: Jane Smith, 0821234567`,
+    `What would you like to update?`,
+    `Just type your new value — email, address, name, or ICE contact.`,
     ``,
     `Reply 0 for Main Menu.`,
   ];
@@ -2319,8 +2328,9 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
       .trim();
     const looksLikeName = textOnly.length >= 2 && /^[a-záàäéèêëíìîïóòôöúùûüýñçA-Z\s'-]+$/i.test(textOnly);
     // Address: has digits, or has comma, or has common street words
-    const looksLikeAddress = !looksLikeName && !isIce && !emailRaw &&
-      /\d/.test(textOnly) || (/,/.test(textOnly) && textOnly.length > 5);
+    const looksLikeAddress = !looksLikeName && !isIce && !emailRaw && (
+      /\d/.test(textOnly) || (/,/.test(textOnly) && textOnly.length > 5)
+    );
 
     if (isIce) {
       // Reuse the existing ICE handler by setting the step and re-entering
