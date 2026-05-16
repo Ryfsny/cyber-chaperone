@@ -245,16 +245,6 @@ const _replyOverrides = new Map<string, (body: string) => Promise<void>>();
 
 // ── Twilio ────────────────────────────────────────────────────────────────────
 
-async function getMemberDeepLink(whatsappNumber: string): Promise<string> {
-  try {
-    const [row] = await db
-      .select({ memberToken: membersTable.memberToken })
-      .from(membersTable)
-      .where(or(eq(membersTable.whatsappNumber, whatsappNumber), eq(membersTable.whatsappNumber, whatsappNumber.replace(/^whatsapp:/, ""))));
-    if (row?.memberToken) return `\n\n🔗 https://cyber-chaperone-r--ryfsny.replit.app/website/me?token=${row.memberToken}`;
-  } catch { /* best-effort */ }
-  return "";
-}
 
 async function sendWhatsApp(from: string, to: string, body: string): Promise<void> {
   // Check for platform override (e.g. Facebook Messenger) registered for this sender
@@ -2738,9 +2728,6 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
       ``,
       `Join me — just send "Hi" to:`,
       `👉 wa.me/${BUSINESS_WA_NUM}`,
-      ``,
-      `Or register at:`,
-      `👉 https://cyber-chaperone-r--ryfsny.replit.app/website/`,
       `─────────────────────────────`,
       ``,
       `Forward this to anyone you want to keep safe.`,
