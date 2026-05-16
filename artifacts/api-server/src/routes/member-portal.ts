@@ -56,6 +56,15 @@ router.post("/member-portal/request-otp", async (req, res): Promise<void> => {
 
   if (rawPhone) {
     const phone = normalisePhone(rawPhone.trim());
+
+    // If a valid unexpired code already exists, re-send it (don't overwrite the WhatsApp profile code)
+    const existing = otpStore.get(phone);
+    if (existing && existing.expiresAt > Date.now()) {
+      res.json(generic);
+      sendOtpWhatsApp(phone, existing.code).catch((err: unknown) => req.log.error({ err }, "Failed to resend OTP via WhatsApp"));
+      return;
+    }
+
     const cooldown = otpCooldown.get(phone);
     if (cooldown && Date.now() - cooldown.lastRequestAt < OTP_COOLDOWN_MS) { res.json(generic); return; }
     otpCooldown.set(phone, { lastRequestAt: Date.now() });
@@ -76,6 +85,15 @@ router.post("/member-portal/request-otp", async (req, res): Promise<void> => {
 
   // Email path
   const email = rawEmail.trim().toLowerCase();
+
+  // Reuse existing valid code for email too
+  const existingEmail = otpStore.get(email);
+  if (existingEmail && existingEmail.expiresAt > Date.now()) {
+    res.json(generic);
+    sendOtpEmail(email, existingEmail.code).catch((err: unknown) => req.log.error({ err }, "Failed to resend OTP via email"));
+    return;
+  }
+
   const cooldown = otpCooldown.get(email);
   if (cooldown && Date.now() - cooldown.lastRequestAt < OTP_COOLDOWN_MS) { res.json(generic); return; }
   otpCooldown.set(email, { lastRequestAt: Date.now() });

@@ -28,7 +28,8 @@ type OtpMethod = "phone" | "email";
 export default function MemberLogin() {
   const [, navigate] = useLocation();
   const [mode, setMode] = useState<LoginMode>("otp");
-  const [step, setStep] = useState<"input" | "code">("input");
+  // OTP mode no longer uses a separate "step" — phone + code shown together
+  const [codeSent, setCodeSent] = useState(false);
 
   // OTP login state
   const [otpMethod, setOtpMethod] = useState<OtpMethod>("phone");
@@ -54,24 +55,23 @@ export default function MemberLogin() {
 
   function resetAll() {
     setError(""); setInfo(""); setLoading(false);
-    setStep("input"); setOtp(""); setForgotStep("request");
+    setCodeSent(false); setOtp(""); setForgotStep("request");
     setForgotCode(""); setNewPassword(""); setConfirmPassword("");
   }
 
   // ── OTP flow ──────────────────────────────────────────────────────────────
-  async function requestOtp(e: React.FormEvent) {
-    e.preventDefault(); setError(""); setLoading(true);
+  async function sendCode() {
+    setError(""); setInfo(""); setLoading(true);
     try {
-      const body = otpMethod === "phone"
-        ? { whatsappNumber: phone }
-        : { email: otpEmail };
+      const body = otpMethod === "phone" ? { whatsappNumber: phone } : { email: otpEmail };
       const res = await fetch(`${BASE}/api/member-portal/request-otp`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify(body),
       });
       const data = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed to send code.");
-      setStep("code");
+      setCodeSent(true);
+      setInfo(otpMethod === "phone" ? "Code sent to your WhatsApp." : "Code sent to your email.");
     } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
     finally { setLoading(false); }
   }
@@ -208,7 +208,7 @@ export default function MemberLogin() {
             {mode !== "forgot" && (
               <div style={{ display: "flex", gap: "4px", background: "#f3f4f6", borderRadius: "10px", padding: "4px", marginBottom: "24px" }}>
                 <button style={tabStyle(mode === "otp")} onClick={() => { setMode("otp"); resetAll(); }}>
-                  Send Code
+                  Login Code
                 </button>
                 <button style={tabStyle(mode === "password")} onClick={() => { setMode("password"); resetAll(); }}>
                   Password
@@ -227,15 +227,21 @@ export default function MemberLogin() {
               </div>
             )}
 
-            {/* ── OTP login — input step ─────────────────────────────────── */}
-            {mode === "otp" && step === "input" && (
-              <form onSubmit={(e) => void requestOtp(e)}>
+            {/* ── OTP login — single screen ──────────────────────────────── */}
+            {mode === "otp" && (
+              <form onSubmit={(e) => void verifyOtp(e)}>
+                {/* Hint banner */}
+                <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "8px", padding: "10px 14px", fontSize: "13px", color: "#166534", marginBottom: "18px", display: "flex", gap: "8px", alignItems: "flex-start" }}>
+                  <span style={{ fontSize: "16px", flexShrink: 0 }}>💬</span>
+                  <span>Got a code from WhatsApp? Enter your number and paste it below — no need to request a new one.</span>
+                </div>
+
                 {/* Phone / Email sub-toggle */}
-                <div style={{ display: "flex", gap: "4px", background: "#f3f4f6", borderRadius: "8px", padding: "3px", marginBottom: "16px" }}>
-                  <button type="button" style={methodTab(otpMethod === "phone")} onClick={() => { setOtpMethod("phone"); setError(""); }}>
+                <div style={{ display: "flex", gap: "4px", background: "#f3f4f6", borderRadius: "8px", padding: "3px", marginBottom: "14px" }}>
+                  <button type="button" style={methodTab(otpMethod === "phone")} onClick={() => { setOtpMethod("phone"); setError(""); setInfo(""); }}>
                     📱 Cell Phone
                   </button>
-                  <button type="button" style={methodTab(otpMethod === "email")} onClick={() => { setOtpMethod("email"); setError(""); }}>
+                  <button type="button" style={methodTab(otpMethod === "email")} onClick={() => { setOtpMethod("email"); setError(""); setInfo(""); }}>
                     ✉️ Email
                   </button>
                 </div>
@@ -243,7 +249,7 @@ export default function MemberLogin() {
                 {otpMethod === "phone" ? (
                   <>
                     <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Cell Phone Number</label>
-                    <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
                       <div style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: "8px", padding: "10px 12px", fontSize: "14px", color: "#374151", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px" }}>
                         🇿🇦 +27
                       </div>
@@ -253,42 +259,35 @@ export default function MemberLogin() {
                 ) : (
                   <>
                     <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Email Address</label>
-                    <input type="email" value={otpEmail} onChange={(e) => setOtpEmail(e.target.value)} placeholder="you@example.com" required style={{ ...inputStyle, marginBottom: "20px" }} />
+                    <input type="email" value={otpEmail} onChange={(e) => setOtpEmail(e.target.value)} placeholder="you@example.com" required style={{ ...inputStyle, marginBottom: "14px" }} />
                   </>
                 )}
 
-                <button type="submit" disabled={loading || (otpMethod === "phone" ? !phone : !otpEmail)} style={{ ...btnPrimary, opacity: loading || (otpMethod === "phone" ? !phone : !otpEmail) ? 0.6 : 1 }}>
-                  {loading ? "Sending…" : otpMethod === "phone" ? "Send WhatsApp Code" : "Send Email Code"}
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>6-Digit Login Code</label>
+                <input
+                  type="text" value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="123456" maxLength={6} inputMode="numeric" autoFocus
+                  style={{ ...inputStyle, fontSize: "22px", letterSpacing: "8px", textAlign: "center", marginBottom: "6px" }}
+                />
+                <div style={{ textAlign: "right", marginBottom: "20px" }}>
+                  <button
+                    type="button"
+                    disabled={loading || (otpMethod === "phone" ? !phone : !otpEmail)}
+                    onClick={() => void sendCode()}
+                    style={{ background: "none", border: "none", color: "#1db954", fontSize: "12px", cursor: "pointer", fontWeight: 600, padding: "2px 0" }}>
+                    {loading && !otp ? "Sending…" : codeSent ? "Code sent ✓ — resend?" : "Don't have a code? Send one to my WhatsApp"}
+                  </button>
+                </div>
+
+                <button type="submit" disabled={loading || otp.length !== 6 || (otpMethod === "phone" ? !phone : !otpEmail)}
+                  style={{ ...btnPrimary, opacity: loading || otp.length !== 6 || (otpMethod === "phone" ? !phone : !otpEmail) ? 0.6 : 1 }}>
+                  {loading && otp.length === 6 ? "Verifying…" : "Log In"}
                 </button>
                 <p style={{ textAlign: "center", fontSize: "12px", color: "#9ca3af", margin: 0 }}>
                   Not registered?{" "}
                   <a href={`${BASE}/`} style={{ color: "#1db954", textDecoration: "none", fontWeight: 600 }}>Register for free</a>
                 </p>
-              </form>
-            )}
-
-            {/* ── OTP login — code step ──────────────────────────────────── */}
-            {mode === "otp" && step === "code" && (
-              <form onSubmit={(e) => void verifyOtp(e)}>
-                <p style={{ fontSize: "13px", color: "#6b7280", marginTop: 0, marginBottom: "14px" }}>
-                  {otpMethod === "phone"
-                    ? <>We've sent a 6-digit code to WhatsApp <strong>{phone}</strong></>
-                    : <>We've sent a 6-digit code to <strong>{otpEmail}</strong></>
-                  }
-                </p>
-                <input
-                  type="text" value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="123456" maxLength={6} required autoFocus
-                  style={{ ...inputStyle, fontSize: "22px", letterSpacing: "8px", textAlign: "center", marginBottom: "20px" }}
-                />
-                <button type="submit" disabled={loading || otp.length !== 6} style={{ ...btnPrimary, opacity: loading || otp.length !== 6 ? 0.6 : 1 }}>
-                  {loading ? "Verifying…" : "Verify & Log In"}
-                </button>
-                <button type="button" onClick={() => { setStep("input"); setOtp(""); setError(""); }}
-                  style={{ width: "100%", background: "none", border: "none", color: "#6b7280", fontSize: "13px", cursor: "pointer", padding: "4px" }}>
-                  ← Try again
-                </button>
               </form>
             )}
 
