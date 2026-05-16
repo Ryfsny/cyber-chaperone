@@ -3,7 +3,7 @@ import { db, messagesTable, tripsTable, membersTable, caseParticipantsTable, cas
 import { and, eq, ne, desc, count } from "drizzle-orm";
 import twilio from "twilio";
 import { assessRisk } from "./ai.js";
-import { handleMenuRouter } from "../menu-router.js";
+import { handleMenuRouter, handleSafetyVehiclePhoto } from "../menu-router.js";
 import { withMenu } from "../message-utils.js";
 import { sendOperatorEmail, type EmailCategory } from "../email-service.js";
 import { reverseGeocodeStreetAddress } from "../route-service.js";
@@ -442,7 +442,16 @@ router.post(
       res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
       return;
     }
-    // Image with no active trip — fall through to the generic media handler below
+    // Image with no active trip — check if member is completing their safety profile
+    if (mediaUrl) {
+      const safetyHandled = await handleSafetyVehiclePhoto(from, to, mediaUrl, sendReply);
+      if (safetyHandled) {
+        res.set("Content-Type", "text/xml");
+        res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+        return;
+      }
+    }
+    // Not a safety profile photo — fall through to the generic media handler below
   }
 
   // BUG 2 FIX: If body is still empty after transcription attempt and there are media

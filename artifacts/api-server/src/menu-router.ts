@@ -33,6 +33,10 @@ interface PendingTripData {
   regCity?: string;
   regProvince?: string;
   regHomeAddress?: string;
+  // Safety profile fields
+  safetyMotherName?: string;
+  safetyMotherPhone?: string;
+  safetyVehiclePhotos?: string[];
 }
 
 interface ConvState {
@@ -90,6 +94,11 @@ const STEP_REG_CITY = "REG_CITY";
 const STEP_REG_PROVINCE = "REG_PROVINCE";
 const STEP_REG_HOME_ADDRESS = "REG_HOME_ADDRESS";
 const STEP_REG_ICE = "REG_ICE";
+const FLOW_SAFETY_PROFILE = "SAFETY_PROFILE";
+const STEP_SAFETY_MOTHER_NAME = "SAFETY_MOTHER_NAME";
+const STEP_SAFETY_MOTHER_PHONE = "SAFETY_MOTHER_PHONE";
+const STEP_SAFETY_VEHICLE_PHOTO = "SAFETY_VEHICLE_PHOTO";
+const STEP_SAFETY_VEHICLE_DESC = "SAFETY_VEHICLE_DESC";
 
 // ── Keyword detectors ─────────────────────────────────────────────────────────
 
@@ -2000,6 +2009,25 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
     return;
   }
 
+  if (choice === "8") {
+    // Safety questionnaire
+    await setConvState(from, {
+      currentFlow: FLOW_SAFETY_PROFILE,
+      currentStep: STEP_SAFETY_MOTHER_NAME,
+      pendingTripData: {},
+    });
+    await sendWhatsApp(from, to, [
+      `🛡️ Let's build your safety profile, ${name}.`,
+      ``,
+      `André uses this to look after you properly on the road. Takes about 2 minutes.`,
+      ``,
+      `*Question 1 of 3:* What is your mother's full name?`,
+      ``,
+      `Reply 0 to cancel.`,
+    ].join("\n"));
+    return;
+  }
+
   // Options 1, 2, 3, 5, 6 — not yet built, direct to human
   const optionLabels: Record<string, string> = {
     "1": "personal details",
@@ -2031,9 +2059,187 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
     `4. My ICE contact`,
     `5. My family members`,
     `6. My local network / conduit details`,
+    `8. 🛡️ Safety questionnaire (mother + vehicle + location)`,
     ``,
     `Reply 0 for Main Menu.`,
   ].join("\n"));
+}
+
+// ── Safety Profile Flow ───────────────────────────────────────────────────────
+
+// Called from webhook.ts when an image arrives during STEP_SAFETY_VEHICLE_PHOTO.
+// Returns true if it handled the image, false if not in that step.
+export async function handleSafetyVehiclePhoto(
+  from: string,
+  to: string,
+  photoUrl: string,
+  sendReplyFn: (from: string, to: string, body: string) => Promise<void>,
+): Promise<boolean> {
+  const state = await getConvState(from);
+  if (state.currentFlow !== FLOW_SAFETY_PROFILE || state.currentStep !== STEP_SAFETY_VEHICLE_PHOTO) {
+    return false;
+  }
+  const pending = state.pendingTripData ?? {};
+  const photos: string[] = Array.isArray(pending.safetyVehiclePhotos) ? (pending.safetyVehiclePhotos as string[]) : [];
+  photos.push(photoUrl);
+  await setConvState(from, {
+    currentFlow: FLOW_SAFETY_PROFILE,
+    currentStep: STEP_SAFETY_VEHICLE_DESC,
+    pendingTripData: { ...pending, safetyVehiclePhotos: photos },
+  });
+  await sendReplyFn(from, to, [
+    `📸 Car photo received! Perfect.`,
+    ``,
+    `Now please describe your vehicle:`,
+    `Colour, make, model and registration plate.`,
+    ``,
+    `Example: Silver Suzuki Ignis, HR 44 YK GP`,
+    ``,
+    `Reply SKIP to skip the description.`,
+    `Reply 0 to cancel.`,
+  ].join("\n"));
+  return true;
+}
+
+async function completeSafetyProfile(
+  from: string,
+  to: string,
+  name: string,
+  member: MemberInfo | null,
+  pending: PendingTripData,
+  vehicleDesc: string | null,
+  vehiclePhotoUrls: string | null,
+): Promise<void> {
+  const motherName = pending.safetyMotherName ?? null;
+  const motherPhone = pending.safetyMotherPhone ?? null;
+  try {
+    await db
+      .update(membersTable)
+      .set({
+        motherName: motherName || null,
+        motherPhone: motherPhone || null,
+        vehicleDescription: vehicleDesc || null,
+        vehiclePhotoUrls: vehiclePhotoUrls || null,
+      })
+      .where(eq(membersTable.whatsappNumber, from));
+  } catch { /* best-effort */ }
+  await resetConvState(from);
+  await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+  await sendWhatsApp(from, to, [
+    `✅ Safety profile saved, ${name}!`,
+    ``,
+    `André now has what he needs to look after you properly on the road. 🛡️`,
+    ``,
+    `*When you leave home:*`,
+    `Share your live WhatsApp location with André for 8 hours.`,
+    `👉 Tap the 📎 attachment icon → Location → Share Live Location → 8 hours.`,
+    ``,
+    `This is how Cyber Chaperone tracks you in real time.`,
+    ``,
+    `Reply 0️⃣ for Main Menu.`,
+  ].join("\n"));
+  const photoCount = vehiclePhotoUrls ? (JSON.parse(vehiclePhotoUrls) as unknown[]).length : 0;
+  await sendOperatorMirror(to, [
+    `🛡️ SAFETY PROFILE COMPLETE — ${name}`,
+    ``,
+    motherName ? `Mother: ${motherName}${motherPhone ? `, ${motherPhone}` : ""}` : `Mother: not provided`,
+    vehicleDesc ? `Vehicle: ${vehicleDesc}` : `Vehicle: not provided`,
+    photoCount > 0 ? `Car photos: ${photoCount} saved` : `Car photos: none`,
+    ``,
+    `Next action: Confirm profile in Member Directory.`,
+  ].join("\n"));
+}
+
+async function handleSafetyProfileStep(ctx: MenuContext, state: ConvState): Promise<void> {
+  const { from, to, body, member, messageSid } = ctx;
+  const name = member?.displayName ?? from;
+  const trimmed = body.trim();
+  const pending = state.pendingTripData ?? {};
+
+  await saveMessage(from, to, body, messageSid, null);
+
+  if (trimmed === "0") {
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, mainMenuText(name, member));
+    return;
+  }
+
+  if (state.currentStep === STEP_SAFETY_MOTHER_NAME) {
+    const motherName = trimmed.slice(0, 80);
+    await setConvState(from, {
+      currentFlow: FLOW_SAFETY_PROFILE,
+      currentStep: STEP_SAFETY_MOTHER_PHONE,
+      pendingTripData: { ...pending, safetyMotherName: motherName },
+    });
+    await sendWhatsApp(from, to, [
+      `Got it. What is your mother's cell phone number?`,
+      ``,
+      `If she lives overseas, include the country code (e.g. +44 7911 123456).`,
+      ``,
+      `Reply SKIP if you'd rather not share.`,
+      `Reply 0 to cancel.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (state.currentStep === STEP_SAFETY_MOTHER_PHONE) {
+    const motherPhone = /^skip$/i.test(trimmed) ? null : trimmed.slice(0, 30);
+    await setConvState(from, {
+      currentFlow: FLOW_SAFETY_PROFILE,
+      currentStep: STEP_SAFETY_VEHICLE_PHOTO,
+      pendingTripData: { ...pending, safetyMotherPhone: motherPhone ?? "" },
+    });
+    await sendWhatsApp(from, to, [
+      `Perfect. Now please send a front-facing photo of your car. 📸`,
+      ``,
+      `I need to clearly see:`,
+      `• Colour, make and model`,
+      `• Registration plate`,
+      ``,
+      `This is how André knows who you are on the road.`,
+      ``,
+      `Reply SKIP if you don't have a photo right now.`,
+      `Reply 0 to cancel.`,
+    ].join("\n"));
+    return;
+  }
+
+  // STEP_SAFETY_VEHICLE_PHOTO — text received (SKIP or typed description instead of photo)
+  if (state.currentStep === STEP_SAFETY_VEHICLE_PHOTO) {
+    if (/^skip$/i.test(trimmed)) {
+      await setConvState(from, {
+        currentFlow: FLOW_SAFETY_PROFILE,
+        currentStep: STEP_SAFETY_VEHICLE_DESC,
+        pendingTripData: { ...pending },
+      });
+      await sendWhatsApp(from, to, [
+        `No worries. Please describe your vehicle:`,
+        ``,
+        `Colour, make, model and registration plate.`,
+        ``,
+        `Example: Silver Suzuki Ignis, HR 44 YK GP`,
+        ``,
+        `Reply SKIP to skip entirely.`,
+        `Reply 0 to cancel.`,
+      ].join("\n"));
+      return;
+    }
+    // They typed something instead of a photo — treat as vehicle description
+    await completeSafetyProfile(from, to, name, member, pending, trimmed.slice(0, 160), null);
+    return;
+  }
+
+  if (state.currentStep === STEP_SAFETY_VEHICLE_DESC) {
+    const vehicleDesc = /^skip$/i.test(trimmed) ? null : trimmed.slice(0, 160);
+    const photos = pending.safetyVehiclePhotos ?? [];
+    await completeSafetyProfile(
+      from, to, name, member, pending,
+      vehicleDesc,
+      photos.length > 0 ? JSON.stringify(photos) : null,
+    );
+    return;
+  }
 }
 
 // ── WhatsApp Registration Flow ────────────────────────────────────────────────
@@ -2253,8 +2459,9 @@ async function handleRegistrationStep(ctx: MenuContext, state: ConvState): Promi
       ``,
       `Your profile is registered. You are now part of a trusted safety network.`,
       ``,
-      `👉 Next step: upgrade to Cyber Chaperone for full route tracking, ICE escalation, and priority response.`,
-      `Reply 3 from the Main Menu to activate your membership.`,
+      `👉 *Next step — complete your safety profile:*`,
+      `Reply *4* then *8* from the Main Menu to add your mother's details and car photo.`,
+      `André uses this to look after you properly on the road. It takes 2 minutes.`,
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n"));
@@ -2594,6 +2801,11 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
 
   if (state.currentFlow === FLOW_PROFILE_UPDATE) {
     await handleProfileUpdateChoice(ctx, state);
+    return { handled: true };
+  }
+
+  if (state.currentFlow === FLOW_SAFETY_PROFILE) {
+    await handleSafetyProfileStep(ctx, state);
     return { handled: true };
   }
 

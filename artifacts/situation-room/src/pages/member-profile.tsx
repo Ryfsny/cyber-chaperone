@@ -39,6 +39,10 @@ interface MemberFull {
   sourceBatch: string | null;
   importStatus: string | null;
   facebookUrl: string | null;
+  motherName: string | null;
+  motherPhone: string | null;
+  vehicleDescription: string | null;
+  vehiclePhotoUrls: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -677,6 +681,49 @@ export default function MemberProfile() {
                 <div className="p-4 grid grid-cols-2 gap-4">
                   <InfoRow label="Name" value={member.iceContactName} />
                   <InfoRow label="Phone / WhatsApp" value={member.iceContactPhone ? fmt(member.iceContactPhone) : null} mono />
+                </div>
+              </div>
+            )}
+
+            {/* Safety profile */}
+            {(member.motherName || member.vehicleDescription || member.vehiclePhotoUrls) && (
+              <div className="border border-green-700/40 bg-card">
+                <div className="px-4 py-2 border-b border-green-700/40 flex items-center gap-2">
+                  <Shield className="w-3.5 h-3.5 text-green-400" />
+                  <span className="text-[10px] uppercase tracking-widest text-green-400 font-bold">🛡️ Safety Profile</span>
+                </div>
+                <div className="p-4 grid grid-cols-2 gap-4">
+                  {member.motherName && (
+                    <InfoRow label="Mother's name" value={member.motherName} />
+                  )}
+                  {member.motherPhone && (
+                    <InfoRow label="Mother's number" value={member.motherPhone} mono />
+                  )}
+                  {member.vehicleDescription && (
+                    <div className="col-span-full">
+                      <InfoRow label="Vehicle" value={member.vehicleDescription} />
+                    </div>
+                  )}
+                  {member.vehiclePhotoUrls && (() => {
+                    let photos: string[] = [];
+                    try { photos = JSON.parse(member.vehiclePhotoUrls) as string[]; } catch { /* ignore */ }
+                    return photos.length > 0 ? (
+                      <div className="col-span-full">
+                        <span className="text-[10px] uppercase tracking-widest text-muted-foreground block mb-2">Car photos</span>
+                        <div className="flex flex-wrap gap-2">
+                          {photos.map((url, i) => (
+                            <a key={i} href={url} target="_blank" rel="noreferrer" className="block">
+                              <img
+                                src={url}
+                                alt={`Car photo ${i + 1}`}
+                                className="h-28 w-auto object-cover border border-green-700/40 hover:border-green-400 transition-colors"
+                              />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               </div>
             )}
