@@ -312,8 +312,8 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
         </td>
         <td style="width:50%;padding:0 0 0 8px;vertical-align:top;">
           <div style="border:1px solid #d1fae5;border-left:3px solid #22c55e;padding:16px 16px 16px 18px;">
-            <div style="font-weight:bold;color:#111827;font-size:13px;margin-bottom:5px;font-family:Arial,sans-serif;">💬 Cyber Shepherd</div>
-            <div style="color:#4b5563;font-size:12px;line-height:1.6;font-family:Arial,sans-serif;">Send <strong>10</strong> on WhatsApp. Your Cyber Shepherd and community are alerted and mobilise around you.</div>
+            <div style="font-weight:bold;color:#111827;font-size:13px;margin-bottom:5px;font-family:Arial,sans-serif;">💬 Cyber Chaperone</div>
+            <div style="color:#4b5563;font-size:12px;line-height:1.6;font-family:Arial,sans-serif;">Send <strong>10</strong> on WhatsApp. Your Cyber Chaperone and community are alerted and mobilise around you.</div>
           </div>
         </td>
       </tr>
