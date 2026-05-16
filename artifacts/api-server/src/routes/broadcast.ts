@@ -649,7 +649,8 @@ router.get("/broadcast/welcome-preview", (req: Request, res: Response): void => 
 });
 
 // ── POST /api/broadcast/welcome-campaign ──────────────────────────────────────
-// Sends the welcome-back email to all active/verified members who have an email.
+// Sends the welcome-back email to the first 50 active/verified members who have an email.
+// André is CC'd on the very first and very last email so he knows when it started and finished.
 router.post("/broadcast/welcome-campaign", async (req: Request, res: Response): Promise<void> => {
   if (!nationalOnly(req, res)) return;
 
@@ -657,61 +658,52 @@ router.post("/broadcast/welcome-campaign", async (req: Request, res: Response): 
   const gmailUser = process.env["GMAIL_USER"] ?? "";
   if (!t || !gmailUser) { res.status(500).json({ error: "Gmail not configured." }); return; }
 
+  const ANDRE_CC = "ryfsny@yebo.co.za";
+  const LIMIT = 50;
+
   const members = await db
     .select({ id: membersTable.id, firstName: membersTable.firstName, displayName: membersTable.displayName, email: membersTable.email })
     .from(membersTable)
     .where(
       sql`(member_status = 'active' OR member_status = 'verified') AND email IS NOT NULL AND email != ''` as unknown as ReturnType<typeof eq>
-    );
+    )
+    .orderBy(membersTable.id)
+    .limit(LIMIT);
 
   const valid = members.filter((m) => m.email?.trim());
   if (valid.length === 0) { res.json({ ok: true, queued: false, sent: 0, failed: 0, total: 0, results: [] }); return; }
 
   const SUBJECT = (fn: string) => `André here — welcome home, ${fn}.`;
+  const TEXT = (fn: string) => `Hi ${fn},\n\nWelcome home to eblockwatch.\n\nActivate on WhatsApp now — save +27 82 561 1065, send "Hi", and Arnie walks you through everything.\n\nAndre Snyman\nFounder · eblockwatch`;
 
-  if (valid.length > 20) {
-    const job = makeJob("email", valid.length);
-    res.json({ ok: true, queued: true, total: valid.length, jobId: job.id });
-    (async () => {
-      for (const m of valid) {
-        const fn = m.firstName ?? m.displayName.split(" ")[0] ?? "Member";
-        try {
-          await t.sendMail({
-            from: `"Andre Snyman | eblockwatch" <${gmailUser}>`,
-            replyTo: "info@eblockwatch.co.za",
-            to: m.email!,
-            subject: SUBJECT(fn),
-            html: buildWelcomeBackEmailHtml(fn, BUSINESS_WA_NUM),
-            text: `Hi ${fn},\n\nWelcome home to eblockwatch.\n\nActivate on WhatsApp now — save +27 82 561 1065, send "Hi", and Arnie walks you through everything.\n\nAndre Snyman\nFounder · eblockwatch`,
-          });
-          job.sent++;
-          void db.insert(messagesTable).values({ fromNumber: gmailUser, toNumber: m.email!, body: `[${SUBJECT(fn)}] Welcome campaign`, direction: "broadcast", channel: "email", status: "sent" }).catch(() => undefined);
-        } catch (err) { job.failed++; if (job.errors.length < 50) job.errors.push({ name: m.displayName, error: String(err) }); }
-        await new Promise((r) => setTimeout(r, 250));
-      }
-      job.done = true;
-    })();
-    return;
-  }
+  const lastIdx = valid.length - 1;
 
-  const results: { id: number; name: string; status: "sent" | "failed"; error?: string }[] = [];
-  for (const m of valid) {
-    const fn = m.firstName ?? m.displayName.split(" ")[0] ?? "Member";
-    try {
-      await t.sendMail({
-        from: `"Andre Snyman | eblockwatch" <${gmailUser}>`,
-        replyTo: "info@eblockwatch.co.za",
-        to: m.email!,
-        subject: SUBJECT(fn),
-        html: buildWelcomeBackEmailHtml(fn, BUSINESS_WA_NUM),
-        text: `Hi ${fn},\n\nWelcome home to eblockwatch.\n\nActivate on WhatsApp now — save +27 82 561 1065, send "Hi", and Arnie walks you through everything.\n\nAndre Snyman\nFounder · eblockwatch`,
-      });
-      results.push({ id: m.id, name: m.displayName, status: "sent" });
-      void db.insert(messagesTable).values({ fromNumber: gmailUser, toNumber: m.email!, body: `[${SUBJECT(fn)}] Welcome campaign`, direction: "broadcast", channel: "email", status: "sent" }).catch(() => undefined);
-    } catch (err) { results.push({ id: m.id, name: m.displayName, status: "failed", error: String(err) }); }
-    await new Promise((r) => setTimeout(r, 250));
-  }
-  res.json({ ok: true, queued: false, sent: results.filter((r) => r.status === "sent").length, failed: results.filter((r) => r.status === "failed").length, total: results.length, results });
+  const job = makeJob("email", valid.length);
+  res.json({ ok: true, queued: true, total: valid.length, jobId: job.id });
+
+  (async () => {
+    for (let i = 0; i < valid.length; i++) {
+      const m = valid[i]!;
+      const fn = m.firstName ?? m.displayName.split(" ")[0] ?? "Member";
+      const isFirst = i === 0;
+      const isLast  = i === lastIdx;
+      try {
+        await t.sendMail({
+          from: `"Andre Snyman | eblockwatch" <${gmailUser}>`,
+          replyTo: "info@eblockwatch.co.za",
+          to: m.email!,
+          ...(isFirst || isLast ? { cc: ANDRE_CC } : {}),
+          subject: SUBJECT(fn),
+          html: buildWelcomeBackEmailHtml(fn, BUSINESS_WA_NUM),
+          text: TEXT(fn),
+        });
+        job.sent++;
+        void db.insert(messagesTable).values({ fromNumber: gmailUser, toNumber: m.email!, body: `[${SUBJECT(fn)}] Welcome campaign`, direction: "broadcast", channel: "email", status: "sent" }).catch(() => undefined);
+      } catch (err) { job.failed++; if (job.errors.length < 50) job.errors.push({ name: m.displayName, error: String(err) }); }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    job.done = true;
+  })();
 });
 
 // ── POST /api/broadcast/sms ───────────────────────────────────────────────────

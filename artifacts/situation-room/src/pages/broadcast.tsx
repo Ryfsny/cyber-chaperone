@@ -509,7 +509,7 @@ function WelcomeCampaignPanel() {
 
             <div>
               <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Audience</div>
-              <div className="text-xs text-gray-400 leading-snug">All <span className="text-white font-semibold">active + verified</span> members with an email address</div>
+              <div className="text-xs text-gray-400 leading-snug">First <span className="text-white font-semibold">50 members</span> (by join date) with an email · André CC'd on #1 and #50</div>
             </div>
 
             <div>
