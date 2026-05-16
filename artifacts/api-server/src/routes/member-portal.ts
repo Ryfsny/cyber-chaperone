@@ -4,39 +4,14 @@ import bcrypt from "bcryptjs";
 import { db, membersTable } from "@workspace/db";
 import { eq, or } from "drizzle-orm";
 import nodemailer from "nodemailer";
+import {
+  otpStore, otpCooldown, cleanExpired, generateOtp, normalisePhone, issueOtp,
+  OTP_TTL_MS, OTP_COOLDOWN_MS, OTP_MAX_ATTEMPTS,
+} from "../otp-store.js";
 
 const router: IRouter = Router();
 
-// ── In-memory OTP store (10-minute TTL) ───────────────────────────────────────
-interface OtpEntry { code: string; expiresAt: number; attempts: number }
-const otpStore = new Map<string, OtpEntry>();
-
-// ── Per-number OTP request cooldown (60 seconds between requests) ─────────────
-interface CooldownEntry { lastRequestAt: number }
-const otpCooldown = new Map<string, CooldownEntry>();
-
-const OTP_TTL_MS = 10 * 60 * 1000;
-const OTP_COOLDOWN_MS = 60 * 1000;
-const OTP_MAX_ATTEMPTS = 5;
 const BCRYPT_ROUNDS = 12;
-
-function cleanExpired() {
-  const now = Date.now();
-  for (const [k, v] of otpStore) if (v.expiresAt < now) otpStore.delete(k);
-  for (const [k, v] of otpCooldown) if (now - v.lastRequestAt > OTP_TTL_MS) otpCooldown.delete(k);
-}
-
-function generateOtp(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
-
-function normalisePhone(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("27") && digits.length === 11) return `+${digits}`;
-  if (digits.startsWith("0") && digits.length === 10) return `+27${digits.slice(1)}`;
-  if (digits.length === 9) return `+27${digits}`;
-  return `+${digits}`;
-}
 
 function requireMemberAuth(req: Request, res: Response, next: NextFunction): void {
   if (req.session.memberId) { next(); return; }

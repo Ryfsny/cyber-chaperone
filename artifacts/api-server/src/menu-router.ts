@@ -5,6 +5,7 @@ import { enrichTripWithRoute, calculateRouteInfo, reverseGeocodeCoords, reverseG
 import { calculateGoogleMapsRoute } from "./google-maps-service.js";
 import { withMenu } from "./message-utils.js";
 import { sendOperatorEmail, sendMemberWelcomeEmail, type EmailCategory } from "./email-service.js";
+import { issueOtp, normalisePhone } from "./otp-store.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -2136,6 +2137,11 @@ async function startSmartProfileUpdate(from: string, to: string, name: string): 
     : none;
   const address = [p?.homeAddress, p?.suburb, p?.city].filter(Boolean).join(", ") || none;
 
+  // Issue an OTP so the member can also log into the website
+  const phone = normalisePhone(from.replace(/^whatsapp:/, ""));
+  const otpCode = issueOtp(phone);
+  const websiteUrl = "https://cyber-chaperone-r--ryfsny.replit.app/website/";
+
   const lines = [
     `${name}, here's what we have for you:`,
     ``,
@@ -2145,7 +2151,12 @@ async function startSmartProfileUpdate(from: string, to: string, name: string): 
     `D. Address: ${address}`,
     `E. ICE:     ${ice}`,
     ``,
-    `Type A, B, C, D or E to update that field.`,
+    `Type A, B, C, D or E to update a field.`,
+    ``,
+    `── Or update everything on the website ──`,
+    websiteUrl,
+    `Login code: *${otpCode}* (valid 10 min)`,
+    ``,
     `Reply 0 for Main Menu.`,
   ];
   await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: STEP_PROFILE_MENU });
