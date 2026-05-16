@@ -3684,13 +3684,8 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   if (isMenuOverride) {
     await resetConvState(from);
     await saveMessage(from, to, body, messageSid, null);
-    if (member?.isKnown) {
-      await setConvState(from, { currentFlow: FLOW_PROFILE_CONFIRM });
-      await sendProfileConfirmation(from, to, name);
-    } else {
-      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-      await sendWhatsApp(from, to, mainMenuText(name, member));
-    }
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, mainMenuText(name, member));
     log.info({ from, body: trimmed, handler: "GLOBAL_MENU_OVERRIDE" }, "menu-router: MENU_OVERRIDE triggered");
     return { handled: true };
   }
@@ -3764,13 +3759,8 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   if (MAIN_MENU_TRIGGER.test(trimmed)) {
     await resetConvState(from);
     await saveMessage(from, to, body, messageSid, null);
-    if (member?.isKnown) {
-      await setConvState(from, { currentFlow: FLOW_PROFILE_CONFIRM });
-      await sendProfileConfirmation(from, to, name);
-    } else {
-      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-      await sendWhatsApp(from, to, mainMenuText(name, member));
-    }
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, mainMenuText(name, member));
     log.info({ from, handler: "MAIN_MENU_TRIGGER" }, "menu-router: main menu trigger");
     return { handled: true };
   }
