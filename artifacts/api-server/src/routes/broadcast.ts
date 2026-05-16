@@ -255,64 +255,65 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
 <meta name="x-apple-disable-message-reformatting">
 <title>Welcome home to eblockwatch</title>
 </head>
-<body style="margin:0;padding:0;background:#f0fdf4;font-family:Arial,sans-serif;-webkit-text-size-adjust:100%;">
+<body style="margin:0;padding:0;background:#ffffff;font-family:Arial,sans-serif;-webkit-text-size-adjust:100%;">
 
-<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;color:#f0fdf4;">André here — your safety network is live and waiting for you on WhatsApp.</div>
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;color:#ffffff;">André here — your safety network is live and waiting for you on WhatsApp.</div>
 
 <div style="max-width:600px;margin:0 auto;background:#ffffff;">
 
-  <!-- ── Header: clean white, logo on white ── -->
-  <div style="background:#ffffff;padding:36px 48px 24px;text-align:center;border-bottom:3px solid #22c55e;">
+  <!-- ── Header: pure white, logo on white ── -->
+  <div style="background:#ffffff;padding:40px 48px 20px;text-align:center;">
     <img src="https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif"
-      alt="eblockwatch" width="180" style="display:block;margin:0 auto;max-width:180px;" />
-    <div style="color:#22c55e;font-size:13px;font-weight:bold;letter-spacing:1px;margin-top:12px;font-family:Arial,sans-serif;">
-      A safer you
+      alt="eblockwatch" width="200" style="display:block;margin:0 auto;max-width:200px;" />
+    <div style="color:#22c55e;font-size:14px;font-weight:bold;letter-spacing:1px;margin-top:14px;font-family:Arial,sans-serif;">
+      eblockwatch: A safer you
     </div>
+    <div style="height:2px;background:#22c55e;margin:16px 0 0;"></div>
   </div>
 
-  <!-- ── Personal greeting ── -->
-  <div style="padding:40px 48px 20px;">
+  <!-- ── Letter ── -->
+  <div style="padding:36px 48px 28px;background:#ffffff;">
     <p style="margin:0 0 6px;color:#16a34a;font-size:11px;font-weight:bold;letter-spacing:3px;text-transform:uppercase;font-family:Arial,sans-serif;">A PERSONAL MESSAGE FROM ANDRÉ</p>
-    <h1 style="margin:0 0 28px;color:#1a1f2e;font-size:26px;font-weight:bold;line-height:1.3;font-family:Arial,sans-serif;">${safe}, welcome home.</h1>
+    <h1 style="margin:0 0 28px;color:#111827;font-size:26px;font-weight:bold;line-height:1.3;font-family:Arial,sans-serif;">${safe}, welcome home.</h1>
     <p style="margin:0 0 20px;color:#374151;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">Dear ${safe},</p>
-    <p style="margin:0 0 20px;color:#374151;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">Twenty-five years ago I started eblockwatch with one purpose: <strong style="color:#1a1f2e;">no South African faces danger alone.</strong></p>
+    <p style="margin:0 0 20px;color:#374151;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">Twenty-five years ago I started eblockwatch with one purpose: <strong style="color:#111827;">no South African faces danger alone.</strong></p>
     <p style="margin:0 0 20px;color:#374151;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">You joined us somewhere along that journey. In all that time, you trusted us with the most important thing there is — getting home safe. I have never taken that lightly.</p>
-    <p style="margin:0 0 20px;color:#374151;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">What I want to tell you today is this: <strong style="color:#1a1f2e;">what we've built for you has changed.</strong> Not the mission — the mission never changes. But the platform we have now is something I'm genuinely proud to put in front of you.</p>
+    <p style="margin:0 0 20px;color:#374151;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">What I want to tell you today is this: <strong style="color:#111827;">what we've built for you has changed.</strong> Not the mission — the mission never changes. But the platform we have now is something I'm genuinely proud to put in front of you.</p>
     <p style="margin:0 0 0;color:#374151;font-size:16px;line-height:1.85;font-family:Georgia,'Times New Roman',serif;">It's called Cyber Chaperone. It lives inside WhatsApp — the app already on your phone. It watches over every trip you take. Included in your membership, right now, today.</p>
   </div>
 
   <!-- ── Divider ── -->
-  <div style="margin:28px 48px;height:1px;background:#bbf7d0;"></div>
+  <div style="margin:0 48px;height:1px;background:#e5e7eb;"></div>
 
-  <!-- ── Feature cards: light green left border on white ── -->
-  <div style="padding:0 48px 32px;">
+  <!-- ── Feature cards ── -->
+  <div style="padding:28px 48px;">
     <p style="margin:0 0 20px;color:#16a34a;font-size:11px;font-weight:bold;letter-spacing:3px;text-transform:uppercase;font-family:Arial,sans-serif;">WHAT'S WAITING FOR YOU</p>
     <table cellpadding="0" cellspacing="0" border="0" style="width:100%;">
       <tr>
         <td style="width:50%;padding:0 8px 12px 0;vertical-align:top;">
-          <div style="background:#f0fdf4;border-left:3px solid #22c55e;padding:16px 16px 16px 18px;border-radius:2px;">
-            <div style="font-weight:bold;color:#1a1f2e;font-size:13px;margin-bottom:5px;font-family:Arial,sans-serif;">🛡️ Cyber Chaperone</div>
-            <div style="color:#4b5563;font-size:12px;line-height:1.6;font-family:Arial,sans-serif;">Live trip monitoring from start to arrival. We watch every kilometre.</div>
+          <div style="border:1px solid #d1fae5;border-left:3px solid #22c55e;padding:16px 16px 16px 18px;">
+            <div style="font-weight:bold;color:#111827;font-size:13px;margin-bottom:5px;font-family:Arial,sans-serif;">🛡️ Cyber Chaperone</div>
+            <div style="color:#4b5563;font-size:12px;line-height:1.6;font-family:Arial,sans-serif;">Live trip monitoring from start to arrival. We watch every kilometre with you.</div>
           </div>
         </td>
         <td style="width:50%;padding:0 0 12px 8px;vertical-align:top;">
-          <div style="background:#f0fdf4;border-left:3px solid #22c55e;padding:16px 16px 16px 18px;border-radius:2px;">
-            <div style="font-weight:bold;color:#1a1f2e;font-size:13px;margin-bottom:5px;font-family:Arial,sans-serif;">🚨 ICE Escalation</div>
-            <div style="color:#4b5563;font-size:12px;line-height:1.6;font-family:Arial,sans-serif;">Your emergency contacts activated automatically if something goes wrong.</div>
+          <div style="border:1px solid #d1fae5;border-left:3px solid #22c55e;padding:16px 16px 16px 18px;">
+            <div style="font-weight:bold;color:#111827;font-size:13px;margin-bottom:5px;font-family:Arial,sans-serif;">🚨 ICE Escalation</div>
+            <div style="color:#4b5563;font-size:12px;line-height:1.6;font-family:Arial,sans-serif;">Your emergency contacts notified automatically when something goes wrong.</div>
           </div>
         </td>
       </tr>
       <tr>
         <td style="width:50%;padding:0 8px 0 0;vertical-align:top;">
-          <div style="background:#f0fdf4;border-left:3px solid #22c55e;padding:16px 16px 16px 18px;border-radius:2px;">
-            <div style="font-weight:bold;color:#1a1f2e;font-size:13px;margin-bottom:5px;font-family:Arial,sans-serif;">🤝 Community Network</div>
-            <div style="color:#4b5563;font-size:12px;line-height:1.6;font-family:Arial,sans-serif;">250 000 verified members across South Africa watching over each other.</div>
+          <div style="border:1px solid #d1fae5;border-left:3px solid #22c55e;padding:16px 16px 16px 18px;">
+            <div style="font-weight:bold;color:#111827;font-size:13px;margin-bottom:5px;font-family:Arial,sans-serif;">🤝 Community Network</div>
+            <div style="color:#4b5563;font-size:12px;line-height:1.6;font-family:Arial,sans-serif;">250 000 members across South Africa. Your neighbours, mobilised.</div>
           </div>
         </td>
         <td style="width:50%;padding:0 0 0 8px;vertical-align:top;">
-          <div style="background:#f0fdf4;border-left:3px solid #22c55e;padding:16px 16px 16px 18px;border-radius:2px;">
-            <div style="font-weight:bold;color:#1a1f2e;font-size:13px;margin-bottom:5px;font-family:Arial,sans-serif;">💬 Instant Response</div>
-            <div style="color:#4b5563;font-size:12px;line-height:1.6;font-family:Arial,sans-serif;">Type <strong>10</strong> from anywhere and we respond. Immediately. No delay.</div>
+          <div style="border:1px solid #d1fae5;border-left:3px solid #22c55e;padding:16px 16px 16px 18px;">
+            <div style="font-weight:bold;color:#111827;font-size:13px;margin-bottom:5px;font-family:Arial,sans-serif;">💬 Cyber Shepherd</div>
+            <div style="color:#4b5563;font-size:12px;line-height:1.6;font-family:Arial,sans-serif;">Send <strong>10</strong> on WhatsApp. Your Cyber Shepherd and community are alerted and mobilise around you.</div>
           </div>
         </td>
       </tr>
@@ -320,12 +321,12 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
   </div>
 
   <!-- ── Divider ── -->
-  <div style="margin:0 48px 32px;height:1px;background:#bbf7d0;"></div>
+  <div style="margin:0 48px;height:1px;background:#e5e7eb;"></div>
 
   <!-- ── 3 steps ── -->
-  <div style="padding:0 48px 32px;">
+  <div style="padding:28px 48px 32px;">
     <p style="margin:0 0 6px;color:#16a34a;font-size:11px;font-weight:bold;letter-spacing:3px;text-transform:uppercase;font-family:Arial,sans-serif;">HOW TO ACTIVATE</p>
-    <p style="margin:0 0 24px;color:#1a1f2e;font-size:17px;font-weight:bold;font-family:Arial,sans-serif;">Three steps. Less than 60 seconds.</p>
+    <p style="margin:0 0 24px;color:#111827;font-size:17px;font-weight:bold;font-family:Arial,sans-serif;">Three steps. Less than 60 seconds.</p>
 
     <table cellpadding="0" cellspacing="0" border="0" style="width:100%;margin-bottom:16px;">
       <tr>
@@ -333,8 +334,8 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
           <div style="width:32px;height:32px;background:#22c55e;border-radius:50%;text-align:center;line-height:32px;font-size:14px;font-weight:bold;color:#ffffff;font-family:Arial,sans-serif;">1</div>
         </td>
         <td style="vertical-align:top;padding-left:14px;padding-top:4px;">
-          <div style="font-weight:bold;color:#1a1f2e;font-size:14px;font-family:Arial,sans-serif;margin-bottom:3px;">Save this number</div>
-          <div style="color:#4b5563;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">Add <strong style="color:#16a34a;">+27 82 561 1065</strong> to your contacts as <em>eblockwatch</em> — this is the number that watches over you.</div>
+          <div style="font-weight:bold;color:#111827;font-size:14px;font-family:Arial,sans-serif;margin-bottom:3px;">Save this number</div>
+          <div style="color:#4b5563;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">Add <strong style="color:#16a34a;">+27 82 561 1065</strong> to your contacts as <em>eblockwatch</em>.</div>
         </td>
       </tr>
     </table>
@@ -345,8 +346,8 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
           <div style="width:32px;height:32px;background:#22c55e;border-radius:50%;text-align:center;line-height:32px;font-size:14px;font-weight:bold;color:#ffffff;font-family:Arial,sans-serif;">2</div>
         </td>
         <td style="vertical-align:top;padding-left:14px;padding-top:4px;">
-          <div style="font-weight:bold;color:#1a1f2e;font-size:14px;font-family:Arial,sans-serif;margin-bottom:3px;">Send "Hi"</div>
-          <div style="color:#4b5563;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">Open WhatsApp, tap the number, send the word <strong style="color:#16a34a;">Hi</strong>. Arnie responds instantly with your member menu.</div>
+          <div style="font-weight:bold;color:#111827;font-size:14px;font-family:Arial,sans-serif;margin-bottom:3px;">Send "Hi"</div>
+          <div style="color:#4b5563;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">Open WhatsApp and send the word <strong style="color:#16a34a;">Hi</strong>. Arnie, our system, responds with your member menu.</div>
         </td>
       </tr>
     </table>
@@ -357,8 +358,8 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
           <div style="width:32px;height:32px;background:#16a34a;border-radius:50%;text-align:center;line-height:32px;font-size:14px;font-weight:bold;color:#ffffff;font-family:Arial,sans-serif;">3</div>
         </td>
         <td style="vertical-align:top;padding-left:14px;padding-top:4px;">
-          <div style="font-weight:bold;color:#1a1f2e;font-size:14px;font-family:Arial,sans-serif;margin-bottom:3px;">Start your first trip</div>
-          <div style="color:#4b5563;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">Choose Cyber Chaperone from the menu. Tell us where you're going and when you'll arrive. We watch every kilometre and close the trip when you're home safe.</div>
+          <div style="font-weight:bold;color:#111827;font-size:14px;font-family:Arial,sans-serif;margin-bottom:3px;">Start your first trip</div>
+          <div style="color:#4b5563;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">Choose Cyber Chaperone from the menu. Tell us your destination and ETA. We track you all the way home.</div>
         </td>
       </tr>
     </table>
@@ -367,23 +368,23 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
   <!-- ── CTA button ── -->
   <div style="padding:0 48px 40px;text-align:center;">
     <a href="https://wa.me/${wa}?text=Hi" target="_blank" rel="noopener"
-      style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:18px 44px;border-radius:4px;letter-spacing:0.5px;font-family:Arial,sans-serif;">
-      💬 &nbsp;Activate on WhatsApp
+      style="display:inline-block;background:#22c55e;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:18px 48px;border-radius:4px;font-family:Arial,sans-serif;">
+      💬 &nbsp;Open WhatsApp &amp; send Hi
     </a>
     <p style="margin:14px 0 0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">Save +27 82 561 1065 · send "Hi" · Arnie does the rest</p>
   </div>
 
-  <!-- ── Signature: clean, light ── -->
-  <div style="background:#f9fafb;padding:28px 48px;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;">
+  <!-- ── Signature ── -->
+  <div style="background:#f9fafb;padding:28px 48px;border-top:1px solid #e5e7eb;">
     <table cellpadding="0" cellspacing="0" border="0">
       <tr>
         <td style="width:48px;vertical-align:top;">
-          <div style="width:42px;height:42px;border-radius:50%;background:#1a1f2e;text-align:center;line-height:42px;">
+          <div style="width:42px;height:42px;border-radius:50%;background:#111827;text-align:center;line-height:42px;">
             <span style="color:#22c55e;font-weight:bold;font-size:17px;font-family:Arial,sans-serif;">A</span>
           </div>
         </td>
         <td style="vertical-align:top;padding-left:14px;">
-          <div style="font-weight:bold;color:#1a1f2e;font-size:14px;font-family:Arial,sans-serif;">Andre Snyman</div>
+          <div style="font-weight:bold;color:#111827;font-size:14px;font-family:Arial,sans-serif;">Andre Snyman</div>
           <div style="color:#6b7280;font-size:12px;font-family:Arial,sans-serif;margin-top:2px;">Founder · eblockwatch · Est. 2001</div>
           <div style="color:#9ca3af;font-size:11px;font-family:Arial,sans-serif;margin-top:2px;">+27 82 561 1065 · <a href="mailto:info@eblockwatch.co.za" style="color:#16a34a;text-decoration:none;">info@eblockwatch.co.za</a></div>
         </td>
@@ -392,15 +393,13 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
     <p style="margin:16px 0 0;color:#6b7280;font-size:13px;font-family:Georgia,'Times New Roman',serif;font-style:italic;line-height:1.7;border-left:3px solid #22c55e;padding-left:14px;">&ldquo;I started this for my family. Now it protects yours too.&rdquo;</p>
   </div>
 
-  <!-- ── Social: light text links ── -->
-  <div style="background:#f9fafb;padding:20px 48px;text-align:center;">
-    <a href="https://www.facebook.com/eblockwatchnational" target="_blank" rel="noopener" style="display:inline-block;color:#1877f2;text-decoration:none;font-size:11px;font-weight:bold;letter-spacing:1px;padding:6px 10px;font-family:Arial,sans-serif;">Facebook</a>
-    <span style="color:#d1d5db;font-size:11px;">·</span>
-    <a href="https://www.instagram.com/eblockwatch" target="_blank" rel="noopener" style="display:inline-block;color:#e1306c;text-decoration:none;font-size:11px;font-weight:bold;letter-spacing:1px;padding:6px 10px;font-family:Arial,sans-serif;">Instagram</a>
-    <span style="color:#d1d5db;font-size:11px;">·</span>
-    <a href="https://eblockwatch.co.za" target="_blank" rel="noopener" style="display:inline-block;color:#16a34a;text-decoration:none;font-size:11px;font-weight:bold;letter-spacing:1px;padding:6px 10px;font-family:Arial,sans-serif;">eblockwatch.co.za</a>
-    <span style="color:#d1d5db;font-size:11px;">·</span>
-    <a href="https://wa.me/${wa}" target="_blank" rel="noopener" style="display:inline-block;color:#16a34a;text-decoration:none;font-size:11px;font-weight:bold;letter-spacing:1px;padding:6px 10px;font-family:Arial,sans-serif;">WhatsApp</a>
+  <!-- ── Social ── -->
+  <div style="background:#f9fafb;padding:16px 48px;text-align:center;border-top:1px solid #e5e7eb;">
+    <a href="https://www.facebook.com/eblockwatchnational" target="_blank" rel="noopener" style="color:#1877f2;text-decoration:none;font-size:11px;font-weight:bold;padding:0 8px;font-family:Arial,sans-serif;">Facebook</a>
+    <span style="color:#d1d5db;">·</span>
+    <a href="https://eblockwatch.co.za" target="_blank" rel="noopener" style="color:#16a34a;text-decoration:none;font-size:11px;font-weight:bold;padding:0 8px;font-family:Arial,sans-serif;">eblockwatch.co.za</a>
+    <span style="color:#d1d5db;">·</span>
+    <a href="https://wa.me/${wa}" target="_blank" rel="noopener" style="color:#16a34a;text-decoration:none;font-size:11px;font-weight:bold;padding:0 8px;font-family:Arial,sans-serif;">WhatsApp</a>
   </div>
 
   <!-- ── Footer ── -->
