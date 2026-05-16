@@ -66,69 +66,98 @@ async function sendOtpEmail(email: string, code: string): Promise<void> {
 }
 
 // ── POST /api/member-portal/request-otp ───────────────────────────────────────
+// Accepts whatsappNumber (phone) OR email — sends code via WhatsApp or email
 router.post("/member-portal/request-otp", async (req, res): Promise<void> => {
-  const raw = (req.body?.whatsappNumber ?? "") as string;
-  if (!raw) { res.status(400).json({ error: "whatsappNumber is required." }); return; }
-  const phone = normalisePhone(raw.trim());
-  cleanExpired();
+  const rawPhone = (req.body?.whatsappNumber ?? "") as string;
+  const rawEmail = (req.body?.email ?? "") as string;
 
-  const cooldown = otpCooldown.get(phone);
-  if (cooldown && Date.now() - cooldown.lastRequestAt < OTP_COOLDOWN_MS) {
-    res.json({ ok: true, message: "If that number is registered, you'll receive a WhatsApp OTP." });
+  if (!rawPhone && !rawEmail) {
+    res.status(400).json({ error: "Cell phone number or email is required." });
     return;
   }
+
+  cleanExpired();
+  const generic = { ok: true, message: "If that account exists, a code has been sent." };
+
+  if (rawPhone) {
+    const phone = normalisePhone(rawPhone.trim());
+    const cooldown = otpCooldown.get(phone);
+    if (cooldown && Date.now() - cooldown.lastRequestAt < OTP_COOLDOWN_MS) { res.json(generic); return; }
+    otpCooldown.set(phone, { lastRequestAt: Date.now() });
+
+    const [member] = await db
+      .select({ id: membersTable.id })
+      .from(membersTable)
+      .where(or(eq(membersTable.whatsappNumber, `whatsapp:${phone}`), eq(membersTable.whatsappNumber, phone)));
+
+    if (!member) { res.json(generic); return; }
+
+    const code = generateOtp();
+    otpStore.set(phone, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0 });
+    res.json(generic);
+    sendOtpWhatsApp(phone, code).catch((err: unknown) => req.log.error({ err }, "Failed to send OTP via WhatsApp"));
+    return;
+  }
+
+  // Email path
+  const email = rawEmail.trim().toLowerCase();
+  const cooldown = otpCooldown.get(email);
+  if (cooldown && Date.now() - cooldown.lastRequestAt < OTP_COOLDOWN_MS) { res.json(generic); return; }
+  otpCooldown.set(email, { lastRequestAt: Date.now() });
 
   const [member] = await db
-    .select({ id: membersTable.id, firstName: membersTable.firstName })
+    .select({ id: membersTable.id, email: membersTable.email })
     .from(membersTable)
-    .where(or(eq(membersTable.whatsappNumber, `whatsapp:${phone}`), eq(membersTable.whatsappNumber, phone)));
+    .where(eq(membersTable.email, email));
 
-  otpCooldown.set(phone, { lastRequestAt: Date.now() });
-
-  if (!member) {
-    res.json({ ok: true, message: "If that number is registered, you'll receive a WhatsApp OTP." });
-    return;
-  }
+  if (!member?.email) { res.json(generic); return; }
 
   const code = generateOtp();
-  otpStore.set(phone, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0 });
-  res.json({ ok: true, message: "If that number is registered, you'll receive a WhatsApp OTP." });
-  sendOtpWhatsApp(phone, code).catch((err: unknown) => req.log.error({ err }, "Failed to send OTP via WhatsApp"));
+  otpStore.set(email, { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0 });
+  res.json(generic);
+  sendOtpEmail(email, code).catch((err: unknown) => req.log.error({ err }, "Failed to send OTP via email"));
 });
 
 // ── POST /api/member-portal/verify-otp ────────────────────────────────────────
+// Accepts whatsappNumber (phone) OR email to match the request-otp call
 router.post("/member-portal/verify-otp", async (req, res): Promise<void> => {
-  const raw = (req.body?.whatsappNumber ?? "") as string;
+  const rawPhone = (req.body?.whatsappNumber ?? "") as string;
+  const rawEmail = (req.body?.email ?? "") as string;
   const code = String(req.body?.code ?? "").trim();
 
-  if (!raw || !code) { res.status(400).json({ error: "whatsappNumber and code are required." }); return; }
-  const phone = normalisePhone(raw.trim());
-  const entry = otpStore.get(phone);
+  if ((!rawPhone && !rawEmail) || !code) {
+    res.status(400).json({ error: "Phone or email, and code are required." });
+    return;
+  }
+
+  const key = rawPhone ? normalisePhone(rawPhone.trim()) : rawEmail.trim().toLowerCase();
+  const entry = otpStore.get(key);
 
   if (!entry || entry.expiresAt < Date.now()) {
-    res.status(401).json({ error: "OTP expired or not found. Please request a new one." });
+    res.status(401).json({ error: "Code expired or not found. Please request a new one." });
     return;
   }
 
   if (entry.code !== code) {
     entry.attempts += 1;
     if (entry.attempts >= OTP_MAX_ATTEMPTS) {
-      otpStore.delete(phone);
-      res.status(401).json({ error: "Too many incorrect attempts. Please request a new OTP." });
+      otpStore.delete(key);
+      res.status(401).json({ error: "Too many incorrect attempts. Please request a new code." });
       return;
     }
-    res.status(401).json({ error: "Incorrect OTP. Please check your WhatsApp and try again." });
+    res.status(401).json({ error: "Incorrect code. Please try again." });
     return;
   }
 
-  const [member] = await db
-    .select()
-    .from(membersTable)
-    .where(or(eq(membersTable.whatsappNumber, `whatsapp:${phone}`), eq(membersTable.whatsappNumber, phone)));
+  otpStore.delete(key);
+
+  // Look up member by phone or email
+  const [member] = rawPhone
+    ? await db.select().from(membersTable).where(or(eq(membersTable.whatsappNumber, `whatsapp:${key}`), eq(membersTable.whatsappNumber, key)))
+    : await db.select().from(membersTable).where(eq(membersTable.email, key));
 
   if (!member) { res.status(401).json({ error: "Member not found." }); return; }
 
-  otpStore.delete(phone);
   req.session.memberId = member.id;
   req.session.save((err) => {
     if (err) { res.status(500).json({ error: "Session error." }); return; }
@@ -147,12 +176,20 @@ router.post("/member-portal/login", async (req, res): Promise<void> => {
     return;
   }
 
-  const phone = normalisePhone(rawPhone.trim());
+  const rawEmail = (req.body?.email ?? "") as string;
 
-  const [member] = await db
-    .select()
-    .from(membersTable)
-    .where(or(eq(membersTable.whatsappNumber, `whatsapp:${phone}`), eq(membersTable.whatsappNumber, phone)));
+  // Look up by phone or email
+  let member: typeof membersTable.$inferSelect | undefined;
+  if (rawPhone) {
+    const phone = normalisePhone(rawPhone.trim());
+    [member] = await db
+      .select()
+      .from(membersTable)
+      .where(or(eq(membersTable.whatsappNumber, `whatsapp:${phone}`), eq(membersTable.whatsappNumber, phone)));
+  } else if (rawEmail) {
+    const email = rawEmail.trim().toLowerCase();
+    [member] = await db.select().from(membersTable).where(eq(membersTable.email, email));
+  }
 
   if (!member) {
     // Generic delay to prevent timing oracle
