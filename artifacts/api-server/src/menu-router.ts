@@ -2114,14 +2114,31 @@ function wizardCurrentValue(step: string, profile: Awaited<ReturnType<typeof fet
   return map[step] ?? null;
 }
 
-async function startProfileWizard(from: string, to: string, name: string): Promise<void> {
-  const profile = await fetchMemberProfile(from);
-  await setConvState(from, {
-    currentFlow: FLOW_PROFILE_WIZARD,
-    currentStep: STEP_WIZARD_NAME,
-    pendingTripData: { wizardChanges: {} },
-  });
-  await sendWhatsApp(from, to, wizardStepMessage(STEP_WIZARD_NAME, profile?.displayName, 1));
+async function startSmartProfileUpdate(from: string, to: string, name: string): Promise<void> {
+  const p = await fetchMemberProfile(from);
+  const none = "(not set)";
+  const ice = p?.iceContactName
+    ? `${p.iceContactName}${p.iceContactPhone ? ` (${p.iceContactPhone})` : ""}`
+    : none;
+  const lines = [
+    `${name}, here's what we have for you:`,
+    ``,
+    `• Name: ${p?.displayName ?? none}`,
+    `• Email: ${p?.email ?? none}`,
+    `• Mobile: ${p?.mobile ?? none}`,
+    `• Address: ${p?.homeAddress ?? none}`,
+    `• Suburb: ${p?.suburb ?? none}`,
+    `• ICE contact: ${ice}`,
+    ``,
+    `Just type what you'd like to change, e.g.:`,
+    `  kierens@tiscali.co.za`,
+    `  12 Oak St, Bryanston`,
+    `  ICE: Jane Smith, 0821234567`,
+    ``,
+    `Reply 0 for Main Menu.`,
+  ];
+  await setConvState(from, { currentFlow: FLOW_PROFILE_UPDATE, currentStep: STEP_WAITING_FOR_PROFILE_FIELD });
+  await sendWhatsApp(from, to, lines.join("\n"));
 }
 
 async function handleProfileWizardStep(ctx: MenuContext, state: ConvState): Promise<void> {
@@ -3157,7 +3174,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
 
   if (choice === "4") {
     await saveMessage(from, to, body, messageSid, null);
-    await startProfileWizard(from, to, name);
+    await startSmartProfileUpdate(from, to, name);
     return true;
   }
 
@@ -3647,8 +3664,8 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
         await sendWhatsApp(from, to, mainMenuText(name, member));
       }
     } else if (choice === "2") {
-      // Needs update — start the profile wizard
-      await startProfileWizard(from, to, name);
+      // Needs update — show current profile + smart field prompt
+      await startSmartProfileUpdate(from, to, name);
     } else {
       // Unrecognised — re-send the confirmation
       await sendProfileConfirmation(from, to, name);
