@@ -870,6 +870,7 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
     member?.memberStatus ?? "unknown",
     member?.membershipTier ?? null,
   );
+  const isUnknown = !member;
   return [
     `Hi ${name}, I'm AI Arnie, Andre Snyman's digital wingman. We are here to make you safer.`,
     ``,
@@ -877,6 +878,7 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
     ``,
     `Please choose an option:`,
     ``,
+    isUnknown ? `0. Join eblockwatch — Register now (free)` : null,
     `1. What is eblockwatch?`,
     `2. Membership Options`,
     `3. Activate my membership`,
@@ -886,8 +888,8 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
     `7. Request contact from a human`,
     ``,
     `EMERGENCY? Reply 10.`,
-    `Reply 0 to return to this menu.`,
-  ].join("\n");
+    isUnknown ? null : `Reply 0 to return to this menu.`,
+  ].filter((l) => l !== null).join("\n");
 }
 
 function membershipActivationText(name: string): string {
