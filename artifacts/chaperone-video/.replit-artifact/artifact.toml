@@ -1,0 +1,31 @@
+kind = "video"
+previewPath = "/chaperone-video/"
+title = "Cyber Chaperone — Are You Going to Granny's?"
+version = "1.0.0"
+id = "artifacts/chaperone-video"
+router = "path"
+
+[[integratedSkills]]
+name = "video-js"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/chaperone-video/" ]
+localPort = 25761
+
+[services.development]
+run = "pnpm --filter @workspace/chaperone-video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/chaperone-video", "run", "build" ]
+publicDir = "artifacts/chaperone-video/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25761"
+BASE_PATH = "/chaperone-video/"
