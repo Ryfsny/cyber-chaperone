@@ -425,7 +425,7 @@ export default function MemberDashboard() {
           {member.role === "operator" && (
             <button
               onClick={async () => {
-                const r = await fetch(`${BASE_URL}api/member-portal/operator-elevate`, { method: "POST", credentials: "include" });
+                const r = await fetch(`/api/member-portal/operator-elevate`, { method: "POST", credentials: "include" });
                 if (r.ok) window.location.href = "/";
               }}
               style={{ background: "#22c55e", border: "none", color: "#fff", borderRadius: "8px", padding: "7px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
