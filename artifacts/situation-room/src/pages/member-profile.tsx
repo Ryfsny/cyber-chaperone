@@ -81,7 +81,7 @@ interface MemberTrip {
   updatedAt: string;
 }
 
-// ── DISC helpers ───────────────────────────────────────────────────────────────
+// ── Shrink — personality profiler ─────────────────────────────────────────────
 const DISC_META: Record<string, { label: string; description: string; color: string; bg: string; border: string }> = {
   D: { label: "D — Dominant", description: "Direct · Results-focused · Acts fast", color: "text-red-300", bg: "bg-red-900/40", border: "border-red-700" },
   I: { label: "I — Influential", description: "Enthusiastic · Social · Inspiring", color: "text-yellow-300", bg: "bg-yellow-900/40", border: "border-yellow-700" },
@@ -678,8 +678,8 @@ export default function MemberProfile() {
               <InfoRow label="Import status" value={member.importStatus} />
             </SectionCard>
 
-            {/* DISC Personality Profile */}
-            <SectionCard title="DISC Personality Profile" icon={Users}>
+            {/* Shrink — personality read */}
+            <SectionCard title="🧠 Shrink" icon={Users}>
               {member.discType ? (
                 <div className="col-span-full space-y-3">
                   <div className="flex items-center gap-3 flex-wrap">
@@ -692,12 +692,12 @@ export default function MemberProfile() {
                   </div>
                   <DiscScoreBar signals={member.discSignals} />
                   <p className="text-xs text-muted-foreground/60 italic">
-                    Profile is inferred automatically from WhatsApp interaction patterns — never shown to the member.
+                    Shrink reads personality automatically from WhatsApp behaviour — never shown to the member.
                   </p>
                 </div>
               ) : (
                 <div className="col-span-full text-xs text-muted-foreground/50 italic">
-                  Profiling in progress — more interactions needed to determine type.
+                  Shrink is still reading — more interactions needed.
                 </div>
               )}
             </SectionCard>
