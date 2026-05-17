@@ -420,8 +420,18 @@ export default function MemberDashboard() {
         <a href={`${BASE}/`} style={{ textDecoration: "none" }}>
           <img src={LOGO} alt="eblockwatch" style={{ height: "36px", objectFit: "contain" }} />
         </a>
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <span style={{ color: "#9ca3af", fontSize: "13px" }}>Hi, {member.firstName}</span>
+          {member.role === "operator" && (
+            <button
+              onClick={async () => {
+                const r = await fetch(`${BASE_URL}api/member-portal/operator-elevate`, { method: "POST", credentials: "include" });
+                if (r.ok) window.location.href = "/";
+              }}
+              style={{ background: "#22c55e", border: "none", color: "#fff", borderRadius: "8px", padding: "7px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
+              🛡️ Situation Room
+            </button>
+          )}
           <button onClick={() => void handleLogout()}
             style={{ background: "none", border: "1px solid #374151", color: "#9ca3af", borderRadius: "8px", padding: "7px 14px", fontSize: "13px", cursor: "pointer" }}>
             Log Out

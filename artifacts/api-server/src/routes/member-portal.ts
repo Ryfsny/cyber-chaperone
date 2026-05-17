@@ -519,6 +519,27 @@ router.get("/member-portal/family", requireMemberAuth, async (req, res): Promise
   res.json({ groupId: self.familyGroupId, members });
 });
 
+// ── POST /api/member-portal/operator-elevate ──────────────────────────────────
+// If the logged-in member has role="operator" this stamps a full Situation Room
+// session onto the same cookie — no second password required.
+router.post("/member-portal/operator-elevate", requireMemberAuth, async (req, res): Promise<void> => {
+  const [member] = await db
+    .select({ id: membersTable.id, role: membersTable.role, displayName: membersTable.displayName })
+    .from(membersTable)
+    .where(eq(membersTable.id, req.session.memberId!));
+  if (!member || member.role !== "operator") {
+    res.status(403).json({ error: "Operator access only." });
+    return;
+  }
+  req.session.authenticated = true;
+  req.session.adminRole = "national";
+  req.session.adminDisplayName = member.displayName;
+  req.session.save((err) => {
+    if (err) { res.status(500).json({ error: "Session error." }); return; }
+    res.json({ ok: true });
+  });
+});
+
 // ── POST /api/member-portal/logout ────────────────────────────────────────────
 router.post("/member-portal/logout", (req, res): void => {
   req.session.memberId = undefined;
