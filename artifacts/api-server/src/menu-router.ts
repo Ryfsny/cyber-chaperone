@@ -1,5 +1,5 @@
 import { db, membersTable, tripsTable, messagesTable, conversationStatesTable, respondersTable } from "@workspace/db";
-import { and, eq, ne, desc, or } from "drizzle-orm";
+import { and, eq, ne, desc, or, sql } from "drizzle-orm";
 import twilio from "twilio";
 import { enrichTripWithRoute, calculateRouteInfo, reverseGeocodeCoords, reverseGeocodeStreetAddress, minutesToSastTime, type RouteInfo } from "./route-service.js";
 import { calculateGoogleMapsRoute } from "./google-maps-service.js";
@@ -262,13 +262,89 @@ async function countNearbyResponders(lat: string, lon: string, radiusKm = 50): P
   }
 }
 
-function nearbyCoverageText(count: number): string {
-  if (count === 0) return "eblockwatch members are active across South Africa — you are not alone.";
-  if (count === 1) return `There is 1 eblockwatch member standing by within 30km of you.`;
-  if (count < 5)   return `There are ${count} eblockwatch members standing by within 30km of you.`;
-  if (count < 15)  return `There are ${count} eblockwatch members standing by in your area.`;
-  if (count < 30)  return `There are over ${Math.floor(count / 5) * 5} eblockwatch members active within 30km of you.`;
-  return `There is a strong eblockwatch presence — ${count}+ members active in your area.`;
+// ── Member-database nearby count — the real marketing number ─────────────────
+// Queries the full 92,000-member database (not just the responders table).
+// Uses a SQL bounding box first for efficiency, then JS haversine to trim corners.
+async function countNearbyMembers(lat: string, lon: string, radiusKm: number): Promise<number> {
+  try {
+    const mLat = parseFloat(lat), mLon = parseFloat(lon);
+    if (isNaN(mLat) || isNaN(mLon)) return 0;
+    const delta = radiusKm / 111.0;
+    const rows = await db
+      .select({ homeLat: membersTable.homeLat, homeLon: membersTable.homeLon })
+      .from(membersTable)
+      .where(and(
+        or(eq(membersTable.memberStatus, "verified"), eq(membersTable.memberStatus, "active")),
+        sql`home_lat IS NOT NULL AND home_lat != '' AND home_lon IS NOT NULL AND home_lon != ''`,
+        sql`CAST(home_lat AS DOUBLE PRECISION) BETWEEN ${mLat - delta} AND ${mLat + delta}`,
+        sql`CAST(home_lon AS DOUBLE PRECISION) BETWEEN ${mLon - delta} AND ${mLon + delta}`,
+      ));
+    return rows.filter(r => {
+      const rLat = parseFloat(r.homeLat ?? ""), rLon = parseFloat(r.homeLon ?? "");
+      return !isNaN(rLat) && !isNaN(rLon) && haversineKm(mLat, mLon, rLat, rLon) <= radiusKm;
+    }).length;
+  } catch {
+    return 0;
+  }
+}
+
+// Smart radius: tries 5km first (dense suburb), then 10km (town), then 25km (rural).
+// Single bounding-box DB call at 25km, JS-filtered for each threshold.
+async function pickRadiusAndCount(lat: string, lon: string): Promise<{ count: number; radiusKm: number }> {
+  try {
+    const mLat = parseFloat(lat), mLon = parseFloat(lon);
+    if (isNaN(mLat) || isNaN(mLon)) return { count: 0, radiusKm: 25 };
+    const delta25 = 25 / 111.0;
+    const rows = await db
+      .select({ homeLat: membersTable.homeLat, homeLon: membersTable.homeLon })
+      .from(membersTable)
+      .where(and(
+        or(eq(membersTable.memberStatus, "verified"), eq(membersTable.memberStatus, "active")),
+        sql`home_lat IS NOT NULL AND home_lat != '' AND home_lon IS NOT NULL AND home_lon != ''`,
+        sql`CAST(home_lat AS DOUBLE PRECISION) BETWEEN ${mLat - delta25} AND ${mLat + delta25}`,
+        sql`CAST(home_lon AS DOUBLE PRECISION) BETWEEN ${mLon - delta25} AND ${mLon + delta25}`,
+      ));
+    const dists = rows.map(r => {
+      const rLat = parseFloat(r.homeLat ?? ""), rLon = parseFloat(r.homeLon ?? "");
+      return isNaN(rLat) || isNaN(rLon) ? null : haversineKm(mLat, mLon, rLat, rLon);
+    }).filter((d): d is number => d !== null);
+    const c5  = dists.filter(d => d <= 5).length;
+    if (c5 >= 10) return { count: c5, radiusKm: 5 };
+    const c10 = dists.filter(d => d <= 10).length;
+    if (c10 >= 10) return { count: c10, radiusKm: 10 };
+    return { count: dists.filter(d => d <= 25).length, radiusKm: 25 };
+  } catch {
+    return { count: 0, radiusKm: 25 };
+  }
+}
+
+// Looks up a member's registered home coordinates by their WhatsApp number.
+async function getMemberHomeCoords(whatsappNumber: string): Promise<{ lat: string; lon: string } | null> {
+  try {
+    const [row] = await db
+      .select({ homeLat: membersTable.homeLat, homeLon: membersTable.homeLon })
+      .from(membersTable)
+      .where(eq(membersTable.whatsappNumber, whatsappNumber))
+      .limit(1);
+    if (row?.homeLat && row?.homeLon) return { lat: row.homeLat, lon: row.homeLon };
+  } catch {}
+  return null;
+}
+
+// 👥 Nearby coverage line — honest, area-aware, never overstated.
+function nearbyCoverageText(count: number, radiusKm = 25): string {
+  const icon = "👥";
+  if (count === 0) return `${icon} eblockwatch members are active across South Africa — you are never alone.`;
+  const area = radiusKm <= 5
+    ? "in your immediate area"
+    : radiusKm <= 10
+      ? `within ${radiusKm}km of you`
+      : "in your region";
+  if (count < 5)    return `${icon} ${count} eblockwatch members are active ${area}.`;
+  if (count < 20)   return `${icon} ${count} eblockwatch members are standing by ${area}.`;
+  if (count < 100)  return `${icon} Over ${Math.floor(count / 10) * 10} eblockwatch members have your back ${area}.`;
+  if (count < 1000) return `${icon} ${Math.floor(count / 50) * 50}+ eblockwatch members are active ${area}.`;
+  return `${icon} ${(Math.floor(count / 100) * 100).toLocaleString()}+ eblockwatch members have your back ${area}.`;
 }
 
 // ── Platform-agnostic reply registry ─────────────────────────────────────────
@@ -634,8 +710,8 @@ async function createTrip(
   // Add nearby member count to trip start confirmation
   const nearbyLine = await (async () => {
     if (routeInfo?.startCoords?.lat && routeInfo?.startCoords?.lon) {
-      const count = await countNearbyResponders(routeInfo.startCoords.lat, routeInfo.startCoords.lon, 30);
-      return count > 0 ? `\n\n${nearbyCoverageText(count)}` : "";
+      const { count, radiusKm } = await pickRadiusAndCount(routeInfo.startCoords.lat, routeInfo.startCoords.lon);
+      return count > 0 ? `\n\n${nearbyCoverageText(count, radiusKm)}` : "";
     }
     return "";
   })();
@@ -766,7 +842,14 @@ async function sendCheckinPrompt(
 ): Promise<void> {
   const name = ctx.member?.displayName ?? ctx.from;
   const destination = trip.title.includes(" → ") ? trip.title.split(" → ").pop()! : trip.title;
-  await sendWhatsApp(ctx.from, ctx.to, checkinText(name, driftMin, trip.title, destination, checkpointLabel));
+  const lat = trip.startLat ?? trip.destLat;
+  const lon = trip.startLon ?? trip.destLon;
+  let nearbyLine = "";
+  if (lat && lon) {
+    const { count, radiusKm } = await pickRadiusAndCount(lat, lon);
+    if (count > 0) nearbyLine = `\n\n${nearbyCoverageText(count, radiusKm)}`;
+  }
+  await sendWhatsApp(ctx.from, ctx.to, checkinText(name, driftMin, trip.title, destination, checkpointLabel) + nearbyLine);
 }
 
 // ── Check-in flow handler ─────────────────────────────────────────────────────
@@ -790,7 +873,7 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
   if (choice === "0") {
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await sendMainMenuWithNearby(from, to, name, member);
     return;
   }
 
@@ -1124,6 +1207,18 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
   ].filter((l) => l !== null).join("\n");
 }
 
+// Sends the main menu with a 👥 nearby member count appended — the marketing footer.
+// Uses the member's registered home coordinates. Falls back silently if no coords.
+async function sendMainMenuWithNearby(from: string, to: string, name: string, member: MemberInfo | null): Promise<void> {
+  const coords = await getMemberHomeCoords(from);
+  let nearbyLine = "";
+  if (coords) {
+    const { count, radiusKm } = await pickRadiusAndCount(coords.lat, coords.lon);
+    if (count > 0) nearbyLine = `\n\n${nearbyCoverageText(count, radiusKm)}`;
+  }
+  await sendWhatsApp(from, to, mainMenuText(name, member) + nearbyLine);
+}
+
 // ── Shared membership tier text ───────────────────────────────────────────────
 // Used across all menu paths: info screen, activation flow, and upgrade prompts.
 // Each tier has a one-line payoff line + what it ADDS over the tier below.
@@ -1217,7 +1312,7 @@ async function handleMembershipChoice(ctx: MenuContext): Promise<void> {
   if (choice === "0") {
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await sendMainMenuWithNearby(from, to, name, member);
     return;
   }
 
@@ -1429,6 +1524,16 @@ async function handleDistress(ctx: MenuContext, activeTrip: Awaited<ReturnType<t
     log.info({ from }, "Distress received — no active trip — RED mirror sent");
   }
 
+  const nearbyDistress = await (async () => {
+    const lat = activeTrip?.startLat ?? activeTrip?.destLat;
+    const lon = activeTrip?.startLon ?? activeTrip?.destLon;
+    if (lat && lon) {
+      const { count, radiusKm } = await pickRadiusAndCount(lat, lon);
+      if (count > 0) return `\n\n${nearbyCoverageText(count, radiusKm)}`;
+    }
+    return "";
+  })();
+
   await sendWhatsApp(from, to, [
     `🆘 *${memberLabel} — we are on it.*`,
     ``,
@@ -1444,7 +1549,7 @@ async function handleDistress(ctx: MenuContext, activeTrip: Awaited<ReturnType<t
     `5. 📞 Call me now`,
     ``,
     `Reply 0 for Main Menu.`,
-  ].join("\n"));
+  ].join("\n") + nearbyDistress);
 
   await resetConvState(from);
 
@@ -1501,6 +1606,16 @@ async function handleArrival(ctx: MenuContext, activeTrip: Awaited<ReturnType<ty
   await saveMessage(from, to, body, messageSid, activeTrip.id);
   await resetConvState(from);
 
+  const nearbyArrival = await (async () => {
+    const lat = activeTrip.destLat ?? activeTrip.startLat;
+    const lon = activeTrip.destLon ?? activeTrip.startLon;
+    if (lat && lon) {
+      const { count, radiusKm } = await pickRadiusAndCount(lat, lon);
+      if (count > 0) return `\n\n${nearbyCoverageText(count, radiusKm)}`;
+    }
+    return "";
+  })();
+
   await sendWhatsApp(from, to, [
     `🏡 *${memberLabel} — welcome home.*`,
     ``,
@@ -1510,7 +1625,7 @@ async function handleArrival(ctx: MenuContext, activeTrip: Awaited<ReturnType<ty
     `This is what eblockwatch is for — we start the journey together and we end it together.`,
     ``,
     `Reply 0 for Main Menu.`,
-  ].join("\n"));
+  ].join("\n") + nearbyArrival);
 
   log.info({ tripId: activeTrip.id }, "Trip closed — arrival (menu router)");
 
@@ -1615,7 +1730,7 @@ async function handleClarificationChoice(ctx: MenuContext, state: ConvState): Pr
 
   if (choice === "0") {
     await resetConvState(from);
-    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await sendMainMenuWithNearby(from, to, name, member);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     return;
   }
@@ -1712,7 +1827,7 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
 
   if (body.trim() === "0") {
     await resetConvState(from);
-    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await sendMainMenuWithNearby(from, to, name, member);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     return;
   }
@@ -1989,7 +2104,7 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
 
   if (choice === "0") {
     await resetConvState(from);
-    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await sendMainMenuWithNearby(from, to, name, member);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     await saveMessage(from, to, body, messageSid, null);
     return true;
@@ -2096,7 +2211,7 @@ async function handleEblockwatchInfoChoice(ctx: MenuContext): Promise<void> {
   if (choice === "0") {
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await sendMainMenuWithNearby(from, to, name, member);
     return;
   }
 
@@ -2300,7 +2415,7 @@ async function handleProfileWizardStep(ctx: MenuContext, state: ConvState): Prom
   if (trimmed === "0") {
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await sendMainMenuWithNearby(from, to, name, member);
     return;
   }
 
@@ -2454,7 +2569,7 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
   if (trimmedBody === "0") {
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await sendMainMenuWithNearby(from, to, name, member);
     return;
   }
 
@@ -3022,7 +3137,7 @@ async function handleSafetyProfileStep(ctx: MenuContext, state: ConvState): Prom
   if (trimmed === "0") {
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await sendMainMenuWithNearby(from, to, name, member);
     return;
   }
 
@@ -3119,7 +3234,7 @@ async function handleRegistrationStep(ctx: MenuContext, state: ConvState): Promi
     const member: MemberInfo | null = row
       ? { displayName: row.displayName, role: row.role, memberStatus: row.memberStatus, membershipTier: row.membershipTier, isKnown: row.memberStatus === "active" || row.memberStatus === "verified", discType: row.discType as DiscDimension | null, memberId: row.id }
       : null;
-    await sendWhatsApp(from, to, mainMenuText(row?.displayName ?? from, member));
+    await sendMainMenuWithNearby(from, to, row?.displayName ?? from, member);
     return;
   }
 
@@ -3399,7 +3514,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
       ``,
       `When you register, the relationship starts, and each member makes the spine of eblockwatch stronger.`,
     ].join("\n"));
-    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await sendMainMenuWithNearby(from, to, name, member);
     return true;
   }
 
@@ -3516,7 +3631,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
       ``,
       `You're in good hands. André and 250 000 members have your back. 🛡️`,
     ].join("\n"));
-    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await sendMainMenuWithNearby(from, to, name, member);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     return true;
   }
@@ -3548,7 +3663,7 @@ async function handleSpeakToPersonFlow(ctx: MenuContext): Promise<void> {
   if (trimmed === "0") {
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await sendMainMenuWithNearby(from, to, name, member);
     return;
   }
 
@@ -3717,7 +3832,7 @@ async function handleShopFlow(ctx: MenuContext): Promise<void> {
   if (choice === "0") {
     await resetConvState(from);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await sendMainMenuWithNearby(from, to, name, member);
     return;
   }
 
@@ -3871,8 +3986,8 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   // Fires a supplemental coverage message for ANY location pin regardless of
   // conversation state, then lets normal routing continue.
   if (latitude && longitude) {
-    const nearbyCount = await countNearbyResponders(latitude, longitude);
-    const coverageLine = nearbyCoverageText(nearbyCount);
+    const { count: nearbyCount, radiusKm: nearbyRadiusKm } = await pickRadiusAndCount(latitude, longitude);
+    const coverageLine = nearbyCoverageText(nearbyCount, nearbyRadiusKm);
     await sendWhatsApp(from, to, [
       `📍 Location received — you are covered.`,
       ``,
@@ -3895,7 +4010,7 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     await resetConvState(from);
     await saveMessage(from, to, body, messageSid, null);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await sendMainMenuWithNearby(from, to, name, member);
     log.info({ from, body: trimmed, handler: "GLOBAL_MENU_OVERRIDE" }, "menu-router: MENU_OVERRIDE triggered");
     return { handled: true };
   }
@@ -3952,7 +4067,7 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
         })
         .where(eq(tripsTable.id, activeTrip.id));
       await sendWhatsApp(from, to, `✅ Trip complete. You have arrived safely. Stay safe, Andre is here if you need anything.`);
-      await sendWhatsApp(from, to, mainMenuText(name, member));
+      await sendMainMenuWithNearby(from, to, name, member);
       await sendOperatorMirror(to, [
         `🏁 TRIP COMPLETE`,
         `Member: ${name}`,
@@ -3984,7 +4099,7 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     await resetConvState(from);
     await saveMessage(from, to, body, messageSid, null);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    await sendWhatsApp(from, to, mainMenuText(name, member));
+    await sendMainMenuWithNearby(from, to, name, member);
     log.info({ from, handler: "MAIN_MENU_TRIGGER" }, "menu-router: main menu trigger");
     return { handled: true };
   }
@@ -4000,9 +4115,9 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
       // Confirmed or skip — go to main menu
       await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
       if (choice === "1") {
-        await sendWhatsApp(from, to, `✅ Great — your details are confirmed.\n\n`+ mainMenuText(name, member));
+        await sendMainMenuWithNearby(from, to, name, member);
       } else {
-        await sendWhatsApp(from, to, mainMenuText(name, member));
+        await sendMainMenuWithNearby(from, to, name, member);
       }
     } else if (choice === "2") {
       // Needs update — show current profile + smart field prompt
