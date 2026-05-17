@@ -3,6 +3,7 @@ import AiArnieChat from "../components/AiArnieChat";
 import { WA_LINK, WA_LINK_HI, WA_LINK_REG } from "../wa-config";
 
 const LOGO = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif";
+const ANDRE_PHOTO = "/andre-snyman.png";
 const HERO_IMG = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/674fef222ea8a7e01faa8d21_E-Block%20Watch%20hero.avif";
 const AI_CHAT_IMG = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675289a450a93f05b46adb68_aichat.png";
 const LIFE_IMG = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/67513bfbc9ad656b85a2c9e2_E-Block%20Watchlifejpg.avif";
@@ -408,6 +409,40 @@ export default function HomePage() {
               style={{ color: "#1db954", fontWeight: 600, textDecoration: "none", fontSize: "15px" }}
             >
               Contact Us →
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── MEET THE FOUNDER ────────────────────────────────────────────── */}
+      <section style={{ background: "#ffffff", padding: "72px 24px", borderTop: "1px solid #f3f4f6" }}>
+        <div style={{ maxWidth: "900px", margin: "0 auto", display: "grid", gridTemplateColumns: "auto 1fr", gap: "52px", alignItems: "center" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px", flexShrink: 0 }}>
+            <img
+              src={ANDRE_PHOTO}
+              alt="André Snyman"
+              style={{ width: "160px", height: "160px", borderRadius: "50%", objectFit: "cover", border: "4px solid #22c55e", boxShadow: "0 8px 32px rgba(34,197,94,0.18)" }}
+            />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontWeight: 800, fontSize: "16px", color: "#0d1117", fontFamily: "Montserrat, sans-serif" }}>André Snyman</div>
+              <div style={{ fontSize: "13px", color: "#6b7280" }}>Founder — eblockwatch</div>
+            </div>
+          </div>
+          <div>
+            <h2 className="ebw-heading" style={{ fontSize: "clamp(22px, 2.8vw, 34px)", color: "#0d1117", marginBottom: "16px" }}>
+              A Community Built on Trust
+            </h2>
+            <p style={{ fontSize: "16px", color: "#4b5563", lineHeight: 1.8, marginBottom: "16px" }}>
+              eblockwatch has been protecting South African families since 2001. I started this because I believe that safety should never be a privilege — it should be a promise every neighbour makes to every other neighbour.
+            </p>
+            <p style={{ fontSize: "15px", color: "#6b7280", lineHeight: 1.8, marginBottom: "28px" }}>
+              Every member of Cyber Chaperone is someone I take personal responsibility for. That is not a marketing line. It is a commitment I put in writing.
+            </p>
+            <a
+              href={`${BASE}/terms`}
+              style={{ display: "inline-flex", alignItems: "center", gap: "8px", color: "#16a34a", fontWeight: 700, fontSize: "15px", textDecoration: "none", fontFamily: "Montserrat, sans-serif" }}
+            >
+              Read the Founder's Pledge →
             </a>
           </div>
         </div>
