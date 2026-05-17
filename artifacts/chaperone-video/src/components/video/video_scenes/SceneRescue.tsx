@@ -92,7 +92,7 @@ export function SceneRescue() {
         transition={{ type: 'spring', stiffness: 200, damping: 20 }}
       >
         <div className="bg-white rounded-2xl rounded-tr-sm shadow-2xl px-5 py-4">
-          <p className="text-xs font-bold text-[#22c55e] mb-2">eblockwatch Alert 🛡️</p>
+          <p className="text-xs font-bold text-[#22c55e] mb-2">Community Alert 🔔</p>
           <p className="text-[#1a1f2e] text-sm font-semibold leading-relaxed">
             Member needs assistance on N1 near Bela-Bela. Who can help?
           </p>

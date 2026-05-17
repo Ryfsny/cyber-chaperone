@@ -47,48 +47,33 @@ export function Scene5() {
         </div>
       </motion.div>
 
-      {/* Pulsing shield */}
+      {/* Pulsing green glow — safe */}
       <motion.div
         className="absolute inset-0 flex flex-col items-center justify-center gap-6"
         initial={{ opacity: 0, scale: 0.6 }}
         animate={phase >= 1 ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.6 }}
         transition={{ type: 'spring', stiffness: 200, damping: 18 }}
       >
-        <motion.div
-          className="relative flex items-center justify-center"
-          animate={phase >= 1 ? {
-            filter: ['drop-shadow(0 0 20px #22c55e)', 'drop-shadow(0 0 50px #22c55e)', 'drop-shadow(0 0 20px #22c55e)'],
-          } : {}}
-          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-        >
+        <motion.div className="relative flex items-center justify-center">
           {/* Ripple rings */}
           {phase >= 1 && [0, 1, 2].map(i => (
             <motion.div
               key={i}
               className="absolute rounded-full border-2 border-[#22c55e]/40"
-              initial={{ width: 100, height: 100, opacity: 0.7 }}
-              animate={{ width: 240, height: 240, opacity: 0 }}
-              transition={{
-                duration: 2.4,
-                repeat: Infinity,
-                delay: i * 0.8,
-                ease: 'easeOut',
-              }}
+              initial={{ width: 80, height: 80, opacity: 0.7 }}
+              animate={{ width: 220, height: 220, opacity: 0 }}
+              transition={{ duration: 2.4, repeat: Infinity, delay: i * 0.8, ease: 'easeOut' }}
             />
           ))}
-
-          <div className="w-28 h-36 bg-[#22c55e] rounded-b-full flex items-center justify-center border-4 border-[#16a34a] shadow-2xl relative overflow-hidden">
-            {/* Shine sweep */}
-            <motion.div
-              className="absolute top-0 left-0 right-0 h-1/2 bg-white/20 skew-y-6"
-              animate={{ y: ['-100%', '300%'] }}
-              transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1 }}
-            />
-            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              <path d="M9 12l2 2 4-4" />
+          <motion.div
+            className="w-24 h-24 rounded-full bg-[#22c55e] flex items-center justify-center shadow-2xl"
+            animate={{ boxShadow: ['0 0 20px #22c55e', '0 0 60px #22c55e', '0 0 20px #22c55e'] }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 6L9 17l-5-5" />
             </svg>
-          </div>
+          </motion.div>
         </motion.div>
       </motion.div>
 

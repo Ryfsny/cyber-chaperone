@@ -5,7 +5,7 @@ import joinBg from '@/assets/scene-join.png';
 const STEPS = [
   { num: '1', icon: '💬', label: 'WhatsApp eblockwatch', sub: 'Say "Hi" to get started' },
   { num: '2', icon: '📝', label: 'Register in 60 seconds', sub: 'Name, number, ICE contact' },
-  { num: '3', icon: '🛡️', label: 'Travel safe — always', sub: 'Cyber Chaperone has you' },
+  { num: '3', icon: '✅', label: 'Travel safe — always', sub: 'Cyber Chaperone has you' },
 ];
 
 export function SceneJoin() {

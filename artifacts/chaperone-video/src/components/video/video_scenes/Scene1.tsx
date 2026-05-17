@@ -67,7 +67,7 @@ export function Scene1() {
         </div>
       </motion.div>
 
-      {/* Shield activated */}
+      {/* Activated indicator */}
       <motion.div
         className="absolute bottom-8 right-16 flex flex-col items-center gap-2"
         initial={{ scale: 0, opacity: 0 }}
@@ -75,22 +75,17 @@ export function Scene1() {
         transition={{ type: 'spring', stiffness: 300, damping: 18, delay: 0.1 }}
       >
         <motion.div
-          animate={{ y: [-5, 5, -5] }}
-          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-          className="w-20 h-24 bg-[#22c55e] rounded-b-full flex items-center justify-center border-4 border-[#16a34a] shadow-[0_0_40px_rgba(34,197,94,0.7)]"
+          className="bg-[#22c55e]/15 border border-[#22c55e]/50 text-[#22c55e] px-6 py-3 rounded-full font-black tracking-widest uppercase flex items-center gap-3 text-base backdrop-blur-sm"
+          animate={{ boxShadow: ['0 0 0px rgba(34,197,94,0)', '0 0 20px rgba(34,197,94,0.5)', '0 0 0px rgba(34,197,94,0)'] }}
+          transition={{ duration: 2, repeat: Infinity }}
         >
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 6L9 17l-5-5" />
-          </svg>
+          <motion.div
+            className="w-3 h-3 rounded-full bg-[#22c55e]"
+            animate={{ scale: [1, 1.5, 1] }}
+            transition={{ duration: 1.2, repeat: Infinity }}
+          />
+          Cyber Chaperone Active
         </motion.div>
-        <motion.span
-          className="text-[#22c55e] text-xs font-black tracking-widest uppercase"
-          initial={{ opacity: 0 }}
-          animate={phase >= 3 ? { opacity: 1 } : { opacity: 0 }}
-          transition={{ duration: 0.4 }}
-        >
-          Protected
-        </motion.span>
       </motion.div>
     </motion.div>
   );
