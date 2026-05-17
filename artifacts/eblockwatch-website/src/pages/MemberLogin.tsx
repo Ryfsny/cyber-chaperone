@@ -22,64 +22,29 @@ function MessengerIcon() {
   );
 }
 
-function EmailIcon({ size = 18 }: { size?: number }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width={size} height={size} style={{ flexShrink: 0 }}>
-      <rect x="2" y="4" width="20" height="16" rx="2"/>
-      <path d="m2 7 10 7 10-7"/>
-    </svg>
-  );
-}
-
-type Mode = "password" | "email-code";
-type EmailCodeStep = "enter" | "sent";
-type ForgotStep = "request" | "verify" | "set";
-
 export default function MemberLogin() {
   const [, navigate] = useLocation();
 
-  const [mode, setMode] = useState<Mode>("password");
-
-  // Password login
-  const [pwIdentifier, setPwIdentifier] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-
-  // Email code login (no-password path)
-  const [codeEmail, setCodeEmail] = useState("");
-  const [codeOtp, setCodeOtp] = useState("");
-  const [emailCodeStep, setEmailCodeStep] = useState<EmailCodeStep>("enter");
-
-  // Forgot password (email OTP → set new password)
-  const [forgotOpen, setForgotOpen] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotCode, setForgotCode] = useState("");
-  const [forgotStep, setForgotStep] = useState<ForgotStep>("request");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
 
-  function clearMessages() { setError(""); setInfo(""); }
+  const inputStyle: React.CSSProperties = {
+    width: "100%", border: "1px solid #d1d5db", borderRadius: "8px",
+    padding: "11px 14px", fontSize: "15px", outline: "none", color: "#111827",
+    boxSizing: "border-box", fontFamily: "'Open Sans', sans-serif",
+  };
 
-  function switchMode(m: Mode) {
-    setMode(m);
-    setForgotOpen(false);
-    setForgotStep("request");
-    setEmailCodeStep("enter");
-    setCodeOtp("");
-    clearMessages();
-  }
-
-  // ── Password login ──────────────────────────────────────────────────────────
   async function loginWithPassword(e: React.FormEvent) {
-    e.preventDefault(); clearMessages(); setLoading(true);
+    e.preventDefault();
+    setError("");
+    setLoading(true);
     try {
-      const isEmail = pwIdentifier.includes("@");
+      const isEmail = identifier.includes("@");
       const body = isEmail
-        ? { email: pwIdentifier.trim(), password }
-        : { whatsappNumber: pwIdentifier.trim(), password };
+        ? { email: identifier.trim(), password }
+        : { whatsappNumber: identifier.trim(), password };
       const res = await fetch(`/api/member-portal/login`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify(body),
@@ -87,102 +52,17 @@ export default function MemberLogin() {
       const data = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Login failed.");
       navigate("/my-account");
-    } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
-    finally { setLoading(false); }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
   }
-
-  // ── Email code: send ────────────────────────────────────────────────────────
-  async function sendEmailCode(e: React.FormEvent) {
-    e.preventDefault(); clearMessages(); setLoading(true);
-    try {
-      const res = await fetch(`/api/member-portal/request-otp`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ email: codeEmail.trim() }),
-      });
-      const data = await res.json() as { ok?: boolean; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Failed to send code.");
-      setEmailCodeStep("sent");
-      setInfo(`Code sent to ${codeEmail.trim()} — check your inbox.`);
-    } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
-    finally { setLoading(false); }
-  }
-
-  // ── Email code: verify ──────────────────────────────────────────────────────
-  async function verifyEmailCode(e: React.FormEvent) {
-    e.preventDefault(); clearMessages(); setLoading(true);
-    try {
-      const res = await fetch(`/api/member-portal/verify-otp`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ email: codeEmail.trim(), code: codeOtp }),
-      });
-      const data = await res.json() as { ok?: boolean; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Verification failed. Check the code and try again.");
-      navigate("/my-account");
-    } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
-    finally { setLoading(false); }
-  }
-
-  // ── Forgot password: send code to email ────────────────────────────────────
-  async function sendForgotCode(e: React.FormEvent) {
-    e.preventDefault(); clearMessages(); setLoading(true);
-    try {
-      const res = await fetch(`/api/member-portal/request-otp`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ email: forgotEmail.trim() }),
-      });
-      const data = await res.json() as { ok?: boolean; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Failed to send code.");
-      setForgotStep("verify");
-      setInfo(`Code sent to ${forgotEmail.trim()} — check your inbox.`);
-    } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
-    finally { setLoading(false); }
-  }
-
-  // ── Forgot password: verify code → log in → set password ───────────────────
-  async function verifyForgotCode(e: React.FormEvent) {
-    e.preventDefault(); clearMessages(); setLoading(true);
-    try {
-      const res = await fetch(`/api/member-portal/verify-otp`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ email: forgotEmail.trim(), code: forgotCode }),
-      });
-      const data = await res.json() as { ok?: boolean; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Verification failed. Check the code and try again.");
-      setForgotStep("set"); setInfo("");
-    } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
-    finally { setLoading(false); }
-  }
-
-  async function setNewPasswordFn(e: React.FormEvent) {
-    e.preventDefault(); clearMessages(); setLoading(true);
-    if (newPassword !== confirmPassword) { setError("Passwords do not match."); setLoading(false); return; }
-    if (newPassword.length < 8) { setError("Password must be at least 8 characters."); setLoading(false); return; }
-    try {
-      const res = await fetch(`/api/member-portal/set-password`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ password: newPassword }),
-      });
-      const data = await res.json() as { ok?: boolean; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Failed to set password.");
-      navigate("/my-account");
-    } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
-    finally { setLoading(false); }
-  }
-
-  const inputStyle: React.CSSProperties = {
-    width: "100%", border: "1px solid #d1d5db", borderRadius: "8px",
-    padding: "11px 14px", fontSize: "15px", outline: "none", color: "#111827",
-    boxSizing: "border-box", fontFamily: "'Open Sans', sans-serif",
-  };
-  const btnGreen: React.CSSProperties = {
-    width: "100%", background: "#1db954", color: "#fff", border: "none",
-    borderRadius: "10px", padding: "14px", fontSize: "15px", fontWeight: 700,
-    cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1,
-    fontFamily: "Montserrat, sans-serif",
-  };
 
   return (
     <div style={{ minHeight: "100vh", background: "#f9fafb", fontFamily: "'Open Sans', sans-serif", display: "flex", flexDirection: "column" }}>
+
+      {/* Nav */}
       <nav style={{ background: "#0d1117", padding: "0 24px", height: "64px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <a href={`${BASE}/`} style={{ textDecoration: "none" }}>
           <img src={LOGO} alt="eblockwatch" style={{ height: "36px", objectFit: "contain" }} />
@@ -191,252 +71,115 @@ export default function MemberLogin() {
       </nav>
 
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 16px" }}>
-        <div style={{ width: "100%", maxWidth: "420px" }}>
+        <div style={{ width: "100%", maxWidth: "400px", display: "flex", flexDirection: "column", gap: "16px" }}>
 
-          <div style={{ background: "#fff", borderRadius: "16px", boxShadow: "0 4px 32px rgba(0,0,0,0.08)", padding: "36px 32px", border: "1px solid #e5e7eb", marginBottom: "16px" }}>
+          {/* Login card */}
+          <div style={{ background: "#fff", borderRadius: "16px", boxShadow: "0 4px 32px rgba(0,0,0,0.08)", padding: "36px 32px", border: "1px solid #e5e7eb" }}>
 
             {/* Header */}
-            <div style={{ textAlign: "center", marginBottom: "24px" }}>
+            <div style={{ textAlign: "center", marginBottom: "28px" }}>
               <div style={{ width: "52px", height: "52px", background: "#0d1117", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", border: "2px solid #1db954" }}>
                 <span style={{ fontSize: "24px" }}>🛡️</span>
               </div>
-              <h1 style={{ fontSize: "21px", fontWeight: 800, color: "#0d1117", fontFamily: "Montserrat, sans-serif", margin: "0 0 5px" }}>Member Portal</h1>
+              <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0d1117", fontFamily: "Montserrat, sans-serif", margin: "0 0 5px" }}>Member Portal</h1>
               <p style={{ fontSize: "13px", color: "#6b7280", margin: 0 }}>Sign in to your eblockwatch account</p>
             </div>
 
-            {/* Mode tabs */}
-            <div style={{ display: "flex", gap: "4px", background: "#f3f4f6", borderRadius: "10px", padding: "4px", marginBottom: "24px" }}>
-              <button
-                style={{
-                  flex: 1, padding: "9px", fontSize: "13px", fontWeight: mode === "password" ? 700 : 500,
-                  background: mode === "password" ? "#1db954" : "none",
-                  color: mode === "password" ? "#fff" : "#6b7280",
-                  border: "none", borderRadius: "8px", cursor: "pointer", transition: "all 0.15s",
-                }}
-                onClick={() => switchMode("password")}
-              >
-                🔑 Password
-              </button>
-              <button
-                style={{
-                  flex: 1, padding: "9px", fontSize: "13px", fontWeight: mode === "email-code" ? 700 : 500,
-                  background: mode === "email-code" ? "#1d4ed8" : "none",
-                  color: mode === "email-code" ? "#fff" : "#6b7280",
-                  border: "none", borderRadius: "8px", cursor: "pointer", transition: "all 0.15s",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
-                }}
-                onClick={() => switchMode("email-code")}
-              >
-                <EmailIcon /> Email Code
-              </button>
-            </div>
-
-            {/* Feedback banners */}
+            {/* Error */}
             {error && (
               <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "10px 14px", fontSize: "13px", color: "#dc2626", marginBottom: "16px" }}>
                 {error}
               </div>
             )}
-            {info && (
-              <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px", padding: "10px 14px", fontSize: "13px", color: "#1d4ed8", marginBottom: "16px" }}>
-                {info}
-              </div>
-            )}
 
-            {/* ── PASSWORD LOGIN ─────────────────────────────────────────────── */}
-            {mode === "password" && !forgotOpen && (
-              <form onSubmit={(e) => void loginWithPassword(e)}>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
-                  Cell Phone Number or Email
-                </label>
-                <input
-                  type="text"
-                  value={pwIdentifier}
-                  onChange={(e) => setPwIdentifier(e.target.value)}
-                  placeholder="082 561 1065 or you@example.com"
-                  required autoFocus
-                  style={{ ...inputStyle, marginBottom: "12px" }}
-                />
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
-                  Password
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Your password"
-                  required
-                  style={{ ...inputStyle, marginBottom: "16px" }}
-                />
-                <button type="submit" disabled={loading || !pwIdentifier || !password}
-                  style={{ ...btnGreen, opacity: loading || !pwIdentifier || !password ? 0.6 : 1 }}>
-                  {loading ? "Signing in…" : "Sign In"}
-                </button>
+            {/* Password form */}
+            <form onSubmit={(e) => void loginWithPassword(e)}>
+              <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
+                Cell Phone Number or Email
+              </label>
+              <input
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="082 561 1065 or you@example.com"
+                required autoFocus
+                style={{ ...inputStyle, marginBottom: "12px" }}
+              />
+              <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Your password"
+                required
+                style={{ ...inputStyle, marginBottom: "20px" }}
+              />
+              <button
+                type="submit"
+                disabled={loading || !identifier || !password}
+                style={{
+                  width: "100%", background: "#1db954", color: "#fff", border: "none",
+                  borderRadius: "10px", padding: "14px", fontSize: "15px", fontWeight: 700,
+                  cursor: loading || !identifier || !password ? "not-allowed" : "pointer",
+                  opacity: loading || !identifier || !password ? 0.6 : 1,
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+              >
+                {loading ? "Signing in…" : "Sign In"}
+              </button>
+            </form>
 
-                {/* Divider */}
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "18px 0" }}>
-                  <div style={{ flex: 1, height: "1px", background: "#e5e7eb" }} />
-                  <span style={{ fontSize: "12px", color: "#9ca3af", fontWeight: 600 }}>OR</span>
-                  <div style={{ flex: 1, height: "1px", background: "#e5e7eb" }} />
-                </div>
+            {/* Divider */}
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "24px 0" }}>
+              <div style={{ flex: 1, height: "1px", background: "#e5e7eb" }} />
+              <span style={{ fontSize: "12px", color: "#9ca3af", fontWeight: 600 }}>FORGOT YOUR PASSWORD?</span>
+              <div style={{ flex: 1, height: "1px", background: "#e5e7eb" }} />
+            </div>
 
-                {/* Forgot password */}
-                <div>
-                  <p style={{ margin: "0 0 8px", fontSize: "15px", fontWeight: 700, color: "#111827" }}>
-                    Forgot your password?
-                  </p>
-                  <p style={{ margin: "0 0 14px", fontSize: "13px", color: "#6b7280", lineHeight: 1.6 }}>
-                    We'll email you a one-time login code. Enter your registered email address and we'll send it straight away.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => { setForgotOpen(true); clearMessages(); setForgotStep("request"); }}
-                    style={{
-                      width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px",
-                      background: "#1d4ed8", color: "#fff", border: "none",
-                      borderRadius: "12px", padding: "15px 18px", fontSize: "16px", fontWeight: 800,
-                      cursor: "pointer", fontFamily: "Montserrat, sans-serif",
-                      boxShadow: "0 4px 16px rgba(29,78,216,0.25)",
-                    }}
-                  >
-                    <EmailIcon size={20} />
-                    Get a login code by email
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* ── FORGOT: step 1 — enter email ──────────────────────────────── */}
-            {mode === "password" && forgotOpen && forgotStep === "request" && (
-              <form onSubmit={(e) => void sendForgotCode(e)}>
-                <p style={{ fontSize: "14px", color: "#374151", marginTop: 0, marginBottom: "16px", lineHeight: 1.6 }}>
-                  Enter your registered email address and we'll send a 6-digit login code.
-                </p>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Email Address</label>
-                <input
-                  type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)}
-                  placeholder="you@example.com" required autoFocus
-                  style={{ ...inputStyle, marginBottom: "18px" }}
-                />
-                <button type="submit" disabled={loading || !forgotEmail}
-                  style={{ ...btnGreen, background: "#1d4ed8", marginBottom: "12px", opacity: loading || !forgotEmail ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
-                  <EmailIcon size={18} />
-                  {loading ? "Sending…" : "Send me a login code"}
-                </button>
-                <button type="button" onClick={() => { setForgotOpen(false); clearMessages(); }}
-                  style={{ width: "100%", background: "none", border: "none", color: "#6b7280", fontSize: "13px", cursor: "pointer", padding: "4px" }}>
-                  ← Back to password login
-                </button>
-              </form>
-            )}
-
-            {/* ── FORGOT: step 2 — enter code ───────────────────────────────── */}
-            {mode === "password" && forgotOpen && forgotStep === "verify" && (
-              <form onSubmit={(e) => void verifyForgotCode(e)}>
-                <p style={{ fontSize: "14px", color: "#374151", marginTop: 0, marginBottom: "18px", lineHeight: 1.6 }}>
-                  Enter the 6-digit code sent to <strong>{forgotEmail}</strong>
-                </p>
-                <input
-                  type="text" value={forgotCode}
-                  onChange={(e) => setForgotCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="123456" maxLength={6} required autoFocus inputMode="numeric"
-                  style={{ ...inputStyle, fontSize: "28px", letterSpacing: "12px", textAlign: "center", marginBottom: "20px" }}
-                />
-                <button type="submit" disabled={loading || forgotCode.length !== 6}
-                  style={{ ...btnGreen, opacity: loading || forgotCode.length !== 6 ? 0.6 : 1 }}>
-                  {loading ? "Verifying…" : "Verify Code"}
-                </button>
-              </form>
-            )}
-
-            {/* ── FORGOT: step 3 — set new password ─────────────────────────── */}
-            {mode === "password" && forgotOpen && forgotStep === "set" && (
-              <form onSubmit={(e) => void setNewPasswordFn(e)}>
-                <p style={{ fontSize: "14px", color: "#374151", marginTop: 0, marginBottom: "16px", lineHeight: 1.6 }}>
-                  You're verified. Choose a new password for next time.
-                </p>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>New Password</label>
-                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="At least 8 characters" required autoFocus style={{ ...inputStyle, marginBottom: "12px" }} />
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Confirm Password</label>
-                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repeat your password" required style={{ ...inputStyle, marginBottom: "20px" }} />
-                <button type="submit" disabled={loading || !newPassword || !confirmPassword}
-                  style={{ ...btnGreen, opacity: loading || !newPassword || !confirmPassword ? 0.6 : 1 }}>
-                  {loading ? "Saving…" : "Save Password & Sign In"}
-                </button>
-              </form>
-            )}
-
-            {/* ── EMAIL CODE LOGIN ───────────────────────────────────────────── */}
-            {mode === "email-code" && (
-              <div>
-                {emailCodeStep === "enter" && (
-                  <form onSubmit={(e) => void sendEmailCode(e)}>
-                    <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "10px", padding: "13px 15px", marginBottom: "18px" }}>
-                      <p style={{ margin: 0, fontSize: "13px", color: "#1e40af", lineHeight: 1.6 }}>
-                        <strong>No password needed.</strong> Enter your registered email and we'll send a 6-digit login code straight to your inbox.
-                      </p>
-                    </div>
-                    <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Email Address</label>
-                    <input
-                      type="email" value={codeEmail} onChange={(e) => setCodeEmail(e.target.value)}
-                      placeholder="you@example.com" required autoFocus
-                      style={{ ...inputStyle, marginBottom: "18px" }}
-                    />
-                    <button type="submit" disabled={loading || !codeEmail}
-                      style={{ ...btnGreen, background: "#1d4ed8", opacity: loading || !codeEmail ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
-                      <EmailIcon size={18} />
-                      {loading ? "Sending…" : "Send me a login code"}
-                    </button>
-                  </form>
-                )}
-
-                {emailCodeStep === "sent" && (
-                  <form onSubmit={(e) => void verifyEmailCode(e)}>
-                    <p style={{ fontSize: "14px", color: "#374151", marginTop: 0, marginBottom: "18px", lineHeight: 1.6 }}>
-                      Code sent to <strong>{codeEmail}</strong> — check your inbox and paste it below.
-                    </p>
-                    <input
-                      type="text" value={codeOtp}
-                      onChange={(e) => setCodeOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                      placeholder="123456" maxLength={6} required autoFocus inputMode="numeric"
-                      style={{ ...inputStyle, fontSize: "28px", letterSpacing: "12px", textAlign: "center", marginBottom: "20px" }}
-                    />
-                    <button type="submit" disabled={loading || codeOtp.length !== 6}
-                      style={{ ...btnGreen, opacity: loading || codeOtp.length !== 6 ? 0.6 : 1, marginBottom: "12px" }}>
-                      {loading ? "Verifying…" : "Log In"}
-                    </button>
-                    <button type="button" onClick={() => { setEmailCodeStep("enter"); setCodeOtp(""); clearMessages(); }}
-                      style={{ width: "100%", background: "none", border: "none", color: "#6b7280", fontSize: "13px", cursor: "pointer", padding: "4px" }}>
-                      ← Use a different email
-                    </button>
-                  </form>
-                )}
-              </div>
-            )}
+            {/* WhatsApp fallback */}
+            <p style={{ margin: "0 0 14px", fontSize: "13px", color: "#6b7280", lineHeight: 1.6, textAlign: "center" }}>
+              Just tap the button below — it opens WhatsApp with a message ready to send. Hit send and your menu comes straight back.
+            </p>
+            <a
+              href={WA_LINK_HI}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "12px",
+                background: "#25d366", color: "#fff", textDecoration: "none",
+                borderRadius: "12px", padding: "16px 18px", fontSize: "16px", fontWeight: 800,
+                fontFamily: "Montserrat, sans-serif", boxShadow: "0 4px 16px rgba(37,211,102,0.3)",
+              }}
+            >
+              <WhatsAppIcon size={22} />
+              Send us a WhatsApp
+            </a>
           </div>
 
-          {/* ── Help panel ─────────────────────────────────────────────────── */}
+          {/* Help panel */}
           <div style={{ background: "#fff", borderRadius: "14px", border: "1px solid #e5e7eb", padding: "20px 24px" }}>
             <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 14px", textAlign: "center" }}>
-              Can't get in? Reach us directly:
+              Need more help? Reach us directly:
             </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <a href={WA_LINK_HI} target="_blank" rel="noopener noreferrer"
-                style={{ display: "flex", alignItems: "center", gap: "10px", background: "#25d366", color: "#fff", textDecoration: "none", borderRadius: "10px", padding: "12px 18px", fontSize: "14px", fontWeight: 700, fontFamily: "Montserrat, sans-serif" }}>
-                <WhatsAppIcon />
-                WhatsApp Andre
-              </a>
-              <a href={FB_MESSENGER_URL} target="_blank" rel="noopener noreferrer"
-                style={{ display: "flex", alignItems: "center", gap: "10px", background: "#0084ff", color: "#fff", textDecoration: "none", borderRadius: "10px", padding: "12px 18px", fontSize: "14px", fontWeight: 700, fontFamily: "Montserrat, sans-serif" }}>
-                <MessengerIcon />
-                Message us on Facebook
-              </a>
-            </div>
+            <a
+              href={FB_MESSENGER_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "flex", alignItems: "center", gap: "10px",
+                background: "#0084ff", color: "#fff", textDecoration: "none",
+                borderRadius: "10px", padding: "12px 18px", fontSize: "14px", fontWeight: 700,
+                fontFamily: "Montserrat, sans-serif",
+              }}
+            >
+              <MessengerIcon />
+              Message us on Facebook
+            </a>
             <p style={{ fontSize: "12px", color: "#9ca3af", margin: "12px 0 0", textAlign: "center" }}>
               Not registered yet?{" "}
-              <a href={`${BASE}/`} style={{ color: "#1db954", textDecoration: "none", fontWeight: 600 }}>Register for free</a>
+              <a href={`${BASE}/`} style={{ color: "#1db954", textDecoration: "none", fontWeight: 600 }}>Register for free →</a>
             </p>
           </div>
 
