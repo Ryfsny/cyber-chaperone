@@ -4044,6 +4044,27 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     return { handled: true };
   }
 
+  // GLOBAL LOGIN CODE — member sends "Login code" (member-initiated, free Twilio window)
+  if (/^(login\s+code|my\s+code|get\s+my\s+code|login\s+code\s+please)$/i.test(trimmed)) {
+    const phone = from.replace(/^whatsapp:/, "");
+    const code = issueOtp(phone);
+    const loginUrl = `https://cyber-chaperone-r--ryfsny.replit.app/website/login`;
+    await sendWhatsApp(from, to, [
+      `Your eblockwatch login code is:`,
+      ``,
+      `*${code}*`,
+      ``,
+      `This code expires in 10 minutes.`,
+      ``,
+      `Go to the member portal and enter this code to sign in:`,
+      loginUrl,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    log.info({ from, handler: "LOGIN_CODE_REQUEST" }, "menu-router: login code sent via WhatsApp");
+    return { handled: true };
+  }
+
   // 1. PRIORITY: Distress — always handled first
   if (isDistress(trimmed)) {
     const activeTrip = await findActiveTrip(from);

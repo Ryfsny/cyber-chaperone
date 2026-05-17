@@ -291,13 +291,16 @@ export async function sendMemberWelcomeEmail(
   </div>
 
   <!-- Big WhatsApp CTA -->
-  <div style="text-align:center;padding:16px 36px 28px;">
+  <div style="background:#f0fdf4;border:2px solid #22c55e;margin:16px 36px;padding:28px 24px;text-align:center;border-radius:6px;">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/120px-WhatsApp.svg.png" width="64" height="64" alt="" style="display:block;margin:0 auto 12px;border-radius:50%;" />
+    <p style="margin:0 0 4px;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:#16a34a;font-family:Arial,sans-serif;">ONE TAP · THEN JUST PRESS SEND</p>
+    <p style="margin:0 0 18px;font-size:15px;font-weight:bold;color:#111827;font-family:Arial,sans-serif;">WhatsApp opens pre-loaded — just tap Send</p>
     <a href="${waLink}?text=Hi" target="_blank" rel="noopener"
-      style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:18px 40px;border-radius:6px;letter-spacing:1px;font-family:Arial,sans-serif;">
+      style="display:block;background:#25d366;color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:20px 32px;border-radius:6px;letter-spacing:1px;font-family:Arial,sans-serif;box-shadow:0 4px 14px rgba(37,211,102,0.45);">
       💬 &nbsp;OPEN WHATSAPP NOW &nbsp;→
     </a>
-    <p style="margin:12px 0 0;font-size:12px;color:#6b7280;font-family:Arial,sans-serif;">
-      Tap to open WhatsApp with +${waNum} pre-loaded. Just send <strong>Hi</strong> and AI Command will guide you in step by step.
+    <p style="margin:12px 0 0;font-size:12px;color:#374151;font-family:Arial,sans-serif;">
+      AI Command walks you through it step by step — takes under 2 minutes.
     </p>
   </div>
 

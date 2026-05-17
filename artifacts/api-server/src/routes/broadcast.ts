@@ -182,14 +182,18 @@ function buildEmailHtml(firstName: string, subject: string, body: string): strin
   </div>
 
   <!-- WhatsApp activation CTA -->
-  <div style="background:#f0fdf4;border:2px solid #22c55e;margin:0 48px 32px;padding:24px 32px;text-align:center;border-radius:4px;">
-    <p style="margin:0 0 4px;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:#16a34a;font-family:Arial,sans-serif;">JOIN THE WHATSAPP SAFETY NETWORK</p>
-    <p style="margin:0 0 16px;font-size:14px;color:#374151;font-family:Arial,sans-serif;">Live trip monitoring · ICE escalation · 250 000 members watching over each other</p>
+  <div style="background:#f0fdf4;border:2px solid #22c55e;margin:0 48px 32px;padding:32px;text-align:center;border-radius:6px;">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/120px-WhatsApp.svg.png" width="72" height="72" alt="" style="display:block;margin:0 auto 14px;border-radius:50%;" />
+    <p style="margin:0 0 4px;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:#16a34a;font-family:Arial,sans-serif;">ONE TAP · THEN JUST PRESS SEND</p>
+    <p style="margin:0 0 20px;font-size:16px;font-weight:bold;color:#111827;font-family:Arial,sans-serif;">Activate your free Cyber Chaperone safety profile</p>
     <a href="https://wa.me/${BUSINESS_WA_NUM}?text=Hi" target="_blank" rel="noopener"
-      style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-size:13px;font-weight:bold;padding:14px 32px;border-radius:4px;letter-spacing:1px;font-family:Arial,sans-serif;">
-      💬 &nbsp;ACTIVATE ON WHATSAPP &nbsp;→
+      style="display:block;background:#25d366;color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:20px 32px;border-radius:6px;letter-spacing:1px;font-family:Arial,sans-serif;box-shadow:0 4px 14px rgba(37,211,102,0.45);">
+      💬 &nbsp;OPEN WHATSAPP NOW &nbsp;→
     </a>
-    <p style="margin:10px 0 0;font-size:11px;color:#6b7280;font-family:Arial,sans-serif;">Tap, send "Hi", and AI Command will walk you through everything.</p>
+    <p style="margin:14px 0 0;font-size:12px;color:#374151;font-family:Arial,sans-serif;">
+      WhatsApp opens → tap <strong>Send</strong> → your safety menu arrives instantly.<br>
+      <span style="color:#6b7280;">Live trip monitoring · ICE escalation · 250 000 members watching over each other</span>
+    </p>
   </div>
 
   <!-- Signature -->
@@ -365,20 +369,18 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
     </table>
   </div>
 
-  <!-- ── CTA: WhatsApp round icon ── -->
-  <div style="padding:0 48px 40px;text-align:center;">
-    <a href="https://wa.me/${wa}?text=Hi" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block;">
-      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/120px-WhatsApp.svg.png"
-        alt="WhatsApp" width="120" height="120"
-        style="display:block;margin:0 auto;border-radius:50%;border:none;" />
-      <div style="margin-top:14px;color:#111827;font-size:15px;font-weight:bold;font-family:Arial,sans-serif;">
-        Activate your eblockwatch Cyber Chaperone membership
-      </div>
-      <div style="margin-top:6px;display:inline-block;background:#22c55e;color:#ffffff;font-size:13px;font-weight:bold;padding:10px 28px;border-radius:4px;font-family:Arial,sans-serif;">
-        Tap here to get started
-      </div>
+  <!-- ── CTA: WhatsApp primary action ── -->
+  <div style="padding:8px 48px 40px;text-align:center;">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/120px-WhatsApp.svg.png"
+      alt="" width="80" height="80"
+      style="display:block;margin:0 auto 16px;border-radius:50%;" />
+    <p style="margin:0 0 6px;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:#16a34a;font-family:Arial,sans-serif;">ONE TAP · THEN JUST PRESS SEND</p>
+    <p style="margin:0 0 18px;font-size:16px;font-weight:bold;color:#111827;font-family:Arial,sans-serif;">WhatsApp opens — your safety menu arrives instantly</p>
+    <a href="https://wa.me/${wa}?text=Hi" target="_blank" rel="noopener"
+      style="display:block;background:#25d366;color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:20px 32px;border-radius:6px;letter-spacing:1px;font-family:Arial,sans-serif;box-shadow:0 4px 14px rgba(37,211,102,0.45);">
+      💬 &nbsp;OPEN WHATSAPP NOW &nbsp;→
     </a>
-    <p style="margin:14px 0 0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">Save +27 82 561 1065 · send "Hi" · AI Command does the rest</p>
+    <p style="margin:14px 0 0;font-size:12px;color:#6b7280;font-family:Arial,sans-serif;">Save +27 82 561 1065 · tap Send · Andre and the eblockwatch team have you covered</p>
   </div>
 
   <!-- ── Signature ── -->
@@ -1065,9 +1067,14 @@ function buildMigrationEmailHtml(firstName: string, portalUrl: string): string {
 
     <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0;">
 
-    <p style="margin:0 0 10px;font-size:14px;line-height:1.7;color:#374151;font-family:Arial,sans-serif;">
-      <strong>Already on WhatsApp?</strong> You can also just send us a message — type <strong>Hi</strong> to <a href="https://wa.me/${BUSINESS_WA_NUM}" style="color:#16a34a;text-decoration:none;">+${BUSINESS_WA_NUM}</a> and the eblockwatch Cyber Chaperone menu will guide you straight in.
-    </p>
+    <div style="text-align:center;margin-top:8px;">
+      <p style="margin:0 0 12px;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">Prefer WhatsApp? One tap and you're in:</p>
+      <a href="https://wa.me/${BUSINESS_WA_NUM}?text=Hi" target="_blank" rel="noopener"
+        style="display:block;background:#25d366;color:#ffffff;text-decoration:none;font-size:16px;font-weight:bold;padding:18px 32px;border-radius:6px;letter-spacing:1px;font-family:Arial,sans-serif;box-shadow:0 4px 14px rgba(37,211,102,0.4);">
+        💬 &nbsp;OPEN WHATSAPP NOW &nbsp;→
+      </a>
+      <p style="margin:10px 0 0;font-size:11px;color:#9ca3af;font-family:Arial,sans-serif;">WhatsApp opens → tap Send → Cyber Chaperone menu arrives instantly</p>
+    </div>
 
   </div>
 

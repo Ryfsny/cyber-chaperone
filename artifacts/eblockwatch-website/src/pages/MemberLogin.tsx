@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { WA_LINK_HI } from "../wa-config";
+import { WA_LINK_HI, WA_LINK_CODE } from "../wa-config";
 import { useLocation } from "wouter";
 
 const LOGO = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif";
@@ -270,15 +270,38 @@ export default function MemberLogin() {
                   placeholder="123456" maxLength={6} inputMode="numeric" autoFocus
                   style={{ ...inputStyle, fontSize: "22px", letterSpacing: "8px", textAlign: "center", marginBottom: "6px" }}
                 />
-                <div style={{ textAlign: "right", marginBottom: "20px" }}>
-                  <button
-                    type="button"
-                    disabled={loading || (otpMethod === "phone" ? !phone : !otpEmail)}
-                    onClick={() => void sendCode()}
-                    style={{ background: "none", border: "none", color: "#1db954", fontSize: "12px", cursor: "pointer", fontWeight: 600, padding: "2px 0" }}>
-                    {loading && !otp ? "Sending…" : codeSent ? "Code sent ✓ — resend?" : "Don't have a code? Send one to my WhatsApp"}
-                  </button>
-                </div>
+                {otpMethod === "phone" ? (
+                  <div style={{ marginBottom: "20px" }}>
+                    <a
+                      href={WA_LINK_CODE}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: "12px",
+                        background: "#25d366", color: "#fff", textDecoration: "none",
+                        borderRadius: "10px", padding: "15px 18px", fontSize: "16px", fontWeight: 700,
+                        fontFamily: "Montserrat, sans-serif",
+                        boxShadow: "0 4px 16px rgba(37,211,102,0.35)",
+                      }}
+                    >
+                      <WhatsAppIcon />
+                      Tap to get my login code on WhatsApp
+                    </a>
+                    <p style={{ textAlign: "center", fontSize: "12px", color: "#6b7280", margin: "8px 0 0" }}>
+                      WhatsApp opens → just tap Send → your code arrives in seconds
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: "right", marginBottom: "20px" }}>
+                    <button
+                      type="button"
+                      disabled={loading || !otpEmail}
+                      onClick={() => void sendCode()}
+                      style={{ background: "none", border: "none", color: "#1db954", fontSize: "12px", cursor: "pointer", fontWeight: 600, padding: "2px 0" }}>
+                      {loading && !otp ? "Sending…" : codeSent ? "Code sent ✓ — resend?" : "Send code to my email"}
+                    </button>
+                  </div>
+                )}
 
                 <button type="submit" disabled={loading || otp.length !== 6 || (otpMethod === "phone" ? !phone : !otpEmail)}
                   style={{ ...btnPrimary, opacity: loading || otp.length !== 6 || (otpMethod === "phone" ? !phone : !otpEmail) ? 0.6 : 1 }}>
