@@ -48,6 +48,24 @@ uri = "file://artifacts/chaperone-video/src/assets/scene5-arrival.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "1wPsZ7Kg1rn94bqLpdjiW"
+uri = "file://artifacts/chaperone-video/src/assets/scene-community.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "S2ZOPM6tKNsyJUzXbjdKf"
+uri = "file://artifacts/chaperone-video/src/assets/scene-rescue.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "tZxYN03mm8Oyyj1HUhMQt"
+uri = "file://artifacts/chaperone-video/src/assets/scene-join.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "GZcowUx324_zRD73VmXNW"
 uri = "file://docs/ruka-vs-current-alignment-report.md"
