@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { WA_LINK_HI } from "../wa-config";
+import { WA_LINK_HI, WA_LINK_ACTIVATE } from "../wa-config";
 import { useLocation } from "wouter";
 
 const LOGO = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif";
@@ -132,7 +132,7 @@ export default function MemberLogin() {
                 </button>
               ) : (
                 <a
-                  href={WA_LINK_HI}
+                  href={WA_LINK_ACTIVATE}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
@@ -143,16 +143,21 @@ export default function MemberLogin() {
                   }}
                 >
                   <WhatsAppIcon size={20} />
-                  Send us a WhatsApp
+                  Activate via WhatsApp
                 </a>
               )}
             </form>
 
             {/* Hint — only shown when password is empty */}
             {!password && (
-              <p style={{ margin: "14px 0 0", fontSize: "13px", color: "#6b7280", lineHeight: 1.6, textAlign: "center" }}>
-                No password yet? Tap the button above — it opens WhatsApp with a message ready to send. Hit send and your menu comes straight back.
-              </p>
+              <div style={{ margin: "14px 0 0", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "12px 14px" }}>
+                <p style={{ margin: "0 0 4px", fontSize: "13px", fontWeight: 700, color: "#15803d" }}>
+                  How it works
+                </p>
+                <p style={{ margin: 0, fontSize: "13px", color: "#166534", lineHeight: 1.6 }}>
+                  Tap <strong>Activate via WhatsApp</strong> — it opens WhatsApp with a security message pre-filled. Send it, and eblockwatch replies immediately with your personal member menu.
+                </p>
+              </div>
             )}
           </div>
 

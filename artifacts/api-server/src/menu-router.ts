@@ -143,7 +143,7 @@ const STEP_SAFETY_VEHICLE_DESC = "SAFETY_VEHICLE_DESC";
 // ── Keyword detectors ─────────────────────────────────────────────────────────
 
 const MAIN_MENU_TRIGGER = /^(hi|hello|menu|main menu|start|0)$/i;
-const GLOBAL_MENU_OVERRIDE = /^(hi|hello|hey|hallo|menu|main menu|start|0|join)$/i;
+const GLOBAL_MENU_OVERRIDE = /^(hi|hello|hey|hallo|menu|main menu|start|0|join|activate|activate my eblockwatch account|activate my eblockwatch)$/i;
 const JOIN_PREFIX = /^join\s+/i;
 const CC_KEYWORDS = /\b(cyber chaperone|travel|trip|start trip)\b/i;
 // Planned stop — member voluntarily pausing for fuel, food, coffee, rest, etc.
