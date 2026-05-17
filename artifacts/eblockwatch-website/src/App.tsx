@@ -6,6 +6,7 @@ import UpgradePage from "@/pages/UpgradePage";
 import RegisterPage from "@/pages/RegisterPage";
 import JoinPage from "@/pages/JoinPage";
 import NotFound from "@/pages/not-found";
+import TermsAndConditions from "@/pages/TermsAndConditions";
 
 function Router() {
   return (
@@ -17,6 +18,7 @@ function Router() {
       <Route path="/member" component={MemberDashboard} />
       <Route path="/my-account" component={MemberDashboard} />
       <Route path="/upgrade" component={UpgradePage} />
+      <Route path="/terms" component={TermsAndConditions} />
       <Route component={NotFound} />
     </Switch>
   );

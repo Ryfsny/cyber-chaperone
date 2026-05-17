@@ -18,6 +18,7 @@ import OperatorBroadcast from "@/pages/operator-broadcast";
 import Conversations from "@/pages/conversations";
 import AdminManagement from "@/pages/admin-management";
 import BroadcastApprovals from "@/pages/broadcast-approvals";
+import IncidentMap from "@/pages/incident-map";
 import { Layout } from "@/components/layout/layout";
 import { AuthGuard } from "@/components/auth-guard";
 
@@ -41,6 +42,7 @@ function Router() {
         <Route path="/conversations" component={Conversations} />
         <Route path="/admin/admins" component={AdminManagement} />
         <Route path="/admin/approvals" component={BroadcastApprovals} />
+        <Route path="/incidents" component={IncidentMap} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

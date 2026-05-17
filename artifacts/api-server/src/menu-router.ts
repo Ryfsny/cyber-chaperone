@@ -1,4 +1,4 @@
-import { db, membersTable, tripsTable, messagesTable, conversationStatesTable, respondersTable } from "@workspace/db";
+import { db, membersTable, tripsTable, messagesTable, conversationStatesTable, respondersTable, memberIncidentsTable } from "@workspace/db";
 import { and, eq, ne, desc, or, sql } from "drizzle-orm";
 import twilio from "twilio";
 import { enrichTripWithRoute, calculateRouteInfo, reverseGeocodeCoords, reverseGeocodeStreetAddress, minutesToSastTime, type RouteInfo } from "./route-service.js";
@@ -17,6 +17,7 @@ export interface MemberInfo {
   role: string | null;
   memberStatus: string;
   membershipTier: string | null;
+  loyaltyTier?: string | null;
   isKnown: boolean;
   discType?: DiscDimension | null;
   memberId?: number | null;
@@ -130,6 +131,8 @@ const STEP_REG_HOME_ADDRESS = "REG_HOME_ADDRESS";
 const STEP_REG_ICE = "REG_ICE";
 const FLOW_SAFETY_PROFILE = "SAFETY_PROFILE";
 const FLOW_SHOP = "SHOP";
+const FLOW_MY_ACCOUNT = "MY_ACCOUNT";
+const FLOW_REPORT_INCIDENT = "REPORT_INCIDENT";
 const FLOW_PROFILE_CONFIRM = "PROFILE_CONFIRM";
 const FLOW_SPEAK_TO_PERSON = "SPEAK_TO_PERSON";
 const STEP_SAFETY_MOTHER_NAME = "SAFETY_MOTHER_NAME";
@@ -1107,10 +1110,24 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
 
 // ── Menu text builders ────────────────────────────────────────────────────────
 
-function membershipStatusLine(memberStatus: string, membershipTier: string | null): string {
-  if (membershipTier) return `You're on a ${membershipTier}.`;
-  if (memberStatus === "pending") return `Your eblockwatch membership is being confirmed.`;
-  return `Your eblockwatch membership status is not confirmed yet.`;
+function trustTierEmoji(loyaltyTier: string | null | undefined): string {
+  if (loyaltyTier === "founder") return "⭐";
+  if (loyaltyTier === "silver")  return "🥈";
+  return "🥉";
+}
+
+function membershipStatusLine(memberStatus: string, membershipTier: string | null, loyaltyTier?: string | null): string {
+  const tierEmoji = trustTierEmoji(loyaltyTier);
+  const isPaying   = membershipTier === "individual" || membershipTier === "family";
+  const purpleStar = isPaying ? " 💜" : "";
+  const tierName   = loyaltyTier === "founder" ? "Founder Member"
+    : loyaltyTier === "silver" ? "Silver Member"
+    : "Bronze Member";
+  const planName   = membershipTier === "family"     ? "Family Plan"
+    : membershipTier === "individual" ? "Individual Plan"
+    : memberStatus === "pending"      ? "Membership pending"
+    : "Entry Level";
+  return `${tierEmoji}${purpleStar} *${tierName}* · ${planName}`;
 }
 
 async function sendProfileConfirmation(from: string, to: string, name: string): Promise<void> {
@@ -1162,7 +1179,7 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
       `1️⃣  What is eblockwatch?`,
       `2️⃣  Membership options`,
       `3️⃣  Activate my membership`,
-      `4️⃣  Update my profile`,
+      `4️⃣  👤 My Account`,
       `5️⃣  Travel with Cyber Chaperone 🛡️`,
       `6️⃣  eblockshop`,
       `7️⃣  Speak to a person`,
@@ -1178,6 +1195,7 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
   const statusLine = membershipStatusLine(
     member?.memberStatus ?? "unknown",
     member?.membershipTier ?? null,
+    member?.loyaltyTier,
   );
   const isUnknown = !member || member.memberStatus === "unverified";
   return [
@@ -1192,7 +1210,7 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
     `1️⃣  What is eblockwatch?`,
     `2️⃣  Membership options`,
     `3️⃣  Activate my membership`,
-    `4️⃣  Update my profile`,
+    `4️⃣  👤 My Account`,
     `5️⃣  Travel with Cyber Chaperone`,
     `6️⃣  eblockshop`,
     `7️⃣  Speak to a person`,
@@ -3232,7 +3250,7 @@ async function handleRegistrationStep(ctx: MenuContext, state: ConvState): Promi
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
     const [row] = await db.select().from(membersTable).where(eq(membersTable.whatsappNumber, from)).limit(1);
     const member: MemberInfo | null = row
-      ? { displayName: row.displayName, role: row.role, memberStatus: row.memberStatus, membershipTier: row.membershipTier, isKnown: row.memberStatus === "active" || row.memberStatus === "verified", discType: row.discType as DiscDimension | null, memberId: row.id }
+      ? { displayName: row.displayName, role: row.role, memberStatus: row.memberStatus, membershipTier: row.membershipTier, loyaltyTier: row.loyaltyTier, isKnown: row.memberStatus === "active" || row.memberStatus === "verified", discType: row.discType as DiscDimension | null, memberId: row.id }
       : null;
     await sendMainMenuWithNearby(from, to, row?.displayName ?? from, member);
     return;
@@ -3407,6 +3425,7 @@ async function handleRegistrationStep(ctx: MenuContext, state: ConvState): Promi
           iceContactPhone: iceContactPhone || null,
           sourceBatch: "whatsapp_registration",
           importStatus: "registered",
+          loyaltyTier: "bronze",
         })
         .onConflictDoUpdate({
           target: membersTable.whatsappNumber,
@@ -3536,7 +3555,8 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   if (choice === "4") {
     if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_PROFILE");
     await saveMessage(from, to, body, messageSid, null);
-    await startSmartProfileUpdate(from, to, name);
+    await setConvState(from, { currentFlow: FLOW_MY_ACCOUNT, currentStep: null });
+    await sendWhatsApp(from, to, myAccountMenuText(name, member));
     return true;
   }
 
@@ -3684,6 +3704,304 @@ async function handleSpeakToPersonFlow(ctx: MenuContext): Promise<void> {
     `Message: ${trimmed}`,
     `Next action: André to reply directly on WhatsApp.`,
   ].join("\n"));
+}
+
+// ── My Account submenu ────────────────────────────────────────────────────────
+
+function myAccountMenuText(name: string, member: MemberInfo | null): string {
+  const tier = member?.loyaltyTier ?? "bronze";
+  const tierEmoji = trustTierEmoji(tier);
+  const tierName = tier === "founder" ? "Founder Member" : tier === "silver" ? "Silver Member" : "Bronze Member";
+  const isPaying = member?.membershipTier === "individual" || member?.membershipTier === "family";
+  return [
+    `👤 *My Account* — ${name}`,
+    ``,
+    `${tierEmoji}${isPaying ? " 💜" : ""} ${tierName}`,
+    ``,
+    `1️⃣  Update my profile`,
+    `2️⃣  My loyalty points & trust status`,
+    `3️⃣  My family group`,
+    `4️⃣  Report confidentially to André 🔒`,
+    `5️⃣  My member portal 🌐`,
+    ``,
+    `Reply 0 for Main Menu.`,
+  ].join("\n");
+}
+
+async function handleMyAccountFlow(ctx: MenuContext, state: ConvState): Promise<void> {
+  const { from, to, body, member, messageSid, log } = ctx;
+  const name = member?.displayName ?? from;
+  const choice = body.trim();
+
+  if (choice === "0") {
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendMainMenuWithNearby(from, to, name, member);
+    return;
+  }
+
+  if (choice === "1") {
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await startSmartProfileUpdate(from, to, name);
+    return;
+  }
+
+  if (choice === "2") {
+    let pts = 0;
+    let tier = member?.loyaltyTier ?? "bronze";
+    if (member?.memberId) {
+      const [row] = await db
+        .select({ loyaltyPoints: membersTable.loyaltyPoints, loyaltyTier: membersTable.loyaltyTier })
+        .from(membersTable)
+        .where(eq(membersTable.id, member.memberId))
+        .limit(1);
+      pts = row?.loyaltyPoints ?? 0;
+      tier = row?.loyaltyTier ?? tier;
+    }
+    const tierEmoji = trustTierEmoji(tier);
+    const tierName = tier === "founder" ? "Founder Member" : tier === "silver" ? "Silver Member" : "Bronze Member";
+    const isPaying = member?.membershipTier === "individual" || member?.membershipTier === "family";
+    const nextTierName = tier === "bronze" ? "Silver" : tier === "silver" ? "Founder" : null;
+    const pointsNeeded = tier === "bronze" ? 50 : tier === "silver" ? 150 : null;
+    const progressLine = nextTierName && pointsNeeded
+      ? `Progress to ${nextTierName}: ${Math.min(pts, pointsNeeded)}/${pointsNeeded} pts (${Math.round((Math.min(pts, pointsNeeded) / pointsNeeded) * 100)}%)`
+      : `You are at the highest trust level — recognised Founder. 🏆`;
+    await saveMessage(from, to, body, messageSid, null);
+    await sendWhatsApp(from, to, [
+      `${tierEmoji}${isPaying ? " 💜" : ""} *${tierName}*`,
+      ``,
+      `⭐ Loyalty points: *${pts}*`,
+      progressLine,
+      ``,
+      `*Your privileges:*`,
+      tier === "founder"
+        ? [
+            `  ✅ Highest priority in emergency dispatch`,
+            `  ✅ Paired first with Founder-level responders`,
+            `  ✅ Direct line to André`,
+            `  ✅ Community pillar recognition`,
+          ].join("\n")
+        : tier === "silver"
+        ? [
+            `  ✅ Priority response activation`,
+            `  ✅ Paired with Silver+ community members`,
+            `  ✅ Early access to new features`,
+          ].join("\n")
+        : [
+            `  ✅ Cyber Chaperone trip monitoring`,
+            `  ✅ Access to eblockshop`,
+            `  ✅ Community network membership`,
+          ].join("\n"),
+      ``,
+      `*Earn points:*`,
+      `  +5  — Submit a safety report`,
+      `  +10 — Complete your full profile`,
+      `  +20 — Refer a friend who joins`,
+      `  +30 — Refer a friend who upgrades`,
+      `  +50 — Upgrade to a paid plan`,
+      ``,
+      `Higher trust = better pairing when you need us most.`,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (choice === "3") {
+    await saveMessage(from, to, body, messageSid, null);
+    if (member?.memberId) {
+      const [self] = await db
+        .select({ familyGroupId: membersTable.familyGroupId })
+        .from(membersTable)
+        .where(eq(membersTable.id, member.memberId))
+        .limit(1);
+      if (self?.familyGroupId) {
+        const fam = await db
+          .select({ displayName: membersTable.displayName, memberStatus: membersTable.memberStatus })
+          .from(membersTable)
+          .where(eq(membersTable.familyGroupId, self.familyGroupId));
+        const list = fam.map((m) => `  • ${m.displayName} — ${m.memberStatus}`).join("\n");
+        await sendWhatsApp(from, to, [
+          `🏠 *Your Family Group*`,
+          ``,
+          list,
+          ``,
+          `Your family members are each other's ICE contacts under our watch.`,
+          `To add or remove a member, type your request here — André will action it.`,
+          ``,
+          `Reply 0 for Main Menu.`,
+        ].join("\n"));
+        return;
+      }
+    }
+    await sendWhatsApp(from, to, [
+      `🏠 *Family Group*`,
+      ``,
+      `You are not on a Family Plan yet.`,
+      ``,
+      `The Family Plan covers up to 5 family members for R250/month — full trip monitoring and ICE escalation for everyone.`,
+      ``,
+      `Reply 3 from the main menu for membership options.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (choice === "4") {
+    await saveMessage(from, to, body, messageSid, null);
+    await setConvState(from, { currentFlow: FLOW_REPORT_INCIDENT, currentStep: "CATEGORY", pendingTripData: null });
+    await sendWhatsApp(from, to, [
+      `🔒 *Confidential Report to André*`,
+      ``,
+      `${name}, this goes directly and only to André. Never shared with other members.`,
+      ``,
+      `What category best describes this?`,
+      ``,
+      `1️⃣  Crime & Security Threat`,
+      `2️⃣  Suspicious Activity`,
+      `3️⃣  Road & Traffic Hazard`,
+      `4️⃣  Personal Safety Concern`,
+      `5️⃣  Neighbourhood Watch Alert`,
+      `6️⃣  Cyber Safety Concern`,
+      `7️⃣  Other`,
+      ``,
+      `Reply 0 to cancel.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (choice === "5") {
+    await saveMessage(from, to, body, messageSid, null);
+    await sendWhatsApp(from, to, [
+      `🌐 *Your Member Portal*`,
+      ``,
+      `${name}, your personal dashboard is here:`,
+      `👉 https://cyber-chaperone-r--ryfsny.replit.app/website/login`,
+      ``,
+      `Log in with a WhatsApp OTP — tap the green button.`,
+      ``,
+      `Your portal includes:`,
+      `  ✅ Your trust tier & loyalty points`,
+      `  ✅ Update your profile & ICE contact`,
+      `  ✅ eblockshop — safer living products`,
+      `  ✅ Family group management`,
+      `  ✅ Confidential reports`,
+      `  ✅ Your full comms history`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    return;
+  }
+
+  await sendWhatsApp(from, to, myAccountMenuText(name, member));
+}
+
+async function handleReportIncidentFlow(ctx: MenuContext, state: ConvState): Promise<void> {
+  const { from, to, body, member, messageSid, log } = ctx;
+  const name = member?.displayName ?? from;
+  const choice = body.trim();
+  const step = state.currentStep;
+
+  if (choice === "0") {
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendMainMenuWithNearby(from, to, name, member);
+    return;
+  }
+
+  if (step === "CATEGORY") {
+    const CATS: Record<string, string> = {
+      "1": "Crime & Security Threat",
+      "2": "Suspicious Activity",
+      "3": "Road & Traffic Hazard",
+      "4": "Personal Safety Concern",
+      "5": "Neighbourhood Watch Alert",
+      "6": "Cyber Safety Concern",
+      "7": "Other",
+    };
+    const category = CATS[choice];
+    if (!category) {
+      await sendWhatsApp(from, to, `Please reply with a number 1–7.\n\nReply 0 to cancel.`);
+      return;
+    }
+    const pending = { reportCategory: category } as unknown as PendingTripData;
+    await setConvState(from, { currentFlow: FLOW_REPORT_INCIDENT, currentStep: "DESCRIPTION", pendingTripData: pending });
+    await sendWhatsApp(from, to, [
+      `📝 *${category}*`,
+      ``,
+      `Please describe what happened, when, and any details that will help André act quickly.`,
+      ``,
+      `(At least 20 characters — more detail helps us respond faster.)`,
+      ``,
+      `Reply 0 to cancel.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (step === "DESCRIPTION") {
+    if (body.trim().length < 20) {
+      await sendWhatsApp(from, to, `Please share a bit more detail (at least 20 characters).\n\nReply 0 to cancel.`);
+      return;
+    }
+    const pending = { ...(state.pendingTripData as Record<string, string> ?? {}), reportDescription: body.trim() } as unknown as PendingTripData;
+    await setConvState(from, { currentFlow: FLOW_REPORT_INCIDENT, currentStep: "LOCATION", pendingTripData: pending });
+    await sendWhatsApp(from, to, [
+      `📍 Do you have a location for this incident?`,
+      ``,
+      `Reply with an address or area (e.g. "Corner of Elm St, Sandton"), or reply *skip* to leave it blank.`,
+      ``,
+      `Reply 0 to cancel.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (step === "LOCATION") {
+    const pending = (state.pendingTripData as Record<string, string> ?? {});
+    const locText = (choice.toLowerCase() === "skip") ? null : body.trim();
+    const category = pending.reportCategory ?? "Other";
+    const description = pending.reportDescription ?? "";
+
+    if (member?.memberId) {
+      try {
+        await db.insert(memberIncidentsTable).values({
+          memberId: member.memberId,
+          category,
+          description,
+          location: locText,
+          status: "received",
+        });
+        await db.update(membersTable)
+          .set({ loyaltyPoints: sql`${membersTable.loyaltyPoints} + 5`, updatedAt: new Date() })
+          .where(eq(membersTable.id, member.memberId));
+        if (locText) {
+          void (async () => {
+            try {
+              const geo = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locText + ", South Africa")}&format=json&limit=1&countrycodes=za`, { headers: { "User-Agent": "eblockwatch-safety/1.0" } });
+              const geoData = await geo.json() as Array<{ lat: string; lon: string }>;
+              if (geoData[0]) {
+                await db.execute(sql`UPDATE member_incidents SET lat = ${geoData[0].lat}, lon = ${geoData[0].lon} WHERE member_id = ${member.memberId!} AND created_at = (SELECT MAX(created_at) FROM member_incidents WHERE member_id = ${member.memberId!})`);
+              }
+            } catch { /* ignore — geocoding is best-effort */ }
+          })();
+        }
+      } catch (err) {
+        log.error({ err }, "Failed to save incident report");
+      }
+    }
+
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU, currentStep: null, pendingTripData: null });
+    await sendWhatsApp(from, to, [
+      `✅ *Report received confidentially.*`,
+      ``,
+      `Thank you, ${name}. André will review this personally.`,
+      ``,
+      `You have earned *+5 loyalty points* for contributing to our project's safety.`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+    return;
+  }
+
+  await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+  await sendMainMenuWithNearby(from, to, name, member);
 }
 
 // ── eblockshop ────────────────────────────────────────────────────────────────
@@ -4162,6 +4480,16 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
 
   if (state.currentFlow === FLOW_SHOP) {
     await handleShopFlow(ctx);
+    return { handled: true };
+  }
+
+  if (state.currentFlow === FLOW_MY_ACCOUNT) {
+    await handleMyAccountFlow(ctx, state);
+    return { handled: true };
+  }
+
+  if (state.currentFlow === FLOW_REPORT_INCIDENT) {
+    await handleReportIncidentFlow(ctx, state);
     return { handled: true };
   }
 

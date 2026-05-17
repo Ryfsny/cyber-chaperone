@@ -168,7 +168,10 @@ interface MemberInfo {
   role: string | null;
   memberStatus: string;
   membershipTier: string | null;
+  loyaltyTier?: string | null;
   isKnown: boolean;
+  discType?: import("../disc-profiler.js").DiscDimension | null;
+  memberId?: number | null;
 }
 
 /**
@@ -200,6 +203,7 @@ async function lookupMember(whatsappNumber: string): Promise<MemberInfo | null> 
         role: member.role,
         memberStatus: member.memberStatus,
         membershipTier: member.membershipTier ?? null,
+        loyaltyTier: member.loyaltyTier ?? "bronze",
         isKnown: member.memberStatus === "verified" || member.memberStatus === "active",
         discType: (member.discType ?? null) as import("../disc-profiler.js").DiscDimension | null,
         memberId: member.id,

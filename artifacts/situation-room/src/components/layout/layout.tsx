@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import {
   Plus, Shield, Bot, Users, BookUser,
   LogOut, Megaphone, MessagesSquare, Menu, X,
-  LayoutDashboard, Map, ScrollText, Send, ShieldCheck, Clock, CreditCard,
+  LayoutDashboard, Map, ScrollText, Send, ShieldCheck, Clock, CreditCard, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
@@ -105,6 +105,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
       sub: "eblockwatch field network",
       icon: Users,
       show: isNational,
+    },
+    {
+      href: "/incidents",
+      label: "Incident Map",
+      sub: "Confidential member reports",
+      icon: AlertTriangle,
+      show: true,
     },
     {
       href: "/admin/admins",

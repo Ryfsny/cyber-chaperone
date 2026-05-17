@@ -100,6 +100,7 @@ interface Member {
   paystackPlanCode: string | null;
   paystackPaidAt: string | null;
   loyaltyPoints: number | null;
+  loyaltyTier: string | null;
   hasPassword?: boolean;
   createdAt: string;
 }
@@ -485,7 +486,7 @@ export default function MemberDashboard() {
           <button style={tabStyle(activeTab === "family")} onClick={() => setActiveTab("family")}>Family</button>
           <button style={tabStyle(activeTab === "report")} onClick={() => setActiveTab("report")}>Report</button>
           <button style={tabStyle(activeTab === "comms")} onClick={() => setActiveTab("comms")}>Our Comms</button>
-          <button style={tabStyle(activeTab === "loyalty")} onClick={() => setActiveTab("loyalty")}>Loyalty</button>
+          <button style={tabStyle(activeTab === "loyalty")} onClick={() => setActiveTab("loyalty")}>My Status</button>
           <button style={tabStyle(activeTab === "security")} onClick={() => setActiveTab("security")}>Security</button>
         </div>
 
@@ -898,69 +899,134 @@ export default function MemberDashboard() {
             </>
           )}
 
-          {/* ── LOYALTY TAB ──────────────────────────────────────────────── */}
-          {activeTab === "loyalty" && (
-            <>
-              <h2 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 700, color: "#111827", fontFamily: "Montserrat, sans-serif" }}>
-                ⭐ Loyalty Points
-              </h2>
-              <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 20px", lineHeight: 1.6 }}>
-                Earn points by helping grow and strengthen our project. Points will unlock discounts, community recognition, and priority support.
-              </p>
+          {/* ── MY STATUS TAB ────────────────────────────────────────────── */}
+          {activeTab === "loyalty" && (() => {
+            const lt = member.loyaltyTier ?? "bronze";
+            const isPaying = member.membershipTier === "individual" || member.membershipTier === "family";
+            const tierEmoji = lt === "founder" ? "⭐" : lt === "silver" ? "🥈" : "🥉";
+            const tierName  = lt === "founder" ? "Founder Member" : lt === "silver" ? "Silver Member" : "Bronze Member";
+            const tierColour = lt === "founder" ? "#92400e" : lt === "silver" ? "#374151" : "#78350f";
+            const tierBg     = lt === "founder" ? "#fffbeb" : lt === "silver" ? "#f3f4f6" : "#fef3c7";
+            const tierBorder = lt === "founder" ? "#fde68a" : lt === "silver" ? "#d1d5db" : "#fcd34d";
+            const nextTier = lt === "bronze" ? "Silver" : lt === "silver" ? "Founder" : null;
+            const ptsCap   = lt === "bronze" ? 50 : lt === "silver" ? 150 : null;
+            const progress = ptsCap ? Math.min(100, Math.round((pts / ptsCap) * 100)) : 100;
+            const privileges: string[] = lt === "founder"
+              ? ["Highest priority in emergency dispatch", "Paired first with Founder-level responders", "Direct line to André", "Community pillar recognition"]
+              : lt === "silver"
+              ? ["Priority response activation", "Paired with Silver+ community members", "Early access to new features"]
+              : ["Cyber Chaperone trip monitoring", "Access to eblockshop", "Community network membership"];
+            return (
+              <>
+                <h2 style={{ margin: "0 0 4px", fontSize: "15px", fontWeight: 700, color: "#111827", fontFamily: "Montserrat, sans-serif" }}>
+                  My Status
+                </h2>
+                <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 20px", lineHeight: 1.6 }}>
+                  Your trust tier reflects your history and commitment to the community. Higher tiers mean better pairing and faster response when you need us most.
+                </p>
 
-              {/* Points balance */}
-              <div style={{ background: "linear-gradient(135deg, #0d1117 0%, #1a2332 100%)", borderRadius: "14px", padding: "28px", textAlign: "center", marginBottom: "24px" }}>
-                <div style={{ color: "#9ca3af", fontSize: "13px", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "1px" }}>Your Balance</div>
-                <div style={{ color: "#fbbf24", fontSize: "52px", fontWeight: 800, fontFamily: "Montserrat, sans-serif", lineHeight: 1 }}>{pts}</div>
-                <div style={{ color: "#6b7280", fontSize: "13px", marginTop: "6px" }}>loyalty points</div>
-                {pts > 0 && (
-                  <div style={{ background: "#1a2332", borderRadius: "8px", padding: "8px 16px", display: "inline-block", marginTop: "14px" }}>
-                    <span style={{ color: "#fbbf24", fontSize: "12px", fontWeight: 600 }}>
-                      {pts >= 100 ? "🥇 Gold Member" : pts >= 50 ? "🥈 Silver Member" : "🥉 Bronze Member"}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* How to earn */}
-              <div style={{ fontWeight: 700, fontSize: "13px", color: "#374151", marginBottom: "12px" }}>How to earn points</div>
-              <div style={{ display: "grid", gap: "8px", marginBottom: "24px" }}>
-                {[
-                  { action: "Submit a confidential safety report", pts: "+5", auto: true, icon: "🔒" },
-                  { action: "Complete your full safety profile", pts: "+10", auto: false, icon: "✅" },
-                  { action: "Upgrade to a paid plan", pts: "+50", auto: false, icon: "🛡️" },
-                  { action: "Refer a friend who joins our project", pts: "+20", auto: false, icon: "👥" },
-                  { action: "Refer a friend who upgrades to paid", pts: "+30", auto: false, icon: "⭐" },
-                  { action: "1-year membership anniversary", pts: "+25", auto: false, icon: "🎂" },
-                ].map(row => (
-                  <div key={row.action} style={{ display: "flex", alignItems: "center", gap: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "12px 14px" }}>
-                    <span style={{ fontSize: "18px", flexShrink: 0 }}>{row.icon}</span>
-                    <div style={{ flex: 1, fontSize: "13px", color: "#374151" }}>{row.action}</div>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "3px" }}>
-                      <span style={{ fontWeight: 800, fontSize: "14px", color: "#1db954" }}>{row.pts}</span>
-                      {row.auto && <span style={{ fontSize: "10px", color: "#6b7280", background: "#f0fdf4", padding: "1px 6px", borderRadius: "8px" }}>auto</span>}
+                {/* Trust tier badge */}
+                <div style={{ background: tierBg, border: `2px solid ${tierBorder}`, borderRadius: "14px", padding: "22px 24px", marginBottom: "20px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
+                    <span style={{ fontSize: "36px", lineHeight: 1 }}>{tierEmoji}</span>
+                    {isPaying && <span style={{ fontSize: "28px", lineHeight: 1 }}>💜</span>}
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: "18px", color: tierColour, fontFamily: "Montserrat, sans-serif" }}>{tierName}</div>
+                      {isPaying && <div style={{ fontSize: "12px", color: "#7c3aed", fontWeight: 600, marginTop: "2px" }}>Paying member — 💜 purple star earned</div>}
                     </div>
                   </div>
-                ))}
-              </div>
 
-              {/* Redeem info */}
-              <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "10px", padding: "14px 16px" }}>
-                <div style={{ fontWeight: 700, fontSize: "13px", color: "#92400e", marginBottom: "4px" }}>🎁 Redeeming points — coming soon</div>
-                <div style={{ fontSize: "12px", color: "#b45309", lineHeight: 1.6 }}>
-                  We're building the rewards system now. Points you earn today will carry over. Planned rewards include plan discounts, early feature access, and community recognition in our project.
+                  {/* Progress bar */}
+                  {nextTier && ptsCap ? (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#6b7280", marginBottom: "5px" }}>
+                        <span>Progress to {nextTier}</span>
+                        <span>{pts} / {ptsCap} pts ({progress}%)</span>
+                      </div>
+                      <div style={{ background: "#e5e7eb", borderRadius: "999px", height: "10px", overflow: "hidden" }}>
+                        <div style={{ width: `${progress}%`, height: "100%", background: "linear-gradient(90deg, #22c55e, #16a34a)", borderRadius: "999px", transition: "width 0.4s ease" }} />
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "5px" }}>Earn {ptsCap - pts} more points to reach {nextTier} status</div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: "13px", color: "#92400e", fontWeight: 600 }}>🏆 You are at the highest trust level — recognised Founder.</div>
+                  )}
                 </div>
-              </div>
 
-              {/* Referral instructions */}
-              <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "14px 16px", marginTop: "12px" }}>
-                <div style={{ fontWeight: 600, fontSize: "13px", color: "#374151", marginBottom: "6px" }}>Refer a friend</div>
-                <div style={{ fontSize: "13px", color: "#6b7280", lineHeight: 1.6 }}>
-                  Tell a friend to WhatsApp <a href={WA_LINK_HI} target="_blank" rel="noopener noreferrer" style={{ color: "#1db954", fontWeight: 600, textDecoration: "none" }}>our project's safety line</a> and mention your name. We'll credit the points to your account manually — usually within 24 hours.
+                {/* Points balance */}
+                <div style={{ background: "linear-gradient(135deg, #0d1117 0%, #1a2332 100%)", borderRadius: "12px", padding: "20px 24px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "20px" }}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "#fbbf24", fontSize: "42px", fontWeight: 800, fontFamily: "Montserrat, sans-serif", lineHeight: 1 }}>{pts}</div>
+                    <div style={{ color: "#9ca3af", fontSize: "11px", marginTop: "4px", textTransform: "uppercase", letterSpacing: "1px" }}>Points</div>
+                  </div>
+                  <div style={{ flex: 1, borderLeft: "1px solid #374151", paddingLeft: "20px" }}>
+                    <div style={{ fontWeight: 700, fontSize: "13px", color: "#e5e7eb", marginBottom: "8px" }}>Your privileges</div>
+                    {privileges.map(p => (
+                      <div key={p} style={{ fontSize: "12px", color: "#9ca3af", display: "flex", alignItems: "flex-start", gap: "6px", marginBottom: "4px" }}>
+                        <span style={{ color: "#22c55e", flexShrink: 0 }}>✓</span> {p}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
+
+                {/* Tier ladder */}
+                <div style={{ fontWeight: 700, fontSize: "13px", color: "#374151", marginBottom: "12px" }}>Trust tier ladder</div>
+                <div style={{ display: "grid", gap: "8px", marginBottom: "20px" }}>
+                  {[
+                    { tier: "🥉 Bronze", desc: "New members — starting the journey", range: "0 – 49 pts" },
+                    { tier: "🥈 Silver", desc: "Active community participants", range: "50 – 149 pts" },
+                    { tier: "⭐ Founder", desc: "Our most trusted and committed members", range: "150+ pts or original batch" },
+                  ].map(row => (
+                    <div key={row.tier} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "11px 14px" }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: "13px", color: "#111827" }}>{row.tier}</div>
+                        <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "2px" }}>{row.desc}</div>
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#9ca3af", whiteSpace: "nowrap", marginLeft: "12px" }}>{row.range}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* How to earn points */}
+                <div style={{ fontWeight: 700, fontSize: "13px", color: "#374151", marginBottom: "12px" }}>How to earn points</div>
+                <div style={{ display: "grid", gap: "8px", marginBottom: "20px" }}>
+                  {[
+                    { action: "Submit a confidential safety report", pts: "+5",  icon: "🔒", auto: true },
+                    { action: "Complete your full safety profile",   pts: "+10", icon: "✅", auto: false },
+                    { action: "Refer a friend who joins",            pts: "+20", icon: "👥", auto: false },
+                    { action: "Refer a friend who upgrades to paid", pts: "+30", icon: "⭐", auto: false },
+                    { action: "Upgrade to a paid plan",              pts: "+50", icon: "🛡️", auto: false },
+                    { action: "1-year membership anniversary",       pts: "+25", icon: "🎂", auto: false },
+                  ].map(row => (
+                    <div key={row.action} style={{ display: "flex", alignItems: "center", gap: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "11px 14px" }}>
+                      <span style={{ fontSize: "18px", flexShrink: 0 }}>{row.icon}</span>
+                      <div style={{ flex: 1, fontSize: "13px", color: "#374151" }}>{row.action}</div>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "3px" }}>
+                        <span style={{ fontWeight: 800, fontSize: "14px", color: "#16a34a" }}>{row.pts}</span>
+                        {row.auto && <span style={{ fontSize: "10px", color: "#6b7280", background: "#f0fdf4", padding: "1px 6px", borderRadius: "8px" }}>auto</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Philosophy */}
+                <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "14px 16px", marginBottom: "12px" }}>
+                  <div style={{ fontWeight: 700, fontSize: "13px", color: "#166534", marginBottom: "4px" }}>💚 Why trust tiers matter</div>
+                  <div style={{ fontSize: "12px", color: "#166534", lineHeight: 1.7 }}>
+                    eblockwatch is built on community trust. The higher your tier, the more confident we are in routing you the best available responders first, and in treating your alerts with highest urgency. This is not a marketing gimmick — it's how we keep everyone safer.
+                  </div>
+                </div>
+
+                {/* Refer */}
+                <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "14px 16px" }}>
+                  <div style={{ fontWeight: 600, fontSize: "13px", color: "#374151", marginBottom: "6px" }}>👥 Refer a friend</div>
+                  <div style={{ fontSize: "13px", color: "#6b7280", lineHeight: 1.6 }}>
+                    Tell a friend to WhatsApp <a href={WA_LINK_HI} target="_blank" rel="noopener noreferrer" style={{ color: "#16a34a", fontWeight: 600, textDecoration: "none" }}>our safety line</a> and mention your name. We'll credit the points to your account — usually within 24 hours.
+                  </div>
+                </div>
+              </>
+            );
+          })()}
 
           {/* ── SECURITY TAB ─────────────────────────────────────────────── */}
           {activeTab === "security" && (
@@ -1020,6 +1086,16 @@ export default function MemberDashboard() {
         </div>
 
       </div>
+
+      {/* Footer */}
+      <div style={{ textAlign: "center", padding: "20px 16px 32px", fontSize: "12px", color: "#9ca3af" }}>
+        <div style={{ marginBottom: "6px" }}>
+          <a href="/terms" style={{ color: "#6b7280", textDecoration: "underline", marginRight: "16px" }}>Founder's Pledge & Terms</a>
+          <a href={WA_LINK_HI} target="_blank" rel="noopener noreferrer" style={{ color: "#6b7280", textDecoration: "underline" }}>WhatsApp Support</a>
+        </div>
+        <div>© {new Date().getFullYear()} eblockwatch — Cyber Chaperone. All rights reserved.</div>
+      </div>
+
     </div>
   );
 }
