@@ -18,6 +18,36 @@ uri = "file://artifacts/cyber-chaperone-deck/public/hero-danger.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "Clf3zijtP048ArvCmVS2h"
+uri = "file://artifacts/chaperone-video/src/assets/scene1-forest.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "DoBNl-MeFlJ56gvGFppmG"
+uri = "file://artifacts/chaperone-video/src/assets/scene2-situationroom.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "lyFGDDquZ0uPUA3u7QCnw"
+uri = "file://artifacts/chaperone-video/src/assets/scene3-checkin.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "IBl_UMqC03NI8Zm3-23-H"
+uri = "file://artifacts/chaperone-video/src/assets/scene4-danger.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "2lmxr1qF88rsNivZXmQij"
+uri = "file://artifacts/chaperone-video/src/assets/scene5-arrival.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "GZcowUx324_zRD73VmXNW"
 uri = "file://docs/ruka-vs-current-alignment-report.md"
