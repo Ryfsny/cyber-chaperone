@@ -189,7 +189,7 @@ function buildEmailHtml(firstName: string, subject: string, body: string): strin
       style="display:inline-block;background:#25d366;color:#ffffff;text-decoration:none;font-size:13px;font-weight:bold;padding:14px 32px;border-radius:4px;letter-spacing:1px;font-family:Arial,sans-serif;">
       💬 &nbsp;ACTIVATE ON WHATSAPP &nbsp;→
     </a>
-    <p style="margin:10px 0 0;font-size:11px;color:#6b7280;font-family:Arial,sans-serif;">Tap, send "Hi", and Arnie will walk you through everything.</p>
+    <p style="margin:10px 0 0;font-size:11px;color:#6b7280;font-family:Arial,sans-serif;">Tap, send "Hi", and AI Command will walk you through everything.</p>
   </div>
 
   <!-- Signature -->
@@ -347,7 +347,7 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
         </td>
         <td style="vertical-align:top;padding-left:14px;padding-top:4px;">
           <div style="font-weight:bold;color:#111827;font-size:14px;font-family:Arial,sans-serif;margin-bottom:3px;">Send "Hi"</div>
-          <div style="color:#4b5563;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">Open WhatsApp and send the word <strong style="color:#16a34a;">Hi</strong>. Arnie, our system, responds with your member menu.</div>
+          <div style="color:#4b5563;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">Open WhatsApp and send the word <strong style="color:#16a34a;">Hi</strong>. AI Command, our system, responds with your member menu.</div>
         </td>
       </tr>
     </table>
@@ -378,7 +378,7 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
         Tap here to get started
       </div>
     </a>
-    <p style="margin:14px 0 0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">Save +27 82 561 1065 · send "Hi" · Arnie does the rest</p>
+    <p style="margin:14px 0 0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">Save +27 82 561 1065 · send "Hi" · AI Command does the rest</p>
   </div>
 
   <!-- ── Signature ── -->
@@ -691,7 +691,7 @@ router.post("/broadcast/welcome-campaign", async (req: Request, res: Response): 
   }
 
   const SUBJECT = (fn: string) => `André here — welcome home, ${fn}.`;
-  const TEXT    = (fn: string) => `Hi ${fn},\n\nWelcome home to eblockwatch.\n\nActivate on WhatsApp now — save +27 82 561 1065, send "Hi", and Arnie walks you through everything.\n\nAndre Snyman\nFounder · eblockwatch`;
+  const TEXT    = (fn: string) => `Hi ${fn},\n\nWelcome home to eblockwatch.\n\nActivate on WhatsApp now — save +27 82 561 1065, send "Hi", and AI Command walks you through everything.\n\nAndre Snyman\nFounder · eblockwatch`;
 
   const lastIdx = valid.length - 1;
   const job = makeJob("email", valid.length);

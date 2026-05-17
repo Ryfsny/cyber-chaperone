@@ -262,7 +262,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   AI Assistant
                 </div>
                 <div className={cn("text-[10px] leading-tight mt-0.5", showAi ? "text-primary-foreground/70" : "text-muted-foreground/70")}>
-                  Arnie — trip analysis & alerts
+                  AI Command — trip analysis & alerts
                 </div>
               </div>
             </button>

@@ -1183,7 +1183,7 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
   return [
     `🛡️ *eblockwatch — Cyber Chaperone*`,
     ``,
-    `Hi ${name}. I'm Arnie — André Snyman's digital assistant.`,
+    `Hi ${name}. I'm AI Command — André Snyman's digital assistant.`,
     `We have one job: get you there safely, every time.`,
     ``,
     statusLine,
@@ -3612,7 +3612,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
       `   Payment is secure via Paystack — card, bank or EFT.`,
       ``,
       `3️⃣  *Travel with Cyber Chaperone*`,
-      `   Reply 5 and tell Arnie where you're going.`,
+      `   Reply 5 and tell AI Command where you're going.`,
       `   We watch your route. If you don't arrive — we act.`,
       ``,
       `4️⃣  *Set up your ICE contact*`,

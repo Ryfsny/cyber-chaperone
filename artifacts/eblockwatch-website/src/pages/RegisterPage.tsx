@@ -189,7 +189,7 @@ export default function RegisterPage() {
                 style={{ display: "inline-flex", alignItems: "center", gap: "8px", marginBottom: "20px" }}
               >
                 <WhatsAppIcon />
-                Chat with AI Arnie on WhatsApp
+                Chat with AI Command on WhatsApp
               </a>
               <div style={{ borderTop: "1px solid #e5e7eb", marginTop: "28px", paddingTop: "24px" }}>
                 <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "12px" }}>Want to pay right away? Please use one of the links below.</p>

@@ -189,7 +189,7 @@ router.post("/webhook/facebook", async (req: Request, res: Response): Promise<vo
       const member = await lookupFacebookMember(psid, senderName);
 
       // For first-time Facebook contacts (unverified = auto-created, never interacted before),
-      // prepend a sales-funnel intro to the very first reply Arnie sends them.
+      // prepend a sales-funnel intro to the very first reply AI Command sends them.
       const isFirstContact = member?.memberStatus === "unverified";
       let salesIntroSent = false;
 
@@ -212,7 +212,7 @@ router.post("/webhook/facebook", async (req: Request, res: Response): Promise<vo
             `━━━━━━━━━━━━━━━━━━━━`,
             `📱 *Get the full experience on WhatsApp:*`,
             `Just send "Hi" to wa.me/${(process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+27825611065").replace("whatsapp:+", "")}`,
-            `Arnie (André's digital assistant) will guide you through everything — step by step.`,
+            `AI Command (André's digital assistant) will guide you through everything — step by step.`,
             `━━━━━━━━━━━━━━━━━━━━`,
             ``,
             messageToSend,
@@ -260,7 +260,7 @@ router.post("/webhook/facebook", async (req: Request, res: Response): Promise<vo
           `Live location tracking and ICE escalation require WhatsApp — they do not work on Messenger.`,
           ``,
           `👉 Send "Hi" to: wa.me/${(process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+27825611065").replace("whatsapp:+", "")}`,
-          `Arnie will pick up exactly where we left off and activate your trip monitoring.`,
+          `AI Command will pick up exactly where we left off and activate your trip monitoring.`,
         ].join("\n"));
       }
     }

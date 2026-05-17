@@ -25,7 +25,7 @@ export default function Slide12WhatsNext() {
           {[
             "WhatsApp Business number (application in progress)",
             "Full family group WhatsApp onboarding",
-            "AI-powered threat inference (Arnie — already in beta)",
+            "AI-powered threat inference (AI Command — already in beta)",
             "Voice check-in for areas with poor data",
             "Responder dispatch from the Situation Room",
             "Corporate travel packages",

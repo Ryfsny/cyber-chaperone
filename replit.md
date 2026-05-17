@@ -52,7 +52,7 @@ This is the single source of truth. Everything happens here.
 | `POST /api/paystack/webhook` | Paystack payment events (HMAC-SHA512 verified — hard reject without sig) |
 | `POST /api/paystack/payment-link` | Generate personalised Paystack checkout URL (members use from website) |
 | `/api/member-portal/*` | Member portal (JWT-based, members self-auth) |
-| `/api/arnie-chat` | AI Arnie WhatsApp-style chat |
+| `/api/arnie-chat` | AI Command WhatsApp-style chat |
 
 ### Operator-protected (requireAuth session)
 | Route | Purpose |
@@ -97,7 +97,7 @@ Two permanent roles — never confuse them:
 
 | Role | Env var | Current value | Changes? |
 |---|---|---|---|
-| **Business number** (members message this, Arnie replies from this) | `TWILIO_WHATSAPP_NUMBER` | `whatsapp:+27825611065` | YES — update when Twilio number arrives |
+| **Business number** (members message this, AI Command replies from this) | `TWILIO_WHATSAPP_NUMBER` | `whatsapp:+27825611065` | YES — update when Twilio number arrives |
 | **Founder's personal phone** (operator mirrors, ICE CC, WingWoman CC, emergencies) | hardcoded `FOUNDER_WHATSAPP` | `whatsapp:+27825611065` | NO — always André's personal phone |
 
 **When the Twilio number arrives, do exactly this:**

@@ -11,7 +11,7 @@ interface Message {
 
 const WELCOME: Message = {
   role: "assistant",
-  content: "Hi there 👋 I'm AI Arnie — Andre's digital safety wingman at eblockwatch. Ask me anything about Cyber Chaperone, how it works, or how to join. What can I help you with?",
+  content: "Hi there 👋 I'm AI Command — Andre's digital safety wingman at eblockwatch. Ask me anything about Cyber Chaperone, how it works, or how to join. What can I help you with?",
 };
 
 export default function AiArnieChat() {
@@ -123,7 +123,7 @@ export default function AiArnieChat() {
           <div style={{ background: "#0d1117", padding: "14px 18px", display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
             <img src={LOGO} alt="eblockwatch" style={{ height: "28px", objectFit: "contain" }} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ color: "#fff", fontWeight: 700, fontSize: "14px", fontFamily: "Montserrat, sans-serif" }}>AI Arnie</div>
+              <div style={{ color: "#fff", fontWeight: 700, fontSize: "14px", fontFamily: "Montserrat, sans-serif" }}>AI Command</div>
               <div style={{ color: "#9ca3af", fontSize: "12px" }}>eblockwatch safety companion</div>
             </div>
             <button
@@ -164,7 +164,7 @@ export default function AiArnieChat() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKey}
-              placeholder="Ask AI Arnie anything…"
+              placeholder="Ask AI Command anything…"
               disabled={streaming}
               style={{
                 flex: 1,
@@ -222,7 +222,7 @@ export default function AiArnieChat() {
         onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
       >
         <img src={LOGO} alt="" style={{ height: "24px", objectFit: "contain" }} />
-        {open ? "Close" : "Chat with AI Arnie"}
+        {open ? "Close" : "Chat with AI Command"}
       </button>
     </div>
   );

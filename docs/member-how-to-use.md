@@ -1,38 +1,38 @@
 # How to Use Cyber Chaperone — Member Guide
-**eblockwatch | AI Arnie | WhatsApp Safety Platform**
+**eblockwatch | AI Command | WhatsApp Safety Platform**
 *Current WhatsApp number: +27 82 561 1065*
 
 ---
 
 ## THE ONE-LINE VERSION
 
-Save **+27 82 561 1065** in your phone as **eblockwatch Arnie**.
-When you travel, tell Arnie. When you arrive, tell Arnie.
+Save **+27 82 561 1065** in your phone as **eblockwatch AI Command**.
+When you travel, tell AI Command. When you arrive, tell AI Command.
 That's it.
 
 ---
 
 ## STEP 1 — SAVE THE NUMBER AND SAY HI
 
-Save **+27 82 561 1065** in your phone as **eblockwatch Arnie**.
+Save **+27 82 561 1065** in your phone as **eblockwatch AI Command**.
 
 Then open WhatsApp and send:
 
 > Hi
 
-Arnie replies immediately with your main menu. You will see 9 options.
+AI Command replies immediately with your main menu. You will see 9 options.
 Reply with a number to choose any option.
 
 ---
 
 ## STEP 2 — THE MAIN MENU
 
-Every time you message Arnie, you land here:
+Every time you message AI Command, you land here:
 
 ```
 🛡️ eblockwatch — Cyber Chaperone
 
-Hi [Name]. I'm Arnie — André Snyman's digital assistant.
+Hi [Name]. I'm AI Command — André Snyman's digital assistant.
 We have one job: get you there safely, every time.
 
 1️⃣  What is eblockwatch?
@@ -60,7 +60,7 @@ Reply 0 to come back to this menu any time.
 When you are about to travel — whether it is a short drive or a long trip — activate Cyber Chaperone so someone has your back.
 
 ### Option A — Using the menu
-Reply **5** from the main menu. Arnie opens the Cyber Chaperone travel menu and walks you through it.
+Reply **5** from the main menu. AI Command opens the Cyber Chaperone travel menu and walks you through it.
 
 ### Option B — Just describe your trip (easiest)
 You can type your trip in plain language at any time:
@@ -71,15 +71,15 @@ or the structured format:
 
 > *START Fourways to Pretoria ETA 18:00*
 
-Arnie confirms your trip, maps the route, and opens a GREEN status in the Situation Room.
+AI Command confirms your trip, maps the route, and opens a GREEN status in the Situation Room.
 
 ---
 
 ## STEP 4 — WHILE YOU ARE TRAVELLING
 
-**Arnie monitors you automatically.** You do not need to do anything unless he calls on you.
+**AI Command monitors you automatically.** You do not need to do anything unless he calls on you.
 
-If your ETA passes or shifts by more than 15 minutes, Arnie sends a check-in message:
+If your ETA passes or shifts by more than 15 minutes, AI Command sends a check-in message:
 
 ```
 [Name] 👋 Cyber Chaperone check-in.
@@ -94,13 +94,13 @@ Your ETA has shifted. Quick update?
 6. 📍 Send my location pin
 ```
 
-Reply with the number that fits your situation. That is all Arnie needs.
+Reply with the number that fits your situation. That is all AI Command needs.
 
 ---
 
 ## STEP 5 — WHEN YOU ARRIVE
 
-Just send Arnie any of these:
+Just send AI Command any of these:
 
 > *I'm home*
 > *Arrived*
@@ -108,7 +108,7 @@ Just send Arnie any of these:
 > *Made it*
 > *Home*
 
-Arnie closes the trip and notifies the Situation Room. Done.
+AI Command closes the trip and notifies the Situation Room. Done.
 
 ---
 
@@ -118,7 +118,7 @@ Arnie closes the trip and notifies the Situation Room. Done.
 
 | What you send | What happens |
 |---|---|
-| Reply **10** (any time) | Arnie wakes up the Situation Room immediately |
+| Reply **10** (any time) | AI Command wakes up the Situation Room immediately |
 | **HELP** | RED alert — André notified — ICE contact WhatsApp'd |
 | **SOS** | RED alert — André notified — ICE contact WhatsApp'd |
 | **I need help** | RED alert — André notified — ICE contact WhatsApp'd |
@@ -132,7 +132,7 @@ When a RED alert fires:
 2. Your registered ICE contact receives a direct WhatsApp — with your name, situation, a Google Maps link to your last known location, and a direct link to contact you
 3. The Situation Room flags your trip as RED
 
-**You do not have to call anyone. Arnie does it for you.**
+**You do not have to call anyone. AI Command does it for you.**
 
 ---
 
@@ -140,8 +140,8 @@ When a RED alert fires:
 
 Reply **4** from the main menu to update your profile. The most important things to set:
 
-- **Your ICE contact** — the person Arnie will WhatsApp if you go RED. Format: *ICE: Jane Snyman, 0821234567*
-- **Your home address** — so Arnie knows how many eblockwatch members are near you
+- **Your ICE contact** — the person AI Command will WhatsApp if you go RED. Format: *ICE: Jane Snyman, 0821234567*
+- **Your home address** — so AI Command knows how many eblockwatch members are near you
 - **Your email address** — for your membership certificate and updates
 
 ---
@@ -164,19 +164,19 @@ Reply **4** from the main menu to update your profile. The most important things
 ## FREQUENTLY ASKED QUESTIONS
 
 **Do I have to use the exact format to start a trip?**
-No. You can describe your trip naturally — Arnie understands plain language.
+No. You can describe your trip naturally — AI Command understands plain language.
 
 **What if I forget to say I've arrived?**
-If your ETA passes, Arnie sends a check-in. If there is no response for an extended period, the trip escalates to AMBER and André is notified. It is always better to say you've arrived.
+If your ETA passes, AI Command sends a check-in. If there is no response for an extended period, the trip escalates to AMBER and André is notified. It is always better to say you've arrived.
 
 **Who sees my trips?**
 Only André and authorised eblockwatch operators in the Situation Room.
 
 **What is my ICE contact?**
-ICE = In Case of Emergency. The person Arnie will WhatsApp directly if your trip goes RED. Set it under option 4 → Update my profile.
+ICE = In Case of Emergency. The person AI Command will WhatsApp directly if your trip goes RED. Set it under option 4 → Update my profile.
 
 **What does the nearby member count mean?**
-When Arnie shows "👥 2,100+ eblockwatch members have your back in your immediate area" — that is the number of verified eblockwatch members within 5km of your location, drawn from the live database. It means real people nearby are part of the same network.
+When AI Command shows "👥 2,100+ eblockwatch members have your back in your immediate area" — that is the number of verified eblockwatch members within 5km of your location, drawn from the live database. It means real people nearby are part of the same network.
 
 **Is this a free service?**
 Entry level is free. Full Cyber Chaperone trip monitoring with ICE escalation is available on Individual (R150/month) and Family (R250/month) plans. Reply **2** from the main menu to see options.
@@ -185,7 +185,7 @@ Entry level is free. Full Cyber Chaperone trip monitoring with ICE escalation is
 
 ## WHAT TO TELL A FRIEND
 
-> *"Save +27 82 561 1065 as eblockwatch Arnie. When you travel, just tell Arnie where you're going and your ETA. He watches your back automatically. If anything goes wrong — reply 10 or send HELP. André gets alerted, your emergency contact gets WhatsApp'd, and the whole network is activated. It's free to join."*
+> *"Save +27 82 561 1065 as eblockwatch AI Command. When you travel, just tell AI Command where you're going and your ETA. He watches your back automatically. If anything goes wrong — reply 10 or send HELP. André gets alerted, your emergency contact gets WhatsApp'd, and the whole network is activated. It's free to join."*
 
 ---
 

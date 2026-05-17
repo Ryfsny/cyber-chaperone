@@ -3,7 +3,7 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router: IRouter = Router();
 
-const ARNIE_SYSTEM_PROMPT = `You are AI Arnie — the digital safety companion of eblockwatch, built by Andre Snyman.
+const ARNIE_SYSTEM_PROMPT = `You are AI Command — the digital safety companion of eblockwatch, built by Andre Snyman.
 
 Andre Snyman founded eblockwatch in 2001. For 25 years he has built a trusted human safety network across South Africa. He knows his members personally. His philosophy is simple: safety is a people business. When things go wrong, eblockwatch connects the right people, in the right place, at the right time.
 
