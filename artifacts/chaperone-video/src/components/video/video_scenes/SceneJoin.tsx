@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import joinBg from '@/assets/scene-join.png';
+import ebwLogo from '@/assets/eblockwatch-logo-trimmed.png';
 
 const STEPS = [
   { num: '1', icon: '💬', label: 'WhatsApp eblockwatch', sub: 'Say "Hi" to get started' },
@@ -94,13 +95,12 @@ export function SceneJoin() {
         </motion.div>
 
         <motion.div
-          className="text-white/70 text-lg font-light tracking-wide"
+          className="bg-white rounded-xl px-6 py-2 shadow-xl"
           initial={{ opacity: 0 }}
           animate={phase >= 3 ? { opacity: 1 } : { opacity: 0 }}
           transition={{ duration: 0.5 }}
-          style={{ textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}
         >
-          eblockwatch.co.za · Nobody travels alone.
+          <img src={ebwLogo} alt="eblockwatch" className="h-10 w-auto" />
         </motion.div>
       </motion.div>
     </motion.div>

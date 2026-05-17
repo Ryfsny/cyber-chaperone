@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import scene5Bg from '@/assets/scene5-arrival.png';
+import ebwLogo from '@/assets/eblockwatch-logo-trimmed.png';
 
 export function Scene5() {
   const [phase, setPhase] = useState(0);
@@ -85,12 +86,11 @@ export function Scene5() {
         transition={{ type: 'spring', stiffness: 150, damping: 20 }}
       >
         <motion.div
-          className="text-[#22c55e] text-4xl font-black tracking-widest uppercase"
-          style={{ fontFamily: 'Nunito, sans-serif' }}
-          animate={phase >= 3 ? { scale: [1, 1.04, 1] } : {}}
-          transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+          className="bg-white rounded-2xl px-8 py-3 shadow-2xl"
+          animate={phase >= 3 ? { scale: [1, 1.03, 1] } : {}}
+          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
         >
-          eblockwatch
+          <img src={ebwLogo} alt="eblockwatch" className="h-14 w-auto" />
         </motion.div>
         <div className="text-white/90 text-2xl font-light tracking-wide" style={{ textShadow: '0 2px 12px rgba(0,0,0,0.8)' }}>
           Nobody travels alone.
