@@ -116,46 +116,44 @@ export default function MemberLogin() {
                 required
                 style={{ ...inputStyle, marginBottom: "20px" }}
               />
-              <button
-                type="submit"
-                disabled={loading || !identifier || !password}
-                style={{
-                  width: "100%", background: "#1db954", color: "#fff", border: "none",
-                  borderRadius: "10px", padding: "14px", fontSize: "15px", fontWeight: 700,
-                  cursor: loading || !identifier || !password ? "not-allowed" : "pointer",
-                  opacity: loading || !identifier || !password ? 0.6 : 1,
-                  fontFamily: "Montserrat, sans-serif",
-                }}
-              >
-                {loading ? "Signing in…" : "Sign In"}
-              </button>
+              {password ? (
+                <button
+                  type="submit"
+                  disabled={loading || !identifier || !password}
+                  style={{
+                    width: "100%", background: "#1db954", color: "#fff", border: "none",
+                    borderRadius: "10px", padding: "14px", fontSize: "15px", fontWeight: 700,
+                    cursor: loading || !identifier || !password ? "not-allowed" : "pointer",
+                    opacity: loading || !identifier || !password ? 0.6 : 1,
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  {loading ? "Signing in…" : "Sign In"}
+                </button>
+              ) : (
+                <a
+                  href={WA_LINK_HI}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: "12px",
+                    background: "#25d366", color: "#fff", textDecoration: "none",
+                    borderRadius: "10px", padding: "14px 18px", fontSize: "15px", fontWeight: 800,
+                    fontFamily: "Montserrat, sans-serif", boxShadow: "0 4px 16px rgba(37,211,102,0.25)",
+                  }}
+                >
+                  <WhatsAppIcon size={20} />
+                  Send us a WhatsApp
+                </a>
+              )}
             </form>
 
-            {/* Divider */}
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "24px 0" }}>
-              <div style={{ flex: 1, height: "1px", background: "#e5e7eb" }} />
-              <span style={{ fontSize: "12px", color: "#9ca3af", fontWeight: 600 }}>FORGOT YOUR PASSWORD?</span>
-              <div style={{ flex: 1, height: "1px", background: "#e5e7eb" }} />
-            </div>
-
-            {/* WhatsApp fallback */}
-            <p style={{ margin: "0 0 14px", fontSize: "13px", color: "#6b7280", lineHeight: 1.6, textAlign: "center" }}>
-              Just tap the button below — it opens WhatsApp with a message ready to send. Hit send and your menu comes straight back.
-            </p>
-            <a
-              href={WA_LINK_HI}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center", gap: "12px",
-                background: "#25d366", color: "#fff", textDecoration: "none",
-                borderRadius: "12px", padding: "16px 18px", fontSize: "16px", fontWeight: 800,
-                fontFamily: "Montserrat, sans-serif", boxShadow: "0 4px 16px rgba(37,211,102,0.3)",
-              }}
-            >
-              <WhatsAppIcon size={22} />
-              Send us a WhatsApp
-            </a>
+            {/* Hint — only shown when password is empty */}
+            {!password && (
+              <p style={{ margin: "14px 0 0", fontSize: "13px", color: "#6b7280", lineHeight: 1.6, textAlign: "center" }}>
+                No password yet? Tap the button above — it opens WhatsApp with a message ready to send. Hit send and your menu comes straight back.
+              </p>
+            )}
           </div>
 
           {/* Help panel */}

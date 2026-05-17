@@ -2336,6 +2336,34 @@ async function fetchMemberProfile(whatsappNumber: string) {
   return rows[0] ?? null;
 }
 
+function formatMemberDetailsGreeting(
+  phone: string,
+  profile: Awaited<ReturnType<typeof fetchMemberProfile>>,
+  membershipTier: string | null,
+): string {
+  if (!profile) return "";
+  const displayPhone = phone.replace(/^whatsapp:/, "").replace(/^(\+27|27)(\d{2})(\d{3})(\d{4})$/, "+27 $2 $3 $4");
+  const tier = membershipTier
+    ? membershipTier.charAt(0).toUpperCase() + membershipTier.slice(1)
+    : "Entry Level";
+  const location = [profile.suburb, profile.city].filter(Boolean).join(", ") || null;
+  return [
+    `👋 Welcome back, *${profile.displayName}*!`,
+    ``,
+    `Here's what we have on file for you:`,
+    ``,
+    `📱 *WhatsApp:* ${displayPhone}`,
+    profile.email ? `📧 *Email:* ${profile.email}` : `📧 *Email:* not set`,
+    location ? `🏠 *Area:* ${location}` : null,
+    profile.iceContactName ? `🆘 *ICE Contact:* ${profile.iceContactName}` : null,
+    `🛡️ *Membership:* ${tier}`,
+    ``,
+    `Are these details correct? Reply *4* (My Account) to update anything.`,
+    ``,
+    `──────────────────`,
+  ].filter((l) => l !== null).join("\n");
+}
+
 const WIZARD_LABELS: Record<string, string> = {
   [STEP_WIZARD_NAME]:     "Full name",
   [STEP_WIZARD_EMAIL]:    "Email address",
@@ -4328,6 +4356,14 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     await resetConvState(from);
     await saveMessage(from, to, body, messageSid, null);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    // Known members get a "here are your details" card before the main menu
+    if (member?.isKnown) {
+      const profile = await fetchMemberProfile(from);
+      if (profile) {
+        const detailsMsg = formatMemberDetailsGreeting(from, profile, member.membershipTier ?? null);
+        if (detailsMsg) await sendWhatsApp(from, to, detailsMsg);
+      }
+    }
     await sendMainMenuWithNearby(from, to, name, member);
     log.info({ from, body: trimmed, handler: "GLOBAL_MENU_OVERRIDE" }, "menu-router: MENU_OVERRIDE triggered");
     return { handled: true };
