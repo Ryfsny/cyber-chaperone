@@ -1,14 +1,14 @@
 import { useState } from "react";
-import { WA_LINK_HI, WA_LINK_CODE } from "../wa-config";
+import { WA_LINK_HI } from "../wa-config";
 import { useLocation } from "wouter";
 
 const LOGO = "https://cdn.prod.website-files.com/674e83f56d9eb778ff7b9bab/675120eee8a345677c7ddb1d_E-Block%20Watch%20logo.avif";
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 const FB_MESSENGER_URL = "https://m.me/eblockwatch";
 
-function WhatsAppIcon() {
+function WhatsAppIcon({ size = 18 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" style={{ flexShrink: 0 }}>
+    <svg viewBox="0 0 24 24" fill="currentColor" width={size} height={size} style={{ flexShrink: 0 }}>
       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
     </svg>
   );
@@ -22,28 +22,36 @@ function MessengerIcon() {
   );
 }
 
-type Mode = "password" | "code";
-type CodeStep = "idle" | "sent";
+function EmailIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width={size} height={size} style={{ flexShrink: 0 }}>
+      <rect x="2" y="4" width="20" height="16" rx="2"/>
+      <path d="m2 7 10 7 10-7"/>
+    </svg>
+  );
+}
+
+type Mode = "password" | "email-code";
+type EmailCodeStep = "enter" | "sent";
 type ForgotStep = "request" | "verify" | "set";
 
 export default function MemberLogin() {
   const [, navigate] = useLocation();
 
-  // Which top-level mode
   const [mode, setMode] = useState<Mode>("password");
 
   // Password login
   const [pwIdentifier, setPwIdentifier] = useState("");
   const [password, setPassword] = useState("");
 
-  // WhatsApp code login
-  const [codePhone, setCodePhone] = useState("");
+  // Email code login (no-password path)
+  const [codeEmail, setCodeEmail] = useState("");
   const [codeOtp, setCodeOtp] = useState("");
-  const [codeStep, setCodeStep] = useState<CodeStep>("idle");
+  const [emailCodeStep, setEmailCodeStep] = useState<EmailCodeStep>("enter");
 
-  // Forgot-password (code → set new password)
+  // Forgot password (email OTP → set new password)
   const [forgotOpen, setForgotOpen] = useState(false);
-  const [forgotPhone, setForgotPhone] = useState("");
+  const [forgotEmail, setForgotEmail] = useState("");
   const [forgotCode, setForgotCode] = useState("");
   const [forgotStep, setForgotStep] = useState<ForgotStep>("request");
   const [newPassword, setNewPassword] = useState("");
@@ -59,9 +67,9 @@ export default function MemberLogin() {
     setMode(m);
     setForgotOpen(false);
     setForgotStep("request");
-    clearMessages();
-    setCodeStep("idle");
+    setEmailCodeStep("enter");
     setCodeOtp("");
+    clearMessages();
   }
 
   // ── Password login ──────────────────────────────────────────────────────────
@@ -83,46 +91,63 @@ export default function MemberLogin() {
     finally { setLoading(false); }
   }
 
-  // ── WhatsApp code login ─────────────────────────────────────────────────────
-  async function verifyCode(e: React.FormEvent) {
+  // ── Email code: send ────────────────────────────────────────────────────────
+  async function sendEmailCode(e: React.FormEvent) {
+    e.preventDefault(); clearMessages(); setLoading(true);
+    try {
+      const res = await fetch(`/api/member-portal/request-otp`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ email: codeEmail.trim() }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to send code.");
+      setEmailCodeStep("sent");
+      setInfo(`Code sent to ${codeEmail.trim()} — check your inbox.`);
+    } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
+    finally { setLoading(false); }
+  }
+
+  // ── Email code: verify ──────────────────────────────────────────────────────
+  async function verifyEmailCode(e: React.FormEvent) {
     e.preventDefault(); clearMessages(); setLoading(true);
     try {
       const res = await fetch(`/api/member-portal/verify-otp`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ whatsappNumber: codePhone, code: codeOtp }),
+        body: JSON.stringify({ email: codeEmail.trim(), code: codeOtp }),
       });
       const data = await res.json() as { ok?: boolean; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Verification failed.");
+      if (!res.ok) throw new Error(data.error ?? "Verification failed. Check the code and try again.");
       navigate("/my-account");
     } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
     finally { setLoading(false); }
   }
 
-  // ── Forgot password flow ────────────────────────────────────────────────────
+  // ── Forgot password: send code to email ────────────────────────────────────
   async function sendForgotCode(e: React.FormEvent) {
     e.preventDefault(); clearMessages(); setLoading(true);
     try {
-      const res = await fetch(`/api/member-portal/forgot-password`, {
+      const res = await fetch(`/api/member-portal/request-otp`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ whatsappNumber: forgotPhone }),
+        body: JSON.stringify({ email: forgotEmail.trim() }),
       });
-      const data = await res.json() as { ok?: boolean; error?: string; message?: string };
-      if (!res.ok) throw new Error(data.error ?? "Failed.");
-      setInfo(data.message ?? "Code sent to your WhatsApp.");
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to send code.");
       setForgotStep("verify");
+      setInfo(`Code sent to ${forgotEmail.trim()} — check your inbox.`);
     } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
     finally { setLoading(false); }
   }
 
+  // ── Forgot password: verify code → log in → set password ───────────────────
   async function verifyForgotCode(e: React.FormEvent) {
     e.preventDefault(); clearMessages(); setLoading(true);
     try {
-      const res = await fetch(`/api/member-portal/verify-reset-otp`, {
+      const res = await fetch(`/api/member-portal/verify-otp`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ whatsappNumber: forgotPhone, code: forgotCode }),
+        body: JSON.stringify({ email: forgotEmail.trim(), code: forgotCode }),
       });
       const data = await res.json() as { ok?: boolean; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Verification failed.");
+      if (!res.ok) throw new Error(data.error ?? "Verification failed. Check the code and try again.");
       setForgotStep("set"); setInfo("");
     } catch (err) { setError(err instanceof Error ? err.message : "Something went wrong."); }
     finally { setLoading(false); }
@@ -149,7 +174,7 @@ export default function MemberLogin() {
     padding: "11px 14px", fontSize: "15px", outline: "none", color: "#111827",
     boxSizing: "border-box", fontFamily: "'Open Sans', sans-serif",
   };
-  const btnPrimary: React.CSSProperties = {
+  const btnGreen: React.CSSProperties = {
     width: "100%", background: "#1db954", color: "#fff", border: "none",
     borderRadius: "10px", padding: "14px", fontSize: "15px", fontWeight: 700,
     cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1,
@@ -168,19 +193,19 @@ export default function MemberLogin() {
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 16px" }}>
         <div style={{ width: "100%", maxWidth: "420px" }}>
 
-          <div style={{ background: "#fff", borderRadius: "16px", boxShadow: "0 4px 32px rgba(0,0,0,0.08)", padding: "40px 36px", border: "1px solid #e5e7eb", marginBottom: "16px" }}>
+          <div style={{ background: "#fff", borderRadius: "16px", boxShadow: "0 4px 32px rgba(0,0,0,0.08)", padding: "36px 32px", border: "1px solid #e5e7eb", marginBottom: "16px" }}>
 
             {/* Header */}
-            <div style={{ textAlign: "center", marginBottom: "28px" }}>
-              <div style={{ width: "56px", height: "56px", background: "#0d1117", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", border: "2px solid #1db954" }}>
-                <span style={{ fontSize: "26px" }}>🛡️</span>
+            <div style={{ textAlign: "center", marginBottom: "24px" }}>
+              <div style={{ width: "52px", height: "52px", background: "#0d1117", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", border: "2px solid #1db954" }}>
+                <span style={{ fontSize: "24px" }}>🛡️</span>
               </div>
-              <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0d1117", fontFamily: "Montserrat, sans-serif", margin: "0 0 6px" }}>Member Portal</h1>
-              <p style={{ fontSize: "14px", color: "#6b7280", margin: 0 }}>Sign in to your eblockwatch account</p>
+              <h1 style={{ fontSize: "21px", fontWeight: 800, color: "#0d1117", fontFamily: "Montserrat, sans-serif", margin: "0 0 5px" }}>Member Portal</h1>
+              <p style={{ fontSize: "13px", color: "#6b7280", margin: 0 }}>Sign in to your eblockwatch account</p>
             </div>
 
-            {/* Top toggle: Password | WhatsApp Code */}
-            <div style={{ display: "flex", gap: "4px", background: "#f3f4f6", borderRadius: "10px", padding: "4px", marginBottom: "28px" }}>
+            {/* Mode tabs */}
+            <div style={{ display: "flex", gap: "4px", background: "#f3f4f6", borderRadius: "10px", padding: "4px", marginBottom: "24px" }}>
               <button
                 style={{
                   flex: 1, padding: "9px", fontSize: "13px", fontWeight: mode === "password" ? 700 : 500,
@@ -194,15 +219,15 @@ export default function MemberLogin() {
               </button>
               <button
                 style={{
-                  flex: 1, padding: "9px", fontSize: "13px", fontWeight: mode === "code" ? 700 : 500,
-                  background: mode === "code" ? "#25d366" : "none",
-                  color: mode === "code" ? "#fff" : "#6b7280",
+                  flex: 1, padding: "9px", fontSize: "13px", fontWeight: mode === "email-code" ? 700 : 500,
+                  background: mode === "email-code" ? "#1d4ed8" : "none",
+                  color: mode === "email-code" ? "#fff" : "#6b7280",
                   border: "none", borderRadius: "8px", cursor: "pointer", transition: "all 0.15s",
                   display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
                 }}
-                onClick={() => switchMode("code")}
+                onClick={() => switchMode("email-code")}
               >
-                <WhatsAppIcon /> WhatsApp Code
+                <EmailIcon /> Email Code
               </button>
             </div>
 
@@ -213,7 +238,7 @@ export default function MemberLogin() {
               </div>
             )}
             {info && (
-              <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "8px", padding: "10px 14px", fontSize: "13px", color: "#166534", marginBottom: "16px" }}>
+              <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px", padding: "10px 14px", fontSize: "13px", color: "#1d4ed8", marginBottom: "16px" }}>
                 {info}
               </div>
             )}
@@ -229,8 +254,7 @@ export default function MemberLogin() {
                   value={pwIdentifier}
                   onChange={(e) => setPwIdentifier(e.target.value)}
                   placeholder="082 561 1065 or you@example.com"
-                  required
-                  autoFocus
+                  required autoFocus
                   style={{ ...inputStyle, marginBottom: "12px" }}
                 />
                 <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
@@ -245,61 +269,58 @@ export default function MemberLogin() {
                   style={{ ...inputStyle, marginBottom: "16px" }}
                 />
                 <button type="submit" disabled={loading || !pwIdentifier || !password}
-                  style={{ ...btnPrimary, opacity: loading || !pwIdentifier || !password ? 0.6 : 1 }}>
+                  style={{ ...btnGreen, opacity: loading || !pwIdentifier || !password ? 0.6 : 1 }}>
                   {loading ? "Signing in…" : "Sign In"}
                 </button>
 
                 {/* Divider */}
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "20px 0" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "18px 0" }}>
                   <div style={{ flex: 1, height: "1px", background: "#e5e7eb" }} />
-                  <span style={{ fontSize: "12px", color: "#9ca3af", fontWeight: 600, whiteSpace: "nowrap" }}>OR</span>
+                  <span style={{ fontSize: "12px", color: "#9ca3af", fontWeight: 600 }}>OR</span>
                   <div style={{ flex: 1, height: "1px", background: "#e5e7eb" }} />
                 </div>
 
-                {/* Forgot password — impossible to miss */}
+                {/* Forgot password */}
                 <div>
-                  <p style={{ margin: "0 0 10px", fontSize: "15px", fontWeight: 700, color: "#111827" }}>
+                  <p style={{ margin: "0 0 8px", fontSize: "15px", fontWeight: 700, color: "#111827" }}>
                     Forgot your password?
                   </p>
                   <p style={{ margin: "0 0 14px", fontSize: "13px", color: "#6b7280", lineHeight: 1.6 }}>
-                    Tap below — WhatsApp opens, tap <strong>Send</strong>, and a login code arrives on your phone in seconds.
+                    We'll email you a one-time login code. Enter your registered email address and we'll send it straight away.
                   </p>
                   <button
                     type="button"
                     onClick={() => { setForgotOpen(true); clearMessages(); setForgotStep("request"); }}
                     style={{
-                      width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "12px",
-                      background: "#25d366", color: "#fff", border: "none",
-                      borderRadius: "12px", padding: "16px 18px", fontSize: "16px", fontWeight: 800,
+                      width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px",
+                      background: "#1d4ed8", color: "#fff", border: "none",
+                      borderRadius: "12px", padding: "15px 18px", fontSize: "16px", fontWeight: 800,
                       cursor: "pointer", fontFamily: "Montserrat, sans-serif",
-                      boxShadow: "0 4px 16px rgba(37,211,102,0.3)",
+                      boxShadow: "0 4px 16px rgba(29,78,216,0.25)",
                     }}
                   >
-                    <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22" style={{ flexShrink: 0 }}>
-                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                    </svg>
-                    Get a login code on WhatsApp
+                    <EmailIcon size={20} />
+                    Get a login code by email
                   </button>
                 </div>
               </form>
             )}
 
-            {/* ── FORGOT PASSWORD — step 1: enter phone ─────────────────────── */}
+            {/* ── FORGOT: step 1 — enter email ──────────────────────────────── */}
             {mode === "password" && forgotOpen && forgotStep === "request" && (
               <form onSubmit={(e) => void sendForgotCode(e)}>
-                <p style={{ fontSize: "14px", color: "#374151", marginTop: 0, marginBottom: "18px", lineHeight: 1.6 }}>
-                  Enter your cell phone number and we'll send a login code to your WhatsApp right now.
+                <p style={{ fontSize: "14px", color: "#374151", marginTop: 0, marginBottom: "16px", lineHeight: 1.6 }}>
+                  Enter your registered email address and we'll send a 6-digit login code.
                 </p>
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Cell Phone Number</label>
-                <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
-                  <div style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: "8px", padding: "11px 12px", fontSize: "14px", color: "#374151", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px" }}>
-                    🇿🇦 +27
-                  </div>
-                  <input type="tel" value={forgotPhone} onChange={(e) => setForgotPhone(e.target.value)} placeholder="82 561 1065" required autoFocus style={{ ...inputStyle, flex: 1 }} />
-                </div>
-                <button type="submit" disabled={loading || !forgotPhone}
-                  style={{ ...btnPrimary, marginBottom: "12px", background: "#25d366", opacity: loading || !forgotPhone ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
-                  <WhatsAppIcon />
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Email Address</label>
+                <input
+                  type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)}
+                  placeholder="you@example.com" required autoFocus
+                  style={{ ...inputStyle, marginBottom: "18px" }}
+                />
+                <button type="submit" disabled={loading || !forgotEmail}
+                  style={{ ...btnGreen, background: "#1d4ed8", marginBottom: "12px", opacity: loading || !forgotEmail ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
+                  <EmailIcon size={18} />
                   {loading ? "Sending…" : "Send me a login code"}
                 </button>
                 <button type="button" onClick={() => { setForgotOpen(false); clearMessages(); }}
@@ -309,95 +330,94 @@ export default function MemberLogin() {
               </form>
             )}
 
-            {/* ── FORGOT PASSWORD — step 2: enter code ──────────────────────── */}
+            {/* ── FORGOT: step 2 — enter code ───────────────────────────────── */}
             {mode === "password" && forgotOpen && forgotStep === "verify" && (
               <form onSubmit={(e) => void verifyForgotCode(e)}>
                 <p style={{ fontSize: "14px", color: "#374151", marginTop: 0, marginBottom: "18px", lineHeight: 1.6 }}>
-                  Enter the 6-digit code sent to your WhatsApp number <strong>+27{forgotPhone}</strong>
+                  Enter the 6-digit code sent to <strong>{forgotEmail}</strong>
                 </p>
                 <input
                   type="text" value={forgotCode}
                   onChange={(e) => setForgotCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   placeholder="123456" maxLength={6} required autoFocus inputMode="numeric"
-                  style={{ ...inputStyle, fontSize: "24px", letterSpacing: "10px", textAlign: "center", marginBottom: "20px" }}
+                  style={{ ...inputStyle, fontSize: "28px", letterSpacing: "12px", textAlign: "center", marginBottom: "20px" }}
                 />
                 <button type="submit" disabled={loading || forgotCode.length !== 6}
-                  style={{ ...btnPrimary, opacity: loading || forgotCode.length !== 6 ? 0.6 : 1 }}>
+                  style={{ ...btnGreen, opacity: loading || forgotCode.length !== 6 ? 0.6 : 1 }}>
                   {loading ? "Verifying…" : "Verify Code"}
                 </button>
               </form>
             )}
 
-            {/* ── FORGOT PASSWORD — step 3: set new password ────────────────── */}
+            {/* ── FORGOT: step 3 — set new password ─────────────────────────── */}
             {mode === "password" && forgotOpen && forgotStep === "set" && (
               <form onSubmit={(e) => void setNewPasswordFn(e)}>
-                <p style={{ fontSize: "14px", color: "#374151", marginTop: 0, marginBottom: "18px", lineHeight: 1.6 }}>
-                  Choose a new password. You'll use this next time you log in.
+                <p style={{ fontSize: "14px", color: "#374151", marginTop: 0, marginBottom: "16px", lineHeight: 1.6 }}>
+                  You're verified. Choose a new password for next time.
                 </p>
                 <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>New Password</label>
-                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 8 characters" required autoFocus style={{ ...inputStyle, marginBottom: "14px" }} />
+                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="At least 8 characters" required autoFocus style={{ ...inputStyle, marginBottom: "12px" }} />
                 <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Confirm Password</label>
-                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Repeat your password" required style={{ ...inputStyle, marginBottom: "20px" }} />
+                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Repeat your password" required style={{ ...inputStyle, marginBottom: "20px" }} />
                 <button type="submit" disabled={loading || !newPassword || !confirmPassword}
-                  style={{ ...btnPrimary, opacity: loading || !newPassword || !confirmPassword ? 0.6 : 1 }}>
+                  style={{ ...btnGreen, opacity: loading || !newPassword || !confirmPassword ? 0.6 : 1 }}>
                   {loading ? "Saving…" : "Save Password & Sign In"}
                 </button>
               </form>
             )}
 
-            {/* ── WHATSAPP CODE LOGIN ────────────────────────────────────────── */}
-            {mode === "code" && (
-              <form onSubmit={(e) => void verifyCode(e)}>
-                <div style={{ background: "#f0fff4", border: "1px solid #86efac", borderRadius: "10px", padding: "14px 16px", marginBottom: "20px" }}>
-                  <p style={{ margin: 0, fontSize: "13px", color: "#166534", lineHeight: 1.6 }}>
-                    <strong>No password needed.</strong> Click the button below — WhatsApp opens with a message ready to send. Just tap Send and your login code arrives in seconds.
-                  </p>
-                </div>
+            {/* ── EMAIL CODE LOGIN ───────────────────────────────────────────── */}
+            {mode === "email-code" && (
+              <div>
+                {emailCodeStep === "enter" && (
+                  <form onSubmit={(e) => void sendEmailCode(e)}>
+                    <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "10px", padding: "13px 15px", marginBottom: "18px" }}>
+                      <p style={{ margin: 0, fontSize: "13px", color: "#1e40af", lineHeight: 1.6 }}>
+                        <strong>No password needed.</strong> Enter your registered email and we'll send a 6-digit login code straight to your inbox.
+                      </p>
+                    </div>
+                    <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Email Address</label>
+                    <input
+                      type="email" value={codeEmail} onChange={(e) => setCodeEmail(e.target.value)}
+                      placeholder="you@example.com" required autoFocus
+                      style={{ ...inputStyle, marginBottom: "18px" }}
+                    />
+                    <button type="submit" disabled={loading || !codeEmail}
+                      style={{ ...btnGreen, background: "#1d4ed8", opacity: loading || !codeEmail ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
+                      <EmailIcon size={18} />
+                      {loading ? "Sending…" : "Send me a login code"}
+                    </button>
+                  </form>
+                )}
 
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Your Cell Phone Number</label>
-                <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
-                  <div style={{ background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: "8px", padding: "11px 12px", fontSize: "14px", color: "#374151", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px" }}>
-                    🇿🇦 +27
-                  </div>
-                  <input type="tel" value={codePhone} onChange={(e) => setCodePhone(e.target.value)} placeholder="82 561 1065" required autoFocus style={{ ...inputStyle, flex: 1 }} />
-                </div>
-
-                <a
-                  href={WA_LINK_CODE}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setCodeStep("sent")}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: "10px",
-                    background: "#25d366", color: "#fff", textDecoration: "none",
-                    borderRadius: "10px", padding: "14px 18px", fontSize: "15px", fontWeight: 700,
-                    fontFamily: "Montserrat, sans-serif", marginBottom: "8px",
-                    boxShadow: "0 4px 16px rgba(37,211,102,0.3)",
-                  }}
-                >
-                  <WhatsAppIcon />
-                  {codeStep === "sent" ? "Resend code on WhatsApp" : "Get my login code on WhatsApp"}
-                </a>
-                <p style={{ textAlign: "center", fontSize: "12px", color: "#6b7280", margin: "0 0 20px" }}>
-                  WhatsApp opens → tap Send → code arrives in seconds
-                </p>
-
-                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Paste Your 6-Digit Code</label>
-                <input
-                  type="text" value={codeOtp}
-                  onChange={(e) => setCodeOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="123456" maxLength={6} inputMode="numeric"
-                  style={{ ...inputStyle, fontSize: "24px", letterSpacing: "10px", textAlign: "center", marginBottom: "20px" }}
-                />
-                <button type="submit" disabled={loading || codeOtp.length !== 6 || !codePhone}
-                  style={{ ...btnPrimary, opacity: loading || codeOtp.length !== 6 || !codePhone ? 0.6 : 1 }}>
-                  {loading ? "Verifying…" : "Log In"}
-                </button>
-              </form>
+                {emailCodeStep === "sent" && (
+                  <form onSubmit={(e) => void verifyEmailCode(e)}>
+                    <p style={{ fontSize: "14px", color: "#374151", marginTop: 0, marginBottom: "18px", lineHeight: 1.6 }}>
+                      Code sent to <strong>{codeEmail}</strong> — check your inbox and paste it below.
+                    </p>
+                    <input
+                      type="text" value={codeOtp}
+                      onChange={(e) => setCodeOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="123456" maxLength={6} required autoFocus inputMode="numeric"
+                      style={{ ...inputStyle, fontSize: "28px", letterSpacing: "12px", textAlign: "center", marginBottom: "20px" }}
+                    />
+                    <button type="submit" disabled={loading || codeOtp.length !== 6}
+                      style={{ ...btnGreen, opacity: loading || codeOtp.length !== 6 ? 0.6 : 1, marginBottom: "12px" }}>
+                      {loading ? "Verifying…" : "Log In"}
+                    </button>
+                    <button type="button" onClick={() => { setEmailCodeStep("enter"); setCodeOtp(""); clearMessages(); }}
+                      style={{ width: "100%", background: "none", border: "none", color: "#6b7280", fontSize: "13px", cursor: "pointer", padding: "4px" }}>
+                      ← Use a different email
+                    </button>
+                  </form>
+                )}
+              </div>
             )}
           </div>
 
-          {/* ── Fallback help ───────────────────────────────────────────────── */}
+          {/* ── Help panel ─────────────────────────────────────────────────── */}
           <div style={{ background: "#fff", borderRadius: "14px", border: "1px solid #e5e7eb", padding: "20px 24px" }}>
             <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 14px", textAlign: "center" }}>
               Can't get in? Reach us directly:
