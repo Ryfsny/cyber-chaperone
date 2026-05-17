@@ -162,26 +162,30 @@ router.post("/member-portal/verify-otp", async (req, res): Promise<void> => {
 // Password-based login — alternative to OTP
 router.post("/member-portal/login", async (req, res): Promise<void> => {
   const rawPhone = (req.body?.whatsappNumber ?? req.body?.phone ?? "") as string;
+  const rawEmail = (req.body?.email ?? "") as string;
   const password = (req.body?.password ?? "") as string;
 
-  if (!rawPhone || !password) {
-    res.status(400).json({ error: "Phone number and password are required." });
+  if ((!rawPhone && !rawEmail) || !password) {
+    res.status(400).json({ error: "Phone number or email and password are required." });
     return;
   }
 
-  const rawEmail = (req.body?.email ?? "") as string;
-
-  // Look up by phone or email
+  // Look up by phone or email — always prefer operator records when there are duplicates
   let member: typeof membersTable.$inferSelect | undefined;
   if (rawPhone) {
     const phone = normalisePhone(rawPhone.trim());
     [member] = await db
       .select()
       .from(membersTable)
-      .where(or(eq(membersTable.whatsappNumber, `whatsapp:${phone}`), eq(membersTable.whatsappNumber, phone)));
+      .where(or(eq(membersTable.whatsappNumber, `whatsapp:${phone}`), eq(membersTable.whatsappNumber, phone)))
+      .orderBy(sql`CASE WHEN role = 'operator' THEN 0 ELSE 1 END ASC`, membersTable.id);
   } else if (rawEmail) {
     const email = rawEmail.trim().toLowerCase();
-    [member] = await db.select().from(membersTable).where(eq(membersTable.email, email));
+    [member] = await db
+      .select()
+      .from(membersTable)
+      .where(eq(membersTable.email, email))
+      .orderBy(sql`CASE WHEN role = 'operator' THEN 0 ELSE 1 END ASC`, membersTable.id);
   }
 
   if (!member) {
