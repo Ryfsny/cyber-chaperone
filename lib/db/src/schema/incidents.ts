@@ -8,6 +8,9 @@ export const memberIncidentsTable = pgTable("member_incidents", {
   category: text("category").notNull(),
   description: text("description").notNull(),
   location: text("location"),
+  // Geocoded coordinates (Nominatim) for the admin incident map
+  lat: text("lat"),
+  lon: text("lon"),
   status: text("status").notNull().default("received"),
   adminNotes: text("admin_notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -18,6 +21,8 @@ export const insertIncidentSchema = createInsertSchema(memberIncidentsTable).omi
   createdAt: true,
   adminNotes: true,
   status: true,
+  lat: true,
+  lon: true,
 });
 export type InsertIncident = z.infer<typeof insertIncidentSchema>;
 export type MemberIncident = typeof memberIncidentsTable.$inferSelect;

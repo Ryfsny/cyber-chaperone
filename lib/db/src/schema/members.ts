@@ -47,6 +47,10 @@ export const membersTable = pgTable("members", {
   discConfidence: integer("disc_confidence"), // 0–100 — how confident we are
   // ─────────────────────────────────────────────────────────────────────────
   loyaltyPoints: integer("loyalty_points").notNull().default(0),
+  // ── Trust Tier: founder | silver | bronze (base tier, set on import/registration)
+  // Paying members show a purple star overlay on top of their base tier.
+  // founder = original 90 000 import; silver = Gass batch; bronze = new registrations
+  loyaltyTier: text("loyalty_tier").notNull().default("bronze"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
