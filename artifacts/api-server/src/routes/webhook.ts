@@ -33,6 +33,7 @@ const LOCATION_GUIDANCE_PATTERN =
   /what should i do|send.{0,20}location|send.{0,20}pin|\blocation\b|\bpin\b|where am i|current location/i;
 
 const GOOGLE_MAPS_PATTERN = /maps\.google\.com|google\.com\/maps/i;
+const WAZE_PATTERN       = /waze\.com\/ul|ul\.waze\.com|waze\.com\/livemap|waze\.com\/directions/i;
 
 type MessageClass = "distress" | "arrival" | "delay" | "eta" | "unknown";
 
@@ -894,17 +895,32 @@ router.post(
 
       if (!activeTrip) {
         req.log.info({ from }, "Follow-up received but no active trip found");
-        await sendReply(
-          from,
-          to,
-          "Message received, but there is no active trip open. Please start a new trip with: Leaving [start] heading to [destination]. ETA [time].\n\nReply 0 for Main Menu.",
-        );
+
+        // If the member shared their location or a map link with no active trip,
+        // ask where they are heading — one tap away from starting a trip.
+        const isLocationShareNoTrip = (latitude !== "" && longitude !== "") || GOOGLE_MAPS_PATTERN.test(body) || WAZE_PATTERN.test(body);
+        if (isLocationShareNoTrip) {
+          const locationHint = latitude !== "" && longitude !== ""
+            ? `📍 Got your location (${latitude}, ${longitude}).`
+            : `🗺️ Got your map link.`;
+          await sendReply(
+            from,
+            to,
+            `${locationHint}\n\nWhere are you heading? Reply with your destination and ETA and I will open a trip for you.\n\nExample:\nHeading to Sandton. ETA 18:30\n\nReply 0 for Main Menu.`,
+          );
+        } else {
+          await sendReply(
+            from,
+            to,
+            "Message received, but there is no active trip open. Please start a new trip with: Leaving [start] heading to [destination]. ETA [time].\n\nReply 0 for Main Menu.",
+          );
+        }
       } else {
         const ts = nowUtc();
 
         // ── Location pin (native WhatsApp location) ─────────────────────────
         const hasNativeLocation = latitude !== "" && longitude !== "";
-        const isGoogleMapsLink = GOOGLE_MAPS_PATTERN.test(body);
+        const isGoogleMapsLink = GOOGLE_MAPS_PATTERN.test(body) || WAZE_PATTERN.test(body);
 
         if (hasNativeLocation) {
           const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;

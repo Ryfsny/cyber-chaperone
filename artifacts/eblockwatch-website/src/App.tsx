@@ -4,12 +4,14 @@ import MemberLogin from "@/pages/MemberLogin";
 import MemberDashboard from "@/pages/MemberDashboard";
 import UpgradePage from "@/pages/UpgradePage";
 import RegisterPage from "@/pages/RegisterPage";
+import JoinPage from "@/pages/JoinPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={HomePage} />
+      <Route path="/join" component={JoinPage} />
       <Route path="/register" component={RegisterPage} />
       <Route path="/login" component={MemberLogin} />
       <Route path="/member" component={MemberDashboard} />
