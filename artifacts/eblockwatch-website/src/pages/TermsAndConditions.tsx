@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link } from "wouter";
 
 const LOGO = "/eblockwatch-logo.png";
+const ANDRE_PHOTO = "/andre-snyman.png";
 
 export default function TermsAndConditions() {
   useEffect(() => { window.scrollTo(0, 0); }, []);
@@ -22,15 +23,20 @@ export default function TermsAndConditions() {
 
         {/* Founder's Pledge */}
         <div style={{ background: "#fff", border: "1px solid #bbf7d0", borderRadius: "20px", padding: "40px 48px", marginBottom: "36px", boxShadow: "0 4px 24px rgba(34,197,94,0.08)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "28px" }}>
-            <img src={LOGO} alt="eblockwatch" style={{ height: "44px" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "18px", marginBottom: "28px" }}>
+            <img
+              src={ANDRE_PHOTO}
+              alt="André Snyman"
+              style={{ width: "72px", height: "72px", borderRadius: "50%", objectFit: "cover", border: "3px solid #22c55e", flexShrink: 0 }}
+            />
             <div>
               <h1 style={{ margin: 0, fontSize: "22px", fontWeight: 800, color: "#111827", fontFamily: "Montserrat, sans-serif" }}>
                 The Founder's Pledge
               </h1>
-              <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#6b7280" }}>
+              <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#6b7280" }}>
                 A personal statement by André Snyman — Founder of eblockwatch
               </p>
+              <img src={LOGO} alt="eblockwatch" style={{ height: "22px", marginTop: "6px", opacity: 0.7 }} />
             </div>
           </div>
 
@@ -58,10 +64,17 @@ export default function TermsAndConditions() {
             </p>
           </div>
 
-          <div style={{ background: "#1a1f2e", borderRadius: "14px", padding: "20px 24px", marginTop: "28px" }}>
-            <div style={{ fontSize: "13px", color: "#9ca3af", marginBottom: "6px" }}>Signed</div>
-            <div style={{ fontSize: "17px", fontWeight: 800, color: "#22c55e", fontFamily: "Montserrat, sans-serif" }}>André Snyman</div>
-            <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "2px" }}>Founder — eblockwatch</div>
+          <div style={{ background: "#1a1f2e", borderRadius: "14px", padding: "20px 24px", marginTop: "28px", display: "flex", alignItems: "center", gap: "16px" }}>
+            <img
+              src={ANDRE_PHOTO}
+              alt="André Snyman"
+              style={{ width: "52px", height: "52px", borderRadius: "50%", objectFit: "cover", border: "2px solid #22c55e", flexShrink: 0 }}
+            />
+            <div>
+              <div style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "3px" }}>Signed</div>
+              <div style={{ fontSize: "17px", fontWeight: 800, color: "#22c55e", fontFamily: "Montserrat, sans-serif" }}>André Snyman</div>
+              <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "2px" }}>Founder — eblockwatch</div>
+            </div>
           </div>
         </div>
 
