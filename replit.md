@@ -155,6 +155,25 @@ Ignore ONLY when `req.body.MessageStatus` is present and truthy. Never block on 
 - Distress → RED + auto ICE if not yet contacted
 - ICE escalation status: `null` → `SENT` → `REPLIED`
 
+## ICE Contact Direct WhatsApp Alert (live — 2026-05-17)
+
+When any RED escalation fires, the system now directly WhatsApps the member's registered ICE contact — no human relay needed. Three trigger points:
+
+1. **Distress keyword** (`handleDistress`) — member sends HELP / SOS / etc.
+2. **Emergency "10"** (global handler) — member replies 10 at any time
+3. **Check-in choice "5"** (`handleCheckinChoice`) — member selects SOS from check-in menu
+
+Each ICE alert includes:
+- Member's name and exact situation description
+- Route name (trip title)
+- **Google Maps deep-link** to last known coordinates (`destLat/destLon` → fallback `startLat/startLon`)
+- Direct wa.me link to contact the member
+- André's name as the monitoring operator
+
+ICE phone normalisation handles both `0XX` and `+27XX` SA formats. Fully best-effort — never crashes the main flow. André's emergency mirror fires in parallel.
+
+Operator mirror message now confirms `ICE contact alerted: Name (number)` or `ICE contact: not set` on every RED event.
+
 ## Route Enrichment (OpenStreetMap — no API key)
 
 - Geocoding: Nominatim (`nominatim.openstreetmap.org`) with `countrycodes=za`

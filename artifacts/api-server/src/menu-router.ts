@@ -398,6 +398,80 @@ async function sendEmergencyAlert(
   await sendOperatorMirror(twilioNumber, msg, "red-alert");
 }
 
+// ── ICE contact alert — sends location-linked WhatsApp to emergency contact ───
+// Fires on any RED escalation if the member has an ICE contact registered.
+// Best-effort: never throws — the safety of the primary flow is always paramount.
+async function sendIceContactAlert(
+  twilioNumber: string,
+  memberName: string,
+  memberPhone: string,
+  iceContactName: string,
+  iceContactPhone: string,
+  trip: { title: string; startLat: string | null; startLon: string | null; destLat: string | null; destLon: string | null } | null,
+  situation: string,
+): Promise<void> {
+  try {
+    // Normalise ICE phone → WhatsApp E.164 (handles SA 0XX and +27XX formats)
+    let raw = iceContactPhone.replace(/[\s\-().]/g, "");
+    if (raw.startsWith("0")) raw = "+27" + raw.slice(1);
+    if (!raw.startsWith("+")) raw = "+" + raw;
+    const iceWa = `whatsapp:${raw}`;
+
+    // Build Google Maps deep-link from best available trip coordinates
+    const mapsLink = (() => {
+      const lat = trip?.destLat ?? trip?.startLat;
+      const lon = trip?.destLon ?? trip?.startLon;
+      if (lat && lon) return `https://maps.google.com/?q=${lat},${lon}`;
+      return null;
+    })();
+
+    const memberE164 = memberPhone.replace(/^whatsapp:\+?/, "");
+
+    const lines = [
+      `🆘 *eblockwatch Cyber Chaperone — URGENT*`,
+      ``,
+      `Hi ${iceContactName},`,
+      ``,
+      `You are the emergency contact for *${memberName}*.`,
+      ``,
+      `Situation: ${situation}`,
+      trip ? `Route: ${trip.title}` : null,
+      mapsLink ? `\n📍 Last known location:\n${mapsLink}` : null,
+      ``,
+      `Please contact ${memberName} immediately:`,
+      `👉 wa.me/${memberE164}`,
+      ``,
+      `André at eblockwatch is monitoring. Reply to this message with any update.`,
+      ``,
+      `— eblockwatch Cyber Chaperone`,
+    ].filter(Boolean).join("\n");
+
+    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    await client.messages.create({ from: twilioNumber, to: iceWa, body: lines });
+  } catch {
+    // Best-effort — never crash the main flow
+  }
+}
+
+// Looks up a member's ICE contact details by their WhatsApp number.
+async function getMemberIce(
+  whatsappNumber: string,
+): Promise<{ iceContactName: string; iceContactPhone: string } | null> {
+  try {
+    const [row] = await db
+      .select({ iceContactName: membersTable.iceContactName, iceContactPhone: membersTable.iceContactPhone })
+      .from(membersTable)
+      .where(eq(membersTable.whatsappNumber, whatsappNumber))
+      .limit(1);
+    if (row?.iceContactName && row?.iceContactPhone) {
+      return { iceContactName: row.iceContactName, iceContactPhone: row.iceContactPhone };
+    }
+  } catch {
+    // Best-effort
+  }
+  return null;
+}
+
 // ── Conversation state ────────────────────────────────────────────────────────
 
 async function getConvState(whatsappNumber: string): Promise<ConvState> {
@@ -904,12 +978,27 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n"));
+    await sendEmergencyAlert(to, name, from);
+    // Alert ICE contact directly with last known location
+    const iceCheckin = await getMemberIce(from);
+    if (iceCheckin) {
+      await sendIceContactAlert(
+        to,
+        name,
+        from,
+        iceCheckin.iceContactName,
+        iceCheckin.iceContactPhone,
+        trip ?? null,
+        `${name} has requested emergency help during a safety check-in.`,
+      );
+    }
     if (trip) {
       await sendOperatorMirror(to, [
         `🚨 CYBER CHAPERONE — RED`,
         `Member: ${name}`,
         `Trip: ${trip.title} (ID: ${trip.id})`,
         `Reason: Member requested help from check-in`,
+        iceCheckin ? `ICE contact alerted: ${iceCheckin.iceContactName} (${iceCheckin.iceContactPhone})` : `ICE contact: not set`,
         `Status: RED`,
         `Next action: Immediate human review required.`,
       ].join("\n"));
@@ -1359,6 +1448,22 @@ async function handleDistress(ctx: MenuContext, activeTrip: Awaited<ReturnType<t
 
   await resetConvState(from);
 
+  // Alert ICE contact directly if the member has one registered
+  const iceDistress = await getMemberIce(from);
+  if (iceDistress) {
+    await sendIceContactAlert(
+      to,
+      memberLabel,
+      from,
+      iceDistress.iceContactName,
+      iceDistress.iceContactPhone,
+      activeTrip ?? null,
+      `${memberLabel} has sent a distress signal via Cyber Chaperone.`,
+    );
+  }
+
+  await sendEmergencyAlert(to, memberLabel, from);
+
   await sendOperatorMirror(
     to,
     [
@@ -1367,6 +1472,7 @@ async function handleDistress(ctx: MenuContext, activeTrip: Awaited<ReturnType<t
       `Known member: ${member?.isKnown ? "YES" : "NO"}`,
       activeTrip ? `Trip: ${activeTrip.title} (ID: ${activeTrip.id})` : `Trip: No active trip`,
       `Distress message: "${excerpt(body, 100)}"`,
+      iceDistress ? `ICE contact alerted: ${iceDistress.iceContactName} (${iceDistress.iceContactPhone})` : `ICE contact: not set`,
       `Status: RED`,
       `Next action: Immediate human review required.`,
     ].join("\n"),
@@ -3806,7 +3912,20 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     await resetConvState(from);
     await sendWhatsApp(from, to, `We have flagged this as urgent. A human support response is being escalated now. If you can, send your location pin 📍 and a short message telling us what is wrong.`);
     await sendEmergencyAlert(to, name, from);
-    log.info({ from, handler: "GLOBAL_EMERGENCY_10" }, "menu-router: global emergency 10 triggered");
+    // Also alert ICE contact directly if the member has one registered
+    const ice10 = await getMemberIce(from);
+    if (ice10) {
+      await sendIceContactAlert(
+        to,
+        name,
+        from,
+        ice10.iceContactName,
+        ice10.iceContactPhone,
+        activeTrip ?? null,
+        `${name} has triggered an emergency alert via Cyber Chaperone (code 10).`,
+      );
+    }
+    log.info({ from, handler: "GLOBAL_EMERGENCY_10", iceAlerted: !!ice10 }, "menu-router: global emergency 10 triggered");
     return { handled: true };
   }
 
