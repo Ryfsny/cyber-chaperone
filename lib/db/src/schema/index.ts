@@ -1,6 +1,7 @@
 export * from "./trips";
 export * from "./messages";
 export * from "./members";
+export * from "./incidents";
 export * from "./conversation-states";
 export * from "./responders";
 export * from "./case-participants";

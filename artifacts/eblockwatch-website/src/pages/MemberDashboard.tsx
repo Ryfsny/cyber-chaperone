@@ -63,6 +63,16 @@ const SA_INDUSTRIES = [
   "Other",
 ];
 
+const INCIDENT_CATEGORIES = [
+  "Crime & Security Threat",
+  "Suspicious Activity",
+  "Road & Traffic Hazard",
+  "Personal Safety Concern",
+  "Neighbourhood Watch Alert",
+  "Cyber Safety Concern",
+  "Other",
+];
+
 interface Member {
   id: number;
   firstName: string;
@@ -89,9 +99,39 @@ interface Member {
   paystackStatus: string | null;
   paystackPlanCode: string | null;
   paystackPaidAt: string | null;
+  loyaltyPoints: number | null;
   hasPassword?: boolean;
   createdAt: string;
 }
+
+interface CommsMsg {
+  id: number;
+  fromNumber: string;
+  toNumber: string;
+  body: string;
+  direction: string;
+  channel: string;
+  receivedAt: string;
+}
+
+interface IncidentItem {
+  id: number;
+  category: string;
+  description: string;
+  location: string | null;
+  status: string;
+  createdAt: string;
+}
+
+interface FamilyMember {
+  id: number;
+  displayName: string;
+  whatsappNumber: string;
+  memberStatus: string;
+  membershipTier: string | null;
+}
+
+type TabId = "profile" | "subscription" | "family" | "report" | "comms" | "loyalty" | "security";
 
 function WhatsAppIcon() {
   return (
@@ -129,6 +169,10 @@ function formatDate(d: string | null): string {
   return new Date(d).toLocaleDateString("en-ZA", { year: "numeric", month: "long", day: "numeric" });
 }
 
+function formatDateTime(d: string): string {
+  return new Date(d).toLocaleString("en-ZA", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 function paystackStatusBadge(status: string | null): { label: string; bg: string; color: string } {
   const map: Record<string, { label: string; bg: string; color: string }> = {
     active: { label: "Active", bg: "#dcfce7", color: "#166534" },
@@ -140,6 +184,16 @@ function paystackStatusBadge(status: string | null): { label: string; bg: string
   return map[status ?? ""] ?? { label: status ?? "Unknown", bg: "#f3f4f6", color: "#6b7280" };
 }
 
+function incidentStatusBadge(status: string): { label: string; bg: string; color: string } {
+  const map: Record<string, { label: string; bg: string; color: string }> = {
+    received: { label: "Received", bg: "#dbeafe", color: "#1d4ed8" },
+    reviewed: { label: "Under Review", bg: "#fffbeb", color: "#92400e" },
+    actioned: { label: "Actioned", bg: "#dcfce7", color: "#166534" },
+    closed: { label: "Closed", bg: "#f3f4f6", color: "#6b7280" },
+  };
+  return map[status] ?? { label: status, bg: "#f3f4f6", color: "#6b7280" };
+}
+
 export default function MemberDashboard() {
   const [, navigate] = useLocation();
   const [member, setMember] = useState<Member | null>(null);
@@ -147,7 +201,7 @@ export default function MemberDashboard() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
-  const [activeTab, setActiveTab] = useState<"profile" | "security" | "subscription">("profile");
+  const [activeTab, setActiveTab] = useState<TabId>("profile");
 
   // Password management
   const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
@@ -166,7 +220,27 @@ export default function MemberDashboard() {
     industry: "",
   });
 
+  // ── New tab state ─────────────────────────────────────────────────────────
+  const [comms, setComms] = useState<CommsMsg[]>([]);
+  const [commsLoaded, setCommsLoaded] = useState(false);
+  const [incidents, setIncidents] = useState<IncidentItem[]>([]);
+  const [incidentsLoaded, setIncidentsLoaded] = useState(false);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [familyGroupId, setFamilyGroupId] = useState<number | null>(null);
+  const [familyLoaded, setFamilyLoaded] = useState(false);
+  const [incidentForm, setIncidentForm] = useState({ category: "", description: "", location: "" });
+  const [incidentMsg, setIncidentMsg] = useState("");
+  const [incidentSaving, setIncidentSaving] = useState(false);
+
   useEffect(() => { void fetchMe(); }, []);
+
+  // Lazy-load data only when the tab is first visited
+  useEffect(() => {
+    if (activeTab === "comms" && !commsLoaded) void loadComms();
+    if (activeTab === "report" && !incidentsLoaded) void loadIncidents();
+    if (activeTab === "family" && !familyLoaded) void loadFamily();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   async function fetchMe() {
     setLoading(true);
@@ -181,7 +255,7 @@ export default function MemberDashboard() {
         displayName: data.member.displayName ?? "",
         notes: data.member.notes ?? "",
         iceContactName: data.member.iceContactName ?? "",
-        iceContactPhone: data.member.iceContactPhone ?? "",
+        iceContactPhone: data.member.iceContactPhone?.replace("whatsapp:", "") ?? "",
         email: data.member.email ?? "",
         mobile: data.member.mobile ?? "",
         homeAddress: data.member.homeAddress ?? "",
@@ -196,52 +270,113 @@ export default function MemberDashboard() {
     finally { setLoading(false); }
   }
 
+  async function loadComms() {
+    try {
+      const res = await fetch(`/api/member-portal/comms`, { credentials: "include" });
+      if (res.ok) { const d = await res.json() as { messages: CommsMsg[] }; setComms(d.messages); }
+    } catch { /**/ } finally { setCommsLoaded(true); }
+  }
+
+  async function loadIncidents() {
+    try {
+      const res = await fetch(`/api/member-portal/incidents`, { credentials: "include" });
+      if (res.ok) { const d = await res.json() as { incidents: IncidentItem[] }; setIncidents(d.incidents); }
+    } catch { /**/ } finally { setIncidentsLoaded(true); }
+  }
+
+  async function loadFamily() {
+    try {
+      const res = await fetch(`/api/member-portal/family`, { credentials: "include" });
+      if (res.ok) {
+        const d = await res.json() as { groupId?: number; members: FamilyMember[] };
+        setFamilyMembers(d.members);
+        setFamilyGroupId(d.groupId ?? null);
+      }
+    } catch { /**/ } finally { setFamilyLoaded(true); }
+  }
+
   async function handleSave(e: React.FormEvent) {
-    e.preventDefault(); setSaving(true); setSaveMsg("");
+    e.preventDefault();
+    setSaving(true);
+    setSaveMsg("");
     try {
       const res = await fetch(`/api/member-portal/me`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        credentials: "include", body: JSON.stringify(form),
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
       });
-      const data = await res.json() as { member: Member; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Save failed.");
-      setMember(data.member); setEditing(false);
-      setSaveMsg("Details updated."); setTimeout(() => setSaveMsg(""), 4000);
-    } catch (err) { setSaveMsg(err instanceof Error ? err.message : "Save failed."); }
+      if (!res.ok) { setSaveMsg("Failed to save. Please try again."); return; }
+      const data = await res.json() as { member: Member };
+      setMember(data.member);
+      setEditing(false);
+      setSaveMsg("Profile updated successfully.");
+    } catch { setSaveMsg("Network error. Please try again."); }
     finally { setSaving(false); }
   }
 
   async function handleSetPassword(e: React.FormEvent) {
-    e.preventDefault(); setPwMsg(""); setPwSaving(true);
-    if (pwForm.next !== pwForm.confirm) { setPwMsg("Passwords do not match."); setPwSaving(false); return; }
-    if (pwForm.next.length < 8) { setPwMsg("Password must be at least 8 characters."); setPwSaving(false); return; }
+    e.preventDefault();
+    if (pwForm.next !== pwForm.confirm) { setPwMsg("Passwords do not match."); return; }
+    if (pwForm.next.length < 8) { setPwMsg("Password must be at least 8 characters."); return; }
+    setPwSaving(true);
+    setPwMsg("");
     try {
       const res = await fetch(`/api/member-portal/set-password`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST",
         credentials: "include",
-        body: JSON.stringify({ password: pwForm.next, currentPassword: pwForm.current || undefined }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.next }),
       });
-      const data = await res.json() as { ok?: boolean; error?: string; message?: string };
-      if (!res.ok) throw new Error(data.error ?? "Failed.");
-      setPwMsg("Password saved successfully."); setPwForm({ current: "", next: "", confirm: "" });
-      setMember(m => m ? { ...m, hasPassword: true } : m);
-    } catch (err) { setPwMsg(err instanceof Error ? err.message : "Failed."); }
+      const d = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok) { setPwMsg(d.error ?? "Failed to set password."); return; }
+      setPwMsg("Password updated successfully.");
+      setPwForm({ current: "", next: "", confirm: "" });
+      await fetchMe();
+    } catch { setPwMsg("Network error. Please try again."); }
     finally { setPwSaving(false); }
   }
 
   async function handleCancelSubscription() {
-    setUnsubLoading(true); setUnsubMsg("");
+    setUnsubLoading(true);
+    setUnsubMsg("");
     try {
       const res = await fetch(`/api/member-portal/cancel-subscription`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        method: "POST",
+        credentials: "include",
       });
-      const data = await res.json() as { ok?: boolean; error?: string; message?: string };
-      if (!res.ok) throw new Error(data.error ?? "Failed to cancel.");
-      setUnsubMsg(data.message ?? "Subscription cancelled.");
+      const d = await res.json() as { ok?: boolean; error?: string; message?: string };
+      if (!res.ok) { setUnsubMsg(d.error ?? "Failed to cancel."); return; }
+      setUnsubMsg(d.message ?? "Subscription cancelled.");
       setUnsubConfirm(false);
-      void fetchMe();
-    } catch (err) { setUnsubMsg(err instanceof Error ? err.message : "Failed."); }
+      await fetchMe();
+    } catch { setUnsubMsg("Network error. Please try again."); }
     finally { setUnsubLoading(false); }
+  }
+
+  async function handleSubmitIncident(e: React.FormEvent) {
+    e.preventDefault();
+    if (!incidentForm.category || incidentForm.description.trim().length < 20) {
+      setIncidentMsg("Please select a category and describe the incident in at least 20 characters.");
+      return;
+    }
+    setIncidentSaving(true);
+    setIncidentMsg("");
+    try {
+      const res = await fetch(`/api/member-portal/incidents`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(incidentForm),
+      });
+      if (!res.ok) { const d = await res.json() as { error?: string }; setIncidentMsg(d.error ?? "Failed to submit."); return; }
+      setIncidentMsg("✅ Report received confidentially. André will review it shortly. You've earned 5 loyalty points.");
+      setIncidentForm({ category: "", description: "", location: "" });
+      setIncidentsLoaded(false);
+      await loadIncidents();
+      await fetchMe(); // refresh points
+    } catch { setIncidentMsg("Network error. Please try again."); }
+    finally { setIncidentSaving(false); }
   }
 
   async function handleLogout() {
@@ -261,11 +396,15 @@ export default function MemberDashboard() {
   const isPaidPlan = !!(member.membershipTier && !["entry", "free", "entry level"].includes(member.membershipTier.toLowerCase()));
   const { label: tierLabelStr, icon: tierIcon } = tierLabel(member.membershipTier);
   const hasActiveSub = !!(member.paystackSubscriptionCode && member.paystackStatus === "active");
+  const pts = member.loyaltyPoints ?? 0;
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
-    padding: "10px 18px", fontSize: "13px", fontWeight: active ? 700 : 500,
+    padding: "10px 16px", fontSize: "13px", fontWeight: active ? 700 : 500,
     borderBottom: active ? "2px solid #1db954" : "2px solid transparent",
     color: active ? "#1db954" : "#6b7280", background: "none", border: "none",
+    borderBottomWidth: active ? "2px" : "2px",
+    borderBottomStyle: "solid",
+    borderBottomColor: active ? "#1db954" : "transparent",
     cursor: "pointer", whiteSpace: "nowrap",
   });
   const inputStyle: React.CSSProperties = {
@@ -305,6 +444,11 @@ export default function MemberDashboard() {
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
             {statusBadge(member.memberStatus)}
             <span style={{ color: "#6b7280", fontSize: "12px" }}>{tierIcon} {tierLabelStr}</span>
+            {pts > 0 && (
+              <span style={{ background: "#fffbeb", color: "#92400e", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 700 }}>
+                ⭐ {pts} pts
+              </span>
+            )}
           </div>
         </div>
 
@@ -319,7 +463,7 @@ export default function MemberDashboard() {
           <div style={{ background: "linear-gradient(135deg, #0d1117 0%, #1a2332 100%)", borderRadius: "14px", border: "2px solid #1db954", padding: "24px 28px", marginBottom: "20px" }}>
             <div style={{ color: "#fff", fontWeight: 800, fontSize: "17px", fontFamily: "Montserrat, sans-serif", marginBottom: "6px" }}>🛡️ Upgrade to Full Cyber Chaperone Protection</div>
             <p style={{ color: "#9ca3af", fontSize: "13px", marginBottom: "20px", lineHeight: 1.5 }}>
-              You're on the free plan. Upgrade to get real-time trip monitoring, ETA tracking, ICE escalation, and 24/7 operator coverage.
+              You're on the free plan. Upgrade to get real-time trip monitoring, ETA tracking, ICE escalation, and 24/7 operator coverage — all part of our project.
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
               <a href={`${BASE}/upgrade`} style={{ display: "block", background: "#1db954", color: "#fff", borderRadius: "10px", padding: "16px", textDecoration: "none", textAlign: "center" }}>
@@ -338,13 +482,17 @@ export default function MemberDashboard() {
         <div style={{ background: "#fff", borderRadius: "14px 14px 0 0", border: "1px solid #e5e7eb", borderBottom: "none", display: "flex", overflowX: "auto" }}>
           <button style={tabStyle(activeTab === "profile")} onClick={() => setActiveTab("profile")}>My Details</button>
           <button style={tabStyle(activeTab === "subscription")} onClick={() => setActiveTab("subscription")}>Subscription</button>
+          <button style={tabStyle(activeTab === "family")} onClick={() => setActiveTab("family")}>Family</button>
+          <button style={tabStyle(activeTab === "report")} onClick={() => setActiveTab("report")}>Report</button>
+          <button style={tabStyle(activeTab === "comms")} onClick={() => setActiveTab("comms")}>Our Comms</button>
+          <button style={tabStyle(activeTab === "loyalty")} onClick={() => setActiveTab("loyalty")}>Loyalty</button>
           <button style={tabStyle(activeTab === "security")} onClick={() => setActiveTab("security")}>Security</button>
         </div>
 
         {/* Tab content */}
         <div style={{ background: "#fff", borderRadius: "0 0 14px 14px", border: "1px solid #e5e7eb", padding: "24px", marginBottom: "20px" }}>
 
-          {/* ── PROFILE TAB ─────────────────────────────────────────────── */}
+          {/* ── MY DETAILS TAB ───────────────────────────────────────────── */}
           {activeTab === "profile" && (
             <>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
@@ -484,7 +632,6 @@ export default function MemberDashboard() {
                 {member.paystackSubscriptionCode && <InfoRow label="Reference" value={member.paystackSubscriptionCode} />}
               </div>
 
-              {/* Paystack status badge */}
               {member.paystackStatus && (
                 <div style={{ marginBottom: "20px" }}>
                   {(() => {
@@ -498,14 +645,12 @@ export default function MemberDashboard() {
                 </div>
               )}
 
-              {/* Payment history notice */}
               {!member.paystackSubscriptionCode && (
                 <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "16px", marginBottom: "20px", fontSize: "13px", color: "#6b7280" }}>
                   No paid subscription on record. <a href={`${BASE}/upgrade`} style={{ color: "#1db954", fontWeight: 600, textDecoration: "none" }}>Upgrade your plan →</a>
                 </div>
               )}
 
-              {/* Upgrade to family CTA */}
               {isPaidPlan && !isFamilyPlan && (
                 <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "10px", padding: "16px 20px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "14px" }}>
                   <span style={{ fontSize: "22px" }}>🏠</span>
@@ -520,7 +665,6 @@ export default function MemberDashboard() {
                 </div>
               )}
 
-              {/* Unsubscribe */}
               {hasActiveSub && (
                 <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: "20px" }}>
                   {unsubMsg && (
@@ -553,6 +697,268 @@ export default function MemberDashboard() {
                   )}
                 </div>
               )}
+            </>
+          )}
+
+          {/* ── FAMILY TAB ───────────────────────────────────────────────── */}
+          {activeTab === "family" && (
+            <>
+              <h2 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 700, color: "#111827", fontFamily: "Montserrat, sans-serif" }}>
+                🏠 Family Plan
+              </h2>
+              <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 20px", lineHeight: 1.6 }}>
+                Link 2–5 family members under one plan. Each person gets full Cyber Chaperone protection and you each serve as each other's emergency contact — our project looks after everyone.
+              </p>
+
+              {!familyLoaded ? (
+                <div style={{ color: "#6b7280", fontSize: "13px" }}>Loading…</div>
+              ) : familyGroupId && familyMembers.length > 0 ? (
+                <>
+                  <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "10px", padding: "12px 16px", marginBottom: "20px" }}>
+                    <div style={{ fontSize: "13px", color: "#166534", fontWeight: 700 }}>✅ You are in Family Group #{familyGroupId}</div>
+                    <div style={{ fontSize: "12px", color: "#4b7c55", marginTop: "3px" }}>Your family members are automatically each other's ICE contacts.</div>
+                  </div>
+                  <div style={{ display: "grid", gap: "10px" }}>
+                    {familyMembers.map(fm => (
+                      <div key={fm.id} style={{ display: "flex", alignItems: "center", gap: "14px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "12px 16px" }}>
+                        <div style={{ width: "38px", height: "38px", background: "#1db954", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>
+                          👤
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: "14px", color: "#111827" }}>{fm.displayName}</div>
+                          <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "2px" }}>{fm.whatsappNumber.replace("whatsapp:", "")}</div>
+                        </div>
+                        {statusBadge(fm.memberStatus)}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: "20px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "14px 16px", fontSize: "13px", color: "#6b7280" }}>
+                    To add or remove a family member, WhatsApp us on{" "}
+                    <a href={WA_LINK_HI} target="_blank" rel="noopener noreferrer" style={{ color: "#1db954", fontWeight: 600, textDecoration: "none" }}>our project's safety line</a>
+                    {" "}and we'll update your group — usually within 24 hours.
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "10px", padding: "16px", marginBottom: "20px" }}>
+                    <div style={{ fontWeight: 700, fontSize: "13px", color: "#92400e", marginBottom: "4px" }}>You are not on a Family Plan yet</div>
+                    <div style={{ fontSize: "12px", color: "#b45309" }}>
+                      Upgrade to the Family Plan (R250/mo) to protect your whole household. Everyone gets full trip monitoring and ICE escalation.
+                    </div>
+                  </div>
+                  {!isFamilyPlan && (
+                    <a href={`${BASE}/upgrade`}
+                      style={{ display: "block", background: "#1db954", color: "#fff", borderRadius: "10px", padding: "14px", textDecoration: "none", textAlign: "center", fontWeight: 700, fontSize: "14px", marginBottom: "16px" }}>
+                      🏠 Upgrade to Family Plan — R250/mo →
+                    </a>
+                  )}
+                  <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "14px 16px", fontSize: "13px", color: "#6b7280" }}>
+                    <div style={{ fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Already on a Family Plan but not linked yet?</div>
+                    <div>
+                      WhatsApp us on{" "}
+                      <a href={WA_LINK_HI} target="_blank" rel="noopener noreferrer" style={{ color: "#1db954", fontWeight: 600, textDecoration: "none" }}>our project's safety line</a>
+                      {" "}and we'll link your family group — usually within 24 hours.
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {/* ── REPORT TAB ───────────────────────────────────────────────── */}
+          {activeTab === "report" && (
+            <>
+              <h2 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 700, color: "#111827", fontFamily: "Montserrat, sans-serif" }}>
+                🔒 Confidential Report
+              </h2>
+              <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 20px", lineHeight: 1.6 }}>
+                Everything you share here goes directly and confidentially to André. It is never shared with other members or visible elsewhere in our project. Each report earns you <strong style={{ color: "#92400e" }}>+5 loyalty points</strong>.
+              </p>
+
+              {incidentMsg && (
+                <div style={{ background: incidentMsg.startsWith("✅") ? "#f0fdf4" : "#fef2f2", border: `1px solid ${incidentMsg.startsWith("✅") ? "#86efac" : "#fecaca"}`, borderRadius: "8px", padding: "10px 14px", fontSize: "13px", color: incidentMsg.startsWith("✅") ? "#166534" : "#dc2626", marginBottom: "16px" }}>
+                  {incidentMsg}
+                </div>
+              )}
+
+              <form onSubmit={(e) => void handleSubmitIncident(e)} style={{ marginBottom: "32px" }}>
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#6b7280", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Category</label>
+                  <select
+                    value={incidentForm.category}
+                    onChange={(e) => setIncidentForm(f => ({ ...f, category: e.target.value }))}
+                    required
+                    style={{ width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: "8px", fontSize: "14px", color: "#111827", background: "#fff", appearance: "auto" }}
+                  >
+                    <option value="">Select a category…</option>
+                    {INCIDENT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#6b7280", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Description <span style={{ color: "#9ca3af", fontWeight: 400, textTransform: "none" }}>(min 20 characters)</span></label>
+                  <textarea
+                    value={incidentForm.description}
+                    onChange={(e) => setIncidentForm(f => ({ ...f, description: e.target.value }))}
+                    placeholder="Describe the incident in as much detail as you can…"
+                    rows={5}
+                    required
+                    style={{ border: "1px solid #d1d5db", borderRadius: "8px", padding: "9px 12px", fontSize: "14px", color: "#111827", outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "'Open Sans', sans-serif", resize: "vertical" }}
+                  />
+                </div>
+                <div style={{ marginBottom: "20px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#6b7280", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Location <span style={{ color: "#9ca3af", fontWeight: 400, textTransform: "none" }}>(optional)</span></label>
+                  <input
+                    type="text"
+                    value={incidentForm.location}
+                    onChange={(e) => setIncidentForm(f => ({ ...f, location: e.target.value }))}
+                    placeholder="e.g. Corner of Elm St & Oak Ave, Sandton"
+                    style={{ border: "1px solid #d1d5db", borderRadius: "8px", padding: "9px 12px", fontSize: "14px", color: "#111827", outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "'Open Sans', sans-serif" }}
+                  />
+                </div>
+                <button type="submit" disabled={incidentSaving}
+                  style={{ background: "#1db954", color: "#fff", border: "none", borderRadius: "8px", padding: "11px 24px", fontSize: "14px", fontWeight: 700, cursor: incidentSaving ? "not-allowed" : "pointer", opacity: incidentSaving ? 0.6 : 1 }}>
+                  {incidentSaving ? "Submitting…" : "Submit Confidentially"}
+                </button>
+              </form>
+
+              {/* Past reports */}
+              {incidentsLoaded && incidents.length > 0 && (
+                <>
+                  <hr style={{ border: "none", borderTop: "1px solid #f3f4f6", marginBottom: "20px" }} />
+                  <div style={{ fontWeight: 700, fontSize: "13px", color: "#374151", marginBottom: "12px" }}>Your previous reports</div>
+                  <div style={{ display: "grid", gap: "10px" }}>
+                    {incidents.map(inc => {
+                      const badge = incidentStatusBadge(inc.status);
+                      return (
+                        <div key={inc.id} style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "14px 16px" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                            <div style={{ fontWeight: 700, fontSize: "13px", color: "#111827" }}>{inc.category}</div>
+                            <span style={{ background: badge.bg, color: badge.color, padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 700 }}>{badge.label}</span>
+                          </div>
+                          <div style={{ fontSize: "13px", color: "#374151", marginBottom: "6px", lineHeight: 1.5 }}>{inc.description}</div>
+                          {inc.location && <div style={{ fontSize: "12px", color: "#6b7280" }}>📍 {inc.location}</div>}
+                          <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "6px" }}>{formatDateTime(inc.createdAt)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+              {incidentsLoaded && incidents.length === 0 && (
+                <div style={{ fontSize: "13px", color: "#9ca3af", textAlign: "center", padding: "16px" }}>No reports submitted yet.</div>
+              )}
+            </>
+          )}
+
+          {/* ── OUR COMMS TAB ────────────────────────────────────────────── */}
+          {activeTab === "comms" && (
+            <>
+              <h2 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 700, color: "#111827", fontFamily: "Montserrat, sans-serif" }}>
+                💬 Our Comms
+              </h2>
+              <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 20px", lineHeight: 1.6 }}>
+                Your WhatsApp conversation history with our project — the last 100 messages, newest first.
+              </p>
+
+              {!commsLoaded ? (
+                <div style={{ color: "#6b7280", fontSize: "13px" }}>Loading…</div>
+              ) : comms.length === 0 ? (
+                <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "24px", textAlign: "center" }}>
+                  <div style={{ fontSize: "24px", marginBottom: "8px" }}>💬</div>
+                  <div style={{ fontSize: "13px", color: "#6b7280" }}>No messages yet. WhatsApp us to get started!</div>
+                  <a href={WA_LINK_HI} target="_blank" rel="noopener noreferrer"
+                    style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#1db954", color: "#fff", borderRadius: "8px", padding: "10px 20px", textDecoration: "none", fontWeight: 700, fontSize: "13px", marginTop: "14px" }}>
+                    <WhatsAppIcon /> Open WhatsApp
+                  </a>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: "8px" }}>
+                  {comms.map(msg => {
+                    const fromUs = msg.direction === "outbound";
+                    return (
+                      <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: fromUs ? "flex-start" : "flex-end" }}>
+                        <div style={{
+                          maxWidth: "85%",
+                          background: fromUs ? "#f0fdf4" : "#f9fafb",
+                          border: `1px solid ${fromUs ? "#86efac" : "#e5e7eb"}`,
+                          borderRadius: fromUs ? "4px 14px 14px 14px" : "14px 4px 14px 14px",
+                          padding: "10px 14px",
+                        }}>
+                          <div style={{ fontSize: "11px", fontWeight: 700, color: fromUs ? "#166534" : "#6b7280", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                            {fromUs ? "our project" : "You"}
+                          </div>
+                          <div style={{ fontSize: "13px", color: "#111827", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{msg.body}</div>
+                          <div style={{ fontSize: "10px", color: "#9ca3af", marginTop: "5px", textAlign: "right" }}>{formatDateTime(msg.receivedAt)}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── LOYALTY TAB ──────────────────────────────────────────────── */}
+          {activeTab === "loyalty" && (
+            <>
+              <h2 style={{ margin: "0 0 6px", fontSize: "15px", fontWeight: 700, color: "#111827", fontFamily: "Montserrat, sans-serif" }}>
+                ⭐ Loyalty Points
+              </h2>
+              <p style={{ fontSize: "13px", color: "#6b7280", margin: "0 0 20px", lineHeight: 1.6 }}>
+                Earn points by helping grow and strengthen our project. Points will unlock discounts, community recognition, and priority support.
+              </p>
+
+              {/* Points balance */}
+              <div style={{ background: "linear-gradient(135deg, #0d1117 0%, #1a2332 100%)", borderRadius: "14px", padding: "28px", textAlign: "center", marginBottom: "24px" }}>
+                <div style={{ color: "#9ca3af", fontSize: "13px", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "1px" }}>Your Balance</div>
+                <div style={{ color: "#fbbf24", fontSize: "52px", fontWeight: 800, fontFamily: "Montserrat, sans-serif", lineHeight: 1 }}>{pts}</div>
+                <div style={{ color: "#6b7280", fontSize: "13px", marginTop: "6px" }}>loyalty points</div>
+                {pts > 0 && (
+                  <div style={{ background: "#1a2332", borderRadius: "8px", padding: "8px 16px", display: "inline-block", marginTop: "14px" }}>
+                    <span style={{ color: "#fbbf24", fontSize: "12px", fontWeight: 600 }}>
+                      {pts >= 100 ? "🥇 Gold Member" : pts >= 50 ? "🥈 Silver Member" : "🥉 Bronze Member"}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* How to earn */}
+              <div style={{ fontWeight: 700, fontSize: "13px", color: "#374151", marginBottom: "12px" }}>How to earn points</div>
+              <div style={{ display: "grid", gap: "8px", marginBottom: "24px" }}>
+                {[
+                  { action: "Submit a confidential safety report", pts: "+5", auto: true, icon: "🔒" },
+                  { action: "Complete your full safety profile", pts: "+10", auto: false, icon: "✅" },
+                  { action: "Upgrade to a paid plan", pts: "+50", auto: false, icon: "🛡️" },
+                  { action: "Refer a friend who joins our project", pts: "+20", auto: false, icon: "👥" },
+                  { action: "Refer a friend who upgrades to paid", pts: "+30", auto: false, icon: "⭐" },
+                  { action: "1-year membership anniversary", pts: "+25", auto: false, icon: "🎂" },
+                ].map(row => (
+                  <div key={row.action} style={{ display: "flex", alignItems: "center", gap: "12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "12px 14px" }}>
+                    <span style={{ fontSize: "18px", flexShrink: 0 }}>{row.icon}</span>
+                    <div style={{ flex: 1, fontSize: "13px", color: "#374151" }}>{row.action}</div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "3px" }}>
+                      <span style={{ fontWeight: 800, fontSize: "14px", color: "#1db954" }}>{row.pts}</span>
+                      {row.auto && <span style={{ fontSize: "10px", color: "#6b7280", background: "#f0fdf4", padding: "1px 6px", borderRadius: "8px" }}>auto</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Redeem info */}
+              <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "10px", padding: "14px 16px" }}>
+                <div style={{ fontWeight: 700, fontSize: "13px", color: "#92400e", marginBottom: "4px" }}>🎁 Redeeming points — coming soon</div>
+                <div style={{ fontSize: "12px", color: "#b45309", lineHeight: 1.6 }}>
+                  We're building the rewards system now. Points you earn today will carry over. Planned rewards include plan discounts, early feature access, and community recognition in our project.
+                </div>
+              </div>
+
+              {/* Referral instructions */}
+              <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "14px 16px", marginTop: "12px" }}>
+                <div style={{ fontWeight: 600, fontSize: "13px", color: "#374151", marginBottom: "6px" }}>Refer a friend</div>
+                <div style={{ fontSize: "13px", color: "#6b7280", lineHeight: 1.6 }}>
+                  Tell a friend to WhatsApp <a href={WA_LINK_HI} target="_blank" rel="noopener noreferrer" style={{ color: "#1db954", fontWeight: 600, textDecoration: "none" }}>our project's safety line</a> and mention your name. We'll credit the points to your account manually — usually within 24 hours.
+                </div>
+              </div>
             </>
           )}
 

@@ -1,8 +1,8 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import twilio from "twilio";
 import bcrypt from "bcryptjs";
-import { db, membersTable } from "@workspace/db";
-import { eq, or } from "drizzle-orm";
+import { db, membersTable, messagesTable, memberIncidentsTable } from "@workspace/db";
+import { eq, or, desc, sql } from "drizzle-orm";
 import nodemailer from "nodemailer";
 import {
   otpStore, otpCooldown, cleanExpired, generateOtp, normalisePhone, issueOtp,
@@ -439,6 +439,84 @@ router.post("/member-portal/cancel-subscription", requireMemberAuth, async (req,
     .where(eq(membersTable.id, member.id));
 
   res.json({ ok: true, message: "Subscription cancelled. You will retain access until the end of the billing period." });
+});
+
+// ── GET /api/member-portal/comms ─────────────────────────────────────────────
+router.get("/member-portal/comms", requireMemberAuth, async (req, res): Promise<void> => {
+  const [member] = await db
+    .select({ whatsappNumber: membersTable.whatsappNumber })
+    .from(membersTable)
+    .where(eq(membersTable.id, req.session.memberId!));
+  if (!member) { res.status(404).json({ error: "Not found." }); return; }
+  const msgs = await db
+    .select()
+    .from(messagesTable)
+    .where(or(
+      eq(messagesTable.fromNumber, member.whatsappNumber),
+      eq(messagesTable.toNumber, member.whatsappNumber),
+    ))
+    .orderBy(desc(messagesTable.receivedAt))
+    .limit(100);
+  res.json({ messages: msgs });
+});
+
+// ── GET /api/member-portal/incidents ─────────────────────────────────────────
+router.get("/member-portal/incidents", requireMemberAuth, async (req, res): Promise<void> => {
+  const incidents = await db
+    .select()
+    .from(memberIncidentsTable)
+    .where(eq(memberIncidentsTable.memberId, req.session.memberId!))
+    .orderBy(desc(memberIncidentsTable.createdAt));
+  res.json({ incidents });
+});
+
+// ── POST /api/member-portal/incidents ────────────────────────────────────────
+router.post("/member-portal/incidents", requireMemberAuth, async (req, res): Promise<void> => {
+  const { category, description, location } = req.body as {
+    category?: string; description?: string; location?: string;
+  };
+  if (!category || !description) {
+    res.status(400).json({ error: "Category and description are required." }); return;
+  }
+  if (description.trim().length < 20) {
+    res.status(400).json({ error: "Please provide at least 20 characters of detail." }); return;
+  }
+  const [incident] = await db
+    .insert(memberIncidentsTable)
+    .values({
+      memberId: req.session.memberId!,
+      category,
+      description: description.trim(),
+      location: location?.trim() ?? null,
+      status: "received",
+    })
+    .returning();
+  // Award 5 loyalty points for contributing a safety report
+  await db
+    .update(membersTable)
+    .set({ loyaltyPoints: sql`${membersTable.loyaltyPoints} + 5`, updatedAt: new Date() })
+    .where(eq(membersTable.id, req.session.memberId!));
+  res.json({ ok: true, incident });
+});
+
+// ── GET /api/member-portal/family ────────────────────────────────────────────
+router.get("/member-portal/family", requireMemberAuth, async (req, res): Promise<void> => {
+  const [self] = await db
+    .select({ familyGroupId: membersTable.familyGroupId })
+    .from(membersTable)
+    .where(eq(membersTable.id, req.session.memberId!));
+  if (!self?.familyGroupId) { res.json({ members: [] }); return; }
+  const members = await db
+    .select({
+      id: membersTable.id,
+      displayName: membersTable.displayName,
+      whatsappNumber: membersTable.whatsappNumber,
+      memberStatus: membersTable.memberStatus,
+      membershipTier: membersTable.membershipTier,
+    })
+    .from(membersTable)
+    .where(eq(membersTable.familyGroupId, self.familyGroupId));
+  res.json({ groupId: self.familyGroupId, members });
 });
 
 // ── POST /api/member-portal/logout ────────────────────────────────────────────

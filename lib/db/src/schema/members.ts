@@ -46,6 +46,7 @@ export const membersTable = pgTable("members", {
   discSignals: text("disc_signals"),    // JSON: accumulated signal scores
   discConfidence: integer("disc_confidence"), // 0–100 — how confident we are
   // ─────────────────────────────────────────────────────────────────────────
+  loyaltyPoints: integer("loyalty_points").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
