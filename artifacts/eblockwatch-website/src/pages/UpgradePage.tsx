@@ -81,7 +81,7 @@ export default function UpgradePage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    fetch(`${BASE}/api/member-portal/me`, { credentials: "include" })
+    fetch(`/api/member-portal/me`, { credentials: "include" })
       .then(r => r.ok ? r.json() as Promise<{ member: Member }> : Promise.reject())
       .then(data => setMember(data.member))
       .catch(() => {})
@@ -96,7 +96,7 @@ export default function UpgradePage() {
 
     const plan = PLANS.find(p => p.id === planId)!;
     try {
-      const res = await fetch(`${BASE}/api/paystack/payment-link`, {
+      const res = await fetch(`/api/paystack/payment-link`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

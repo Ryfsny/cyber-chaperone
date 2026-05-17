@@ -171,7 +171,7 @@ export default function MemberDashboard() {
   async function fetchMe() {
     setLoading(true);
     try {
-      const res = await fetch(`${BASE}/api/member-portal/me`, { credentials: "include" });
+      const res = await fetch(`/api/member-portal/me`, { credentials: "include" });
       if (res.status === 401) { navigate("/login"); return; }
       const data = await res.json() as { member: Member };
       setMember(data.member);
@@ -199,7 +199,7 @@ export default function MemberDashboard() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault(); setSaving(true); setSaveMsg("");
     try {
-      const res = await fetch(`${BASE}/api/member-portal/me`, {
+      const res = await fetch(`/api/member-portal/me`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         credentials: "include", body: JSON.stringify(form),
       });
@@ -216,7 +216,7 @@ export default function MemberDashboard() {
     if (pwForm.next !== pwForm.confirm) { setPwMsg("Passwords do not match."); setPwSaving(false); return; }
     if (pwForm.next.length < 8) { setPwMsg("Password must be at least 8 characters."); setPwSaving(false); return; }
     try {
-      const res = await fetch(`${BASE}/api/member-portal/set-password`, {
+      const res = await fetch(`/api/member-portal/set-password`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ password: pwForm.next, currentPassword: pwForm.current || undefined }),
@@ -232,7 +232,7 @@ export default function MemberDashboard() {
   async function handleCancelSubscription() {
     setUnsubLoading(true); setUnsubMsg("");
     try {
-      const res = await fetch(`${BASE}/api/member-portal/cancel-subscription`, {
+      const res = await fetch(`/api/member-portal/cancel-subscription`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
       });
       const data = await res.json() as { ok?: boolean; error?: string; message?: string };
@@ -245,7 +245,7 @@ export default function MemberDashboard() {
   }
 
   async function handleLogout() {
-    await fetch(`${BASE}/api/member-portal/logout`, { method: "POST", credentials: "include" });
+    await fetch(`/api/member-portal/logout`, { method: "POST", credentials: "include" });
     navigate("/login");
   }
 

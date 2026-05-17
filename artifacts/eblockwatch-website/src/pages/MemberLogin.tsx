@@ -64,7 +64,7 @@ export default function MemberLogin() {
     setError(""); setInfo(""); setLoading(true);
     try {
       const body = otpMethod === "phone" ? { whatsappNumber: phone } : { email: otpEmail };
-      const res = await fetch(`${BASE}/api/member-portal/request-otp`, {
+      const res = await fetch(`/api/member-portal/request-otp`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify(body),
       });
@@ -82,7 +82,7 @@ export default function MemberLogin() {
       const body = otpMethod === "phone"
         ? { whatsappNumber: phone, code: otp }
         : { email: otpEmail, code: otp };
-      const res = await fetch(`${BASE}/api/member-portal/verify-otp`, {
+      const res = await fetch(`/api/member-portal/verify-otp`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify(body),
       });
@@ -102,7 +102,7 @@ export default function MemberLogin() {
       const body = isEmail(pwIdentifier)
         ? { email: pwIdentifier.trim(), password }
         : { whatsappNumber: pwIdentifier.trim(), password };
-      const res = await fetch(`${BASE}/api/member-portal/login`, {
+      const res = await fetch(`/api/member-portal/login`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify(body),
       });
@@ -117,7 +117,7 @@ export default function MemberLogin() {
   async function sendForgotOtp(e: React.FormEvent) {
     e.preventDefault(); setError(""); setInfo(""); setLoading(true);
     try {
-      const res = await fetch(`${BASE}/api/member-portal/forgot-password`, {
+      const res = await fetch(`/api/member-portal/forgot-password`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ whatsappNumber: forgotPhone }),
       });
@@ -132,7 +132,7 @@ export default function MemberLogin() {
   async function verifyForgotOtp(e: React.FormEvent) {
     e.preventDefault(); setError(""); setLoading(true);
     try {
-      const res = await fetch(`${BASE}/api/member-portal/verify-reset-otp`, {
+      const res = await fetch(`/api/member-portal/verify-reset-otp`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ whatsappNumber: forgotPhone, code: forgotCode }),
       });
@@ -148,7 +148,7 @@ export default function MemberLogin() {
     if (newPassword !== confirmPassword) { setError("Passwords do not match."); setLoading(false); return; }
     if (newPassword.length < 8) { setError("Password must be at least 8 characters."); setLoading(false); return; }
     try {
-      const res = await fetch(`${BASE}/api/member-portal/set-password`, {
+      const res = await fetch(`/api/member-portal/set-password`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ password: newPassword }),
       });

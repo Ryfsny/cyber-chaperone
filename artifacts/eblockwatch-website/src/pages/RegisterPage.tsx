@@ -123,7 +123,7 @@ export default function RegisterPage() {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (apiKey) headers["X-API-Key"] = apiKey;
 
-      const res = await fetch(`${BASE}/api/register`, {
+      const res = await fetch(`/api/register`, {
         method: "POST",
         headers,
         body: JSON.stringify(payload),

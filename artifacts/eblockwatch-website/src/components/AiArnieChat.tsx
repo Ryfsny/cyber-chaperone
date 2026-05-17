@@ -46,7 +46,7 @@ export default function AiArnieChat() {
     setMessages([...updated, assistantMsg]);
 
     try {
-      const res = await fetch(`${BASE}/api/arnie/chat`, {
+      const res = await fetch(`/api/arnie/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: updated }),
