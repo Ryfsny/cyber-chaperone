@@ -269,7 +269,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   AI Assistant
                 </div>
                 <div className={cn("text-[10px] leading-tight mt-0.5", showAi ? "text-primary-foreground/70" : "text-muted-foreground/70")}>
-                  AI Command — trip analysis & alerts
+                  Arnie — trip analysis & alerts
                 </div>
               </div>
             </button>
@@ -297,8 +297,48 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
+      {/* ── Mobile bottom nav ──────────────────────────────────────────── */}
+      <div
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border flex items-stretch"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        {[
+          { href: "/",              icon: LayoutDashboard, label: "Live"      },
+          { href: "/conversations", icon: MessagesSquare,  label: "Chat"      },
+          { href: "/members",       icon: BookUser,        label: "Members"   },
+          ...(isNational ? [{ href: "/broadcast", icon: Megaphone, label: "Broadcast" }] : []),
+        ].map((item) => {
+          const Icon = item.icon;
+          const active = location === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 transition-colors min-w-0",
+                active ? "text-primary" : "text-muted-foreground",
+              )}
+            >
+              <Icon className="w-5 h-5 shrink-0" />
+              <span className="text-[9px] uppercase tracking-wide font-bold leading-none">{item.label}</span>
+            </Link>
+          );
+        })}
+        {/* More — opens sidebar */}
+        <button
+          onClick={() => { setShowNav((v) => !v); setShowAi(false); }}
+          className={cn(
+            "flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 transition-colors min-w-0",
+            showNav ? "text-primary" : "text-muted-foreground",
+          )}
+        >
+          <Menu className="w-5 h-5 shrink-0" />
+          <span className="text-[9px] uppercase tracking-wide font-bold leading-none">More</span>
+        </button>
+      </div>
+
       {/* ── Main content ───────────────────────────────────────────────── */}
-      <main className="flex-1 flex min-w-0 overflow-hidden pt-12 md:pt-0">
+      <main className="flex-1 flex min-w-0 overflow-hidden pt-12 pb-16 md:pt-0 md:pb-0">
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {children}
         </div>

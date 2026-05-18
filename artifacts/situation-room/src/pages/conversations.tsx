@@ -170,7 +170,8 @@ export default function Conversations() {
   return (
     <div className="flex h-full overflow-hidden">
       {/* ── Left: conversation list ─────────────────────────── */}
-      <div className="w-72 shrink-0 border-r border-border flex flex-col bg-card">
+      {/* On mobile: full-width list when no chat open, hidden when chat open */}
+      <div className={`shrink-0 border-r border-border flex flex-col bg-card ${activeNumber ? "hidden md:flex md:w-72" : "flex w-full md:w-72"}`}>
         <div className="h-14 flex items-center gap-2 px-4 border-b border-border shrink-0">
           <Link
             href="/"
@@ -260,14 +261,22 @@ export default function Conversations() {
 
       {/* ── Right: thread view ─────────────────────────────── */}
       {!activeNumber ? (
-        <div className="flex-1 flex items-center justify-center text-muted-foreground flex-col gap-3">
+        <div className="hidden md:flex flex-1 items-center justify-center text-muted-foreground flex-col gap-3">
           <MessageSquare className="w-10 h-10 opacity-20" />
           <p className="text-sm uppercase tracking-widest opacity-40">Select a conversation</p>
         </div>
       ) : (
         <div className="flex-1 flex flex-col min-w-0">
           {/* Thread header */}
-          <div className="px-5 py-3 flex items-center gap-3 border-b border-border shrink-0 bg-card">
+          <div className="px-4 py-3 flex items-center gap-2 border-b border-border shrink-0 bg-card">
+            {/* Back to list — mobile only */}
+            <button
+              onClick={() => setActiveNumber(null)}
+              className="md:hidden flex items-center justify-center w-9 h-9 -ml-1 text-muted-foreground hover:text-foreground shrink-0"
+              aria-label="Back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
             <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
               activeNumber.startsWith("fb:") ? "bg-[#1877f2]/20 text-[#1877f2]" : "bg-primary/20 text-primary"
             }`}>
@@ -361,13 +370,13 @@ export default function Conversations() {
             <div ref={bottomRef} />
           </div>
 
-          {/* Quick replies */}
-          <div className="px-4 pt-3 pb-0 flex gap-2 flex-wrap bg-[#111b21] border-t border-border/30">
+          {/* Quick replies — horizontal scroll on mobile */}
+          <div className="px-4 pt-2.5 pb-0 flex gap-2 overflow-x-auto bg-[#111b21] border-t border-border/30 scrollbar-none" style={{ WebkitOverflowScrolling: "touch" }}>
             {QUICK_REPLIES.map((qr) => (
               <button
                 key={qr}
                 onClick={() => setReply(qr)}
-                className="text-[11px] px-3 py-1.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors bg-secondary/20 whitespace-nowrap"
+                className="text-[11px] px-3 py-1.5 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors bg-secondary/20 whitespace-nowrap shrink-0"
               >
                 {qr}
               </button>
@@ -375,20 +384,23 @@ export default function Conversations() {
             <button
               onClick={() => void draftWithAI()}
               disabled={draftLoading || !thread?.messages.length}
-              className="text-[11px] px-3 py-1.5 rounded-full border border-primary/40 text-primary hover:bg-primary/10 transition-colors bg-primary/5 whitespace-nowrap flex items-center gap-1.5 disabled:opacity-40 ml-auto"
+              className="text-[11px] px-3 py-1.5 rounded-full border border-primary/40 text-primary hover:bg-primary/10 transition-colors bg-primary/5 whitespace-nowrap shrink-0 flex items-center gap-1.5 disabled:opacity-40 ml-2 mr-1"
             >
               {draftLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
               AI Draft
             </button>
           </div>
 
-          {/* Reply box */}
-          <div className="px-4 pb-4 pt-3 bg-[#111b21] flex gap-3 items-end">
+          {/* Reply box — safe-area inset for iPhone home bar */}
+          <div
+            className="px-4 pt-3 bg-[#111b21] flex gap-3 items-end"
+            style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
+          >
             <Textarea
               value={reply}
               onChange={(e) => setReply(e.target.value)}
               onKeyDown={handleKey}
-              placeholder="Type a message… (Ctrl+Enter to send)"
+              placeholder="Message…"
               className="flex-1 resize-none text-sm font-sans min-h-[44px] max-h-36 bg-[#2a3942] border-[#3b4a54] text-[#e9edef] placeholder:text-[#8696a0] focus-visible:ring-0 focus-visible:border-[#00a884]"
               rows={2}
             />
@@ -396,7 +408,7 @@ export default function Conversations() {
               size="icon"
               onClick={send}
               disabled={!reply.trim() || sendMutation.isPending}
-              className="shrink-0 w-10 h-10 bg-[#00a884] hover:bg-[#00a884]/90 rounded-full"
+              className="shrink-0 w-11 h-11 bg-[#00a884] hover:bg-[#00a884]/90 rounded-full mb-0.5"
             >
               {sendMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </Button>
