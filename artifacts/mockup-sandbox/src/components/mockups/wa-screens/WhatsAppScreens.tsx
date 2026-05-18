@@ -1,16 +1,10 @@
 
-// Clean light WhatsApp UI — white background, green accents, eblockwatch logo
-
 const GREEN = "#25D366";
 const GREEN_DARK = "#128C7E";
 const BUBBLE_IN = "#FFFFFF";
 const BUBBLE_OUT = "#D9FDD3";
-const CHAT_BG = "#F0F2F5";
-const HEADER_BG = "#FFFFFF";
 const TIME_COLOR = "#8696A0";
-const DIVIDER_BG = "#E1E8ED";
 
-// Render *bold* markdown
 function renderText(s: string) {
   return s.split(/(\*[^*\n]+\*)/g).map((part, i) =>
     part.startsWith("*") && part.endsWith("*")
@@ -19,104 +13,105 @@ function renderText(s: string) {
   );
 }
 
-type Dir = "in" | "out";
-
-function Bubble({ text, dir, time = "09:41" }: { text: string; dir: Dir; time?: string }) {
+function Bubble({ text, dir, time = "09:41" }: { text: string; dir: "in" | "out"; time?: string }) {
   const isIn = dir === "in";
   return (
-    <div style={{ display: "flex", justifyContent: isIn ? "flex-start" : "flex-end", marginBottom: 3, padding: "0 8px" }}>
+    <div style={{ display: "flex", justifyContent: isIn ? "flex-start" : "flex-end", marginBottom: 2, padding: "0 8px" }}>
       <div style={{
         position: "relative",
         background: isIn ? BUBBLE_IN : BUBBLE_OUT,
-        borderRadius: isIn ? "0 12px 12px 12px" : "12px 0 12px 12px",
-        padding: "8px 52px 18px 10px",
-        maxWidth: "82%",
-        boxShadow: "0 1px 2px rgba(0,0,0,0.10)",
-        fontSize: 14,
-        lineHeight: 1.5,
+        borderRadius: isIn ? "0 10px 10px 10px" : "10px 0 10px 10px",
+        padding: "7px 46px 16px 9px",
+        maxWidth: "86%",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.09)",
+        fontSize: 12.5,
+        lineHeight: 1.45,
         color: "#111",
         whiteSpace: "pre-wrap",
         wordBreak: "break-word",
       }}>
-        {/* Bubble tail */}
         <div style={{
           position: "absolute", top: 0,
-          ...(isIn ? { left: -7 } : { right: -7 }),
+          ...(isIn ? { left: -6 } : { right: -6 }),
           width: 0, height: 0, borderStyle: "solid",
-          borderWidth: isIn ? "0 8px 10px 0" : "0 0 10px 8px",
+          borderWidth: isIn ? "0 7px 9px 0" : "0 0 9px 7px",
           borderColor: isIn
             ? `transparent ${BUBBLE_IN} transparent transparent`
             : `transparent transparent transparent ${BUBBLE_OUT}`,
         }} />
         {renderText(text)}
-        <span style={{
-          position: "absolute", bottom: 5, right: 8,
-          fontSize: 11, color: TIME_COLOR, whiteSpace: "nowrap",
-          display: "flex", alignItems: "center", gap: 2,
-        }}>
-          {time}
-          {!isIn && <span style={{ color: GREEN_DARK, fontSize: 13 }}>✓✓</span>}
+        <span style={{ position: "absolute", bottom: 4, right: 6, fontSize: 10, color: TIME_COLOR, whiteSpace: "nowrap" }}>
+          {time}{!isIn && <span style={{ color: GREEN_DARK }}> ✓✓</span>}
         </span>
       </div>
     </div>
   );
 }
 
-function FlowLabel({ label, sub }: { label: string; sub?: string }) {
+function StepLabel({ trigger, intent }: { trigger: string; intent?: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "center", margin: "14px 0 8px" }}>
-      <div style={{
-        background: DIVIDER_BG, borderRadius: 8,
-        padding: "3px 12px", fontSize: 11.5, color: "#667781",
-        textAlign: "center", lineHeight: 1.5,
-      }}>
-        <strong style={{ fontWeight: 600 }}>{label}</strong>
-        {sub && <span style={{ color: "#999" }}> · {sub}</span>}
+    <div style={{ margin: "12px 8px 4px", padding: "6px 10px", background: "#F0F7FF", borderLeft: "3px solid #90CAF9", borderRadius: "0 6px 6px 0" }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: "#1565C0", textTransform: "uppercase", letterSpacing: 0.4 }}>{trigger}</div>
+      {intent && <div style={{ fontSize: 10.5, color: "#555", marginTop: 2 }}>{intent}</div>}
+    </div>
+  );
+}
+
+function Phone({ title, accent = GREEN_DARK, children }: { title: string; accent?: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", width: 310, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 16px rgba(0,0,0,0.10)", border: "1px solid #e8e8e8", flexShrink: 0 }}>
+      {/* Header */}
+      <div style={{ background: "#fff", borderBottom: "1px solid #E9EDEF", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+        <img src="/eblockwatch-logo.png" alt="eblockwatch" style={{ width: 34, height: 34, objectFit: "contain", borderRadius: 17 }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: "#111" }}>Cyber Chaperone</div>
+          <div style={{ fontSize: 11, color: accent }}>eblockwatch · Always watching 🛡️</div>
+        </div>
+      </div>
+      {/* Title strip */}
+      <div style={{ background: accent, padding: "5px 14px" }}>
+        <div style={{ color: "#fff", fontSize: 11, fontWeight: 600 }}>{title}</div>
+      </div>
+      {/* Chat */}
+      <div style={{ background: "#F0F2F5", padding: "4px 0 12px", overflowY: "auto", flex: 1 }}>
+        {children}
+      </div>
+      {/* Input bar */}
+      <div style={{ background: "#fff", borderTop: "1px solid #E9EDEF", padding: "6px 10px", display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ flex: 1, background: "#F0F2F5", borderRadius: 20, padding: "7px 14px", fontSize: 12, color: "#aaa" }}>Message</div>
+        <div style={{ width: 36, height: 36, borderRadius: "50%", background: GREEN, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🎤</div>
       </div>
     </div>
   );
 }
 
-type Flow = { label: string; sub?: string; msgs: { text: string; dir: Dir; time?: string }[] };
+export default function WhatsAppScreens() {
+  return (
+    <div style={{ fontFamily: "'Segoe UI', Helvetica, Arial, sans-serif", background: "#FAFAFA", minHeight: "100vh", padding: "28px 28px 60px" }}>
 
-const flows: Flow[] = [
-  {
-    label: "First Contact",
-    sub: "Member sends Hi",
-    msgs: [
-      { dir: "out", text: "Hi", time: "09:00" },
-      { dir: "in", time: "09:00", text: `🛡️ *eblockwatch — Cyber Chaperone*
+      {/* Page title */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+          <img src="/eblockwatch-logo.png" alt="eblockwatch" style={{ width: 44, height: 44, objectFit: "contain" }} />
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#111" }}>Cyber Chaperone — Complete Trip Journey</div>
+            <div style={{ fontSize: 13, color: "#666" }}>Full conversation walkthrough · annotated with triggers and intent</div>
+          </div>
+        </div>
+      </div>
 
-Hi Kieren. I'm Arnie — André Snyman's digital safety companion.
+      {/* Column headers */}
+      <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
+
+        {/* ─── PATH A: HAPPY PATH ─────────────────────────────────────────── */}
+        <Phone title="Path A — Everything Goes Smoothly" accent={GREEN_DARK}>
+
+          <StepLabel trigger="Member opens WhatsApp, says Hi" intent="First touch — show them the door, nothing overwhelming." />
+          <Bubble dir="out" text="Hi" time="14:00" />
+          <Bubble dir="in" time="14:00" text={`🛡️ *eblockwatch — Cyber Chaperone*
+
+Hi Kieren. I'm Arnie — André Snyman's digital assistant.
 We have one job: get you there safely, every time.
-
-⭕ Status: Not yet a member
-
-0️⃣  Join eblockwatch — it's free
-1️⃣  Cyber Chaperone 🛡️
-2️⃣  What is eblockwatch?
-3️⃣  Membership options
-4️⃣  Activate my membership
-5️⃣  👤 My Account
-6️⃣  eblockshop
-7️⃣  Speak to a person
-8️⃣  📣 Invite a Friend
-9️⃣  📖 Getting Started Guide
-
-🚨 *EMERGENCY? Reply 10*
-
-📺 New here? See what we do:
-https://fb.com/share/v/1ACByM44QZ` },
-    ],
-  },
-  {
-    label: "Returning Verified Member",
-    sub: "Replies 0 or Hi",
-    msgs: [
-      { dir: "out", text: "0", time: "09:05" },
-      { dir: "in", time: "09:05", text: `🛡️ *eblockwatch — Cyber Chaperone*
-
-Hi Kieren. Welcome back.
 
 ✅ Verified member — Individual plan
 
@@ -125,384 +120,273 @@ Hi Kieren. Welcome back.
 3️⃣  Membership options
 4️⃣  Activate my membership
 5️⃣  👤 My Account
-6️⃣  eblockshop
 7️⃣  Speak to a person
 8️⃣  📣 Invite a Friend
 9️⃣  📖 Getting Started Guide
 
-🚨 *EMERGENCY? Reply 10*
-Reply 0 any time to return here.
+🚨 *EMERGENCY? Reply 10*`} />
 
-👥 47 members watching your area.` },
-    ],
-  },
-  {
-    label: "Cyber Chaperone Menu",
-    sub: "Replies 1",
-    msgs: [
-      { dir: "out", text: "1", time: "09:10" },
-      { dir: "in", time: "09:10", text: `🛡️ *Cyber Chaperone — Kieren*
+          <StepLabel trigger="Member wants to travel — replies 1" intent="Open Cyber Chaperone sub-menu. Keep it simple: home or road?" />
+          <Bubble dir="out" text="1" time="14:01" />
+          <Bubble dir="in" time="14:01" text={`🛡️ *Cyber Chaperone — Kieren*
 
-Your WhatsApp connection to the eblockwatch Situation Room.
-In your safe zone, we're here. When you roam — kick-start your trip.
-
-─── 🏠 In your safe zone ───
+─── 🏠 Safe zone ───
 8️⃣  I need help 🆘
-9️⃣  Speak to André / Situation Room
+9️⃣  Speak to André
 
 ─── 🚗 On the road ───
 1️⃣  Start a monitored drive
-2️⃣  I'm going out — clock me in when I'm home
-3️⃣  Update my current trip
-4️⃣  Change my destination
-5️⃣  I have arrived safely ✅
+2️⃣  Clock me in — I'll be home later
+3️⃣  Update my trip
+4️⃣  Change destination
+5️⃣  I have arrived ✅
 
-6️⃣  How Cyber Chaperone works
+6️⃣  How it works
 
-Reply 0 for Main Menu.` },
-    ],
-  },
-  {
-    label: "How Cyber Chaperone Works",
-    sub: "Replies 6",
-    msgs: [
-      { dir: "out", text: "6", time: "09:11" },
-      { dir: "in", time: "09:11", text: `Kieren, *Cyber Chaperone* keeps you connected to eblockwatch.
+Reply 0 for Main Menu.`} />
 
-eblockwatch has been keeping South Africans safe for over 20 years.
-We are always watching. You are never alone.
+          <StepLabel trigger="Member starts a drive — replies 1" intent="Ask where they're coming from. If we have their home saved, make it a one-tap confirm." />
+          <Bubble dir="out" text="1" time="14:02" />
+          <Bubble dir="in" time="14:02" text={`Kieren, are you starting from Home 🏠?
 
-─── 🏠 At home ───
-We are here whenever you need us.
-Someone is always watching the Situation Room.
+1. Yes — start from Home
+2. No — I'm somewhere else
 
-─── 🚗 When you drive ───
-Tell us where you are going and when you will arrive.
-If you don't arrive on time — we message you.
-If you don't reply — we call your emergency contact.
+Or drop a location pin 📍
 
-─── 🌙 Going out for the evening ───
-Tell us what time you will be home.
-When you are back, reply *SAFE*.
-If we do not hear from you — we act.
+Reply 0 for Main Menu.`} />
 
-─── 🆘 Emergency ───
-Reply *HELP* or *10* at any time.
-A real person will respond immediately.
+          <Bubble dir="out" text="1" time="14:02" />
+          <Bubble dir="in" time="14:02" text={`Got it — starting from Home 🏠.
 
-Reply 0 to go back.` },
-    ],
-  },
-  {
-    label: "Getting Started Guide",
-    sub: "Replies 9",
-    msgs: [
-      { dir: "out", text: "9", time: "09:12" },
-      { dir: "in", time: "09:12", text: `📖 *Getting Started with eblockwatch*
+Where are you heading today?`} />
 
-Watch the 2-minute intro first 👇
-https://fb.com/share/v/1ACByM44QZ
+          <Bubble dir="out" text="Going to see my mom in Pretoria" time="14:03" />
+          <Bubble dir="in" time="14:03" text={`Lovely — Pretoria it is. 🏡
 
-━━━━━━━━━━━━━━━━━━━━
-1️⃣  *Join eblockwatch* — it's free. Reply 0.
+What time do you expect to arrive? (e.g. 15:30)`} />
 
-2️⃣  *Add your emergency contact*
-   Reply 5 → My Account → Update ICE contact.
-   This is the person we call if we cannot reach you.
+          <StepLabel trigger="Member gives ETA — trip launches" intent="Confirm everything. Warm, personal. Let them feel covered without feeling watched." />
+          <Bubble dir="out" text="About 15:30" time="14:03" />
+          <Bubble dir="in" time="14:03" text={`✅ *You're covered, Kieren!*
 
-3️⃣  *Activate your membership*
-   R150/mo Individual or R250/mo Family.
+Home → Pretoria
+ETA: 15:30 · about 1h 25min
 
-4️⃣  *Use Cyber Chaperone when you go out*
-   Reply 1. Tell us where you're going.
+I'll check in with you at Midrand.
+If you're not at your mom's by 15:30 — I'll message you.
 
-5️⃣  *Invite someone you care about*
-   Reply 8.
-━━━━━━━━━━━━━━━━━━━━
-
-*How we look after you* 🛡️
-
-We never jump straight to the last step.
-
-🟢😊 *Level 1 — We message you*
-You reply. All good. GREEN.
-
-🟠😟 *Level 2 — We contact your emergency person*
-You stopped replying. AMBER.
-
-🔴💥 *Level 3 — We widen the circle*
-Local → national → international. RED.
-
-*Don't push us to RED.*
-Just reply to our messages to stay GREEN.
-But if it ever comes to RED — we will find you.
-
-⚠️ *Your profile is what makes this work.*
-Add your address, area, and emergency contact.
-━━━━━━━━━━━━━━━━━━━━
-André is watching. You are never alone. 🛡️` },
-    ],
-  },
-  {
-    label: "Starting a Monitored Drive",
-    sub: "CC Menu → 1",
-    msgs: [
-      { dir: "out", text: "1", time: "14:00" },
-      { dir: "in", time: "14:00", text: `Kieren, are you starting from Home 🏠?
-
-1. Yes — start from Home 🏠
-2. No — I am somewhere else
-
-Or share your location pin 📍
-
-Reply 0 for Main Menu.` },
-      { dir: "out", text: "1", time: "14:01" },
-      { dir: "in", time: "14:01", text: `Got it — starting from Home 🏠.
-
-Where are you heading today?
-
-Reply 0 for Main Menu.` },
-      { dir: "out", text: "Pretoria", time: "14:01" },
-      { dir: "in", time: "14:02", text: `Got it — heading to *Pretoria*.
-
-What time do you expect to arrive? (e.g. 15:30)
-
-Reply 0 for Main Menu.` },
-      { dir: "out", text: "15:30", time: "14:02" },
-      { dir: "in", time: "14:02", text: `✅ *Trip started — you are covered!*
-
-Kieren → Pretoria
-ETA: 15:30 · Drive time: ~1h 20min
-
-We will check in along the route.
-If you don't arrive by 15:30 — we will message you.
-
-Safe travels. 🛡️
+Enjoy the drive. 🛡️
 
 Reply *5* when you arrive.
-Reply *10* at any time for emergency.` },
-    ],
-  },
-  {
-    label: "Checkpoint Ping — Mid Route",
-    sub: "Auto-sent by scheduler",
-    msgs: [
-      { dir: "in", time: "14:42", text: `Kieren 👋 Cyber Chaperone — *Midrand* checkpoint.
+Reply *10* if you ever need us.`} />
 
-You should be at or near *Midrand* on your way to *Pretoria*.
+          <StepLabel trigger="Scheduler fires checkpoint ping at Midrand" intent="Friendly mid-route check. One reply and they're good. Don't make it feel like a test." />
+          <Bubble dir="in" time="14:52" text={`Kieren 👋 Just checking in — *Midrand* checkpoint.
 
-1. ✅ Yes — passing through now
-2. 🕐 Not yet — running behind
-3. 📍 Somewhere else — tell us where
-4. 🆘 I need help
+Are you through?
 
-Reply 0 for Main Menu.` },
-      { dir: "out", text: "1", time: "14:43" },
-      { dir: "in", time: "14:43", text: `✅ *Midrand* — confirmed, you're on track!
+1. ✅ Yes, passing through now
+2. 🕐 Still on the way
+3. 🆘 I need help`} />
+          <Bubble dir="out" text="1" time="14:53" />
+          <Bubble dir="in" time="14:53" text={`✅ On track to Pretoria!
 
-Updated ETA to *Pretoria*: 15:28 (45 min to go).
+ETA still 15:28. We're with you all the way. 🛡️`} />
 
-We're still with you. Safe travels! 🛡️` },
-    ],
-  },
-  {
-    label: "ETA Reached — Arrival Check",
-    sub: "🟢 Phase 1 · 0 min",
-    msgs: [
-      { dir: "in", time: "15:30", text: `Kieren, you should be near *Pretoria* by now.
+          <StepLabel trigger="ETA reached — scheduler sends arrival check" intent="Soft ping. They probably arrived fine — just need the confirmation tap." />
+          <Bubble dir="in" time="15:30" text={`Kieren, you should be near Pretoria by now. 🏡
 
-Are you there and okay?
+Have you arrived safely?
 
-1. I have arrived safely
-2. I am delayed
-3. I will send my location pin
-4. I need help
+1. Yes — I'm there ✅
+2. Running a bit late
+3. I need help`} />
+          <Bubble dir="out" text="1" time="15:31" />
 
-Reply 0 for Main Menu.` },
-    ],
-  },
-  {
-    label: "AMBER — No Reply After 10 Min",
-    sub: "🟠 Phase 2",
-    msgs: [
-      { dir: "in", time: "15:40", text: `Kieren, we have not had your arrival confirmation yet.
+          <StepLabel trigger="Member confirms arrival — trip closes. Personalise it." intent="Warm close. Acknowledge the trip. This is their 3rd — mention it. Make them feel seen." />
+          <Bubble dir="in" time="15:31" text={`🎉 *Made it, Kieren!*
 
-You are overdue at *Pretoria*.
+Pretoria ✅ · 15:31
 
-Please reply:
+That's your *3rd trip* with Cyber Chaperone.
+Every one covered. Every one safe.
 
-1. I am okay — I have arrived
-2. I am delayed
-3. Send location pin
-4. I need help` },
-    ],
-  },
-  {
-    label: "RED — Escalated After 25 Min",
-    sub: "🔴 Phase 3",
-    msgs: [
-      { dir: "in", time: "15:55", text: `Kieren, we have not had a reply after your expected arrival time.
+Give your mom our regards. 😊
+See you on the next journey. 🛡️`} />
 
-You are *28 minutes* overdue at *Pretoria*.
+        </Phone>
 
-Cyber Chaperone is escalating this for human attention.
+        {/* ─── PATH B: ESCALATION PATH ───────────────────────────────────────── */}
+        <Phone title="Path B — Member Doesn't Respond" accent="#B71C1C">
 
-Reply:
-1. I am okay
-4. I need help` },
-    ],
-  },
-  {
-    label: "Running Late",
-    sub: "Replies 2 to any check",
-    msgs: [
-      { dir: "out", text: "2", time: "15:32" },
-      { dir: "in", time: "15:32", text: `Understood — no rush.
+          <StepLabel trigger="Same trip start — same conversation" intent="Identical opening. The difference only happens after ETA is missed." />
+          <Bubble dir="out" text="Hi" time="14:00" />
+          <Bubble dir="in" time="14:00" text={`🛡️ *eblockwatch — Cyber Chaperone*
 
-What is your new ETA to *Pretoria*? (e.g. 16:00)
+Hi Kieren. Welcome back.
 
-Reply 0 for Main Menu.` },
-      { dir: "out", text: "16:15", time: "15:33" },
-      { dir: "in", time: "15:33", text: `✅ ETA updated to 16:15. We will continue monitoring your trip.
+✅ Verified member — Individual plan
 
-Reply 0 for Main Menu.` },
-    ],
-  },
-  {
-    label: "Fuel / Rest Stop",
-    msgs: [
-      { dir: "out", text: "Fuel stop", time: "15:10" },
-      { dir: "in", time: "15:10", text: `⛽ Fuel/rest stop noted. Take your time — we will pick up your trip when you are back on the road.
+1️⃣  Cyber Chaperone 🛡️
+9️⃣  📖 Getting Started Guide
+🚨 *EMERGENCY? Reply 10*`} />
+          <Bubble dir="out" text="1" time="14:01" />
+          <Bubble dir="out" text="1" time="14:02" />
+          <Bubble dir="out" text="1" time="14:02" />
+          <Bubble dir="out" text="Going to Pretoria" time="14:03" />
+          <Bubble dir="out" text="15:30" time="14:03" />
+          <Bubble dir="in" time="14:03" text={`✅ *You're covered, Kieren!*
 
-Reply 0 for Main Menu.` },
-    ],
-  },
-  {
-    label: "Roadblock",
-    msgs: [
-      { dir: "out", text: "Roadblock", time: "15:15" },
-      { dir: "in", time: "15:15", text: `🚧 Roadblock noted. We are watching over you.
+Home → Pretoria · ETA 15:30
 
-When you are through, just keep going — we will follow your journey from here.
+I'll check in at Midrand.
+Reply *5* when you arrive. Reply *10* for help.
 
-Reply 0 for Main Menu.` },
-    ],
-  },
-  {
-    label: "Police Stop",
-    msgs: [
-      { dir: "out", text: "Pulled over", time: "15:20" },
-      { dir: "in", time: "15:20", text: `🚔 Understood — pulled over. Stay calm.
+Enjoy the drive. 🛡️`} />
 
-We have quietly let your emergency contact know you are safe.
+          <StepLabel trigger="Checkpoint passes without reply — ETA reached" intent="They missed the checkpoint ping too. Now ETA has passed. Phase 1 — gentle. Keep the tone calm." />
+          <Bubble dir="in" time="15:30" text={`Kieren, you should be near Pretoria by now. 🏡
 
-When you are back on the road, just continue — we are right here.
+Have you arrived safely?
 
-Reply 0 for Main Menu.` },
-    ],
-  },
-  {
-    label: "Arrived Safely",
-    sub: "Replies 5 · Trip closed ✅",
-    msgs: [
-      { dir: "out", text: "5", time: "15:48" },
-      { dir: "in", time: "15:48", text: `Kieren, you have arrived safely. Your Cyber Chaperone trip is now closed.
+1. Yes — I'm there ✅
+2. Running a bit late
+3. I need help`} />
 
-Thank you for travelling with us. Stay safe.` },
-    ],
-  },
-  {
-    label: "Safe Zone Clock-in — Setup",
-    sub: "CC Menu → 2",
-    msgs: [
-      { dir: "out", text: "2", time: "19:00" },
-      { dir: "in", time: "19:00", text: `Kieren, what time will you be home tonight? 🏠
+          <StepLabel trigger="No reply after 10 minutes — AMBER" intent="We're getting concerned. Tone shifts slightly — more direct, still human. Not alarming yet." />
+          <Bubble dir="in" time="15:40" text={`Kieren, we haven't had your arrival confirmation yet.
 
-Just send us the time.
-For example: 11pm or 23:00
+You're overdue at Pretoria.
 
-We will message you then to check you are safe.` },
-      { dir: "out", text: "23:00", time: "19:01" },
-      { dir: "in", time: "19:01", text: `✅ Done, Kieren.
+Are you okay?
 
-We will message you at 23:00.
-When you are home, just reply *SAFE*.
+1. I'm okay — I've arrived
+2. I'm delayed — give me time
+3. Send my location
+4. I need help`} />
 
-If we do not hear from you — we will contact someone.
+          <StepLabel trigger="Still no reply at +25 min — RED. ICE + André alerted." intent="Now it's serious. Message is short, clear. ICE gets alerted in the background simultaneously." />
+          <Bubble dir="in" time="15:55" text={`Kieren, we haven't been able to reach you.
 
-Enjoy your evening 🌙` },
-    ],
-  },
-  {
-    label: "Clock-in — Deadline Ping",
-    sub: "Auto-sent at 23:00",
-    msgs: [
-      { dir: "in", time: "23:00", text: `Hi Kieren 👋
+You are *28 minutes* overdue at Pretoria.
 
-Are you home safely?
+We are escalating this now.
 
-Reply *SAFE* if yes.
-Reply *10* if you need help.` },
-      { dir: "out", text: "SAFE", time: "23:04" },
-      { dir: "in", time: "23:04", text: `Good to hear, Kieren. 🏠
+Reply *1* if you're okay.
+Reply *10* if you need help.`} />
 
-Sleep well. 🌙` },
-    ],
-  },
-  {
-    label: "Emergency — HELP or SOS",
-    sub: "🔴 Any distress keyword",
-    msgs: [
-      { dir: "out", text: "HELP", time: "16:33" },
-      { dir: "in", time: "16:33", text: `Kieren, I have alerted the Situation Room. Help is being arranged.
-
-Stay where you are if possible.
-
-Reply *10* at any time for immediate escalation.` },
-    ],
-  },
-  {
-    label: 'Emergency — Reply "10"',
-    sub: "🔴 Immediate escalation",
-    msgs: [
-      { dir: "out", text: "10", time: "16:34" },
-      { dir: "in", time: "16:34", text: `🚨 *Emergency — Situation Room alerted.*
-
-Kieren, André and the eblockwatch team have been notified.
-
-You are not alone. Help is on the way.
-
-Stay on the line.` },
-    ],
-  },
-  {
-    label: "ICE Contact — Trip Overdue RED",
-    sub: "Goes to Mary (emergency contact)",
-    msgs: [
-      { dir: "in", time: "15:58", text: `🆘 *eblockwatch Cyber Chaperone — URGENT*
+          <StepLabel trigger="ICE contact (Mary) receives this alert simultaneously" intent="ICE gets a direct WhatsApp. No human relay needed — the system fires it automatically." />
+          <Bubble dir="in" time="15:55" text={`🆘 *eblockwatch — URGENT*
 
 Hi Mary,
 
 You are the emergency contact for *Kieren Snyman*.
 
-Kieren was due to arrive at Pretoria 28 minutes ago and has not responded.
+Kieren was due in Pretoria at 15:30 and has not responded to check-ins.
+They are now 28 minutes overdue.
 
-📍 Last known location:
-https://maps.google.com/?q=-25.7479,28.2293
+📍 Last known route: Home → Pretoria
+👉 Contact Kieren: wa.me/27833263751
 
-Please contact Kieren now:
-👉 wa.me/27833263751
+André at eblockwatch is monitoring.
+Reply with any update.
 
-André at eblockwatch is monitoring. Reply with any update.
+— eblockwatch`} />
 
-— eblockwatch Cyber Chaperone` },
-    ],
-  },
-  {
-    label: "ICE Contact — Clock-in Overdue",
-    sub: "Goes to Mary · T+40 min",
-    msgs: [
-      { dir: "in", time: "23:42", text: `Hi Mary,
+          <StepLabel trigger="André receives operator mirror on his phone" intent="André is aware and can take over at any point. ICE note confirms who was contacted." />
+          <Bubble dir="in" time="15:55" text={`🚨 RED — No arrival confirmation.
+
+Member: Kieren Snyman
+Trip: Home → Pretoria · Trip #42
+Overdue: 28 minutes
+ICE alerted: Mary (+27820000000)
+
+Human review required.`} />
+
+          <StepLabel trigger="Member finally replies — they were in a dead zone" intent="Warm resolution. Relief, not lecture. Acknowledge what happened. Remind them the one-tap trick for next time." />
+          <Bubble dir="out" text="So sorry! Was in a tunnel with no signal. I'm at mom's, all good 😅" time="16:05" />
+          <Bubble dir="in" time="16:05" text={`Kieren! We're so relieved. 😊
+
+Trip closed — *Pretoria ✅ · 16:05*
+
+We did contact Mary — she'll be glad to hear you're safe.
+Quick message to let her know? 👉 wa.me/...
+
+Next time, a quick *2* (I'm delayed) keeps us calm.
+One tap. That's all it takes.
+
+That was your *3rd trip* with us. All safe, all good.
+
+See you on the next one. 🛡️`} />
+
+        </Phone>
+
+        {/* ─── PATH C: CLOCK-IN ─── */}
+        <Phone title="Path C — Evening Clock-in (Going Out)" accent="#6A1B9A">
+
+          <StepLabel trigger="Member is going out for the evening, not driving" intent="Different flow — no destination, just a home-by time. Relaxed, evening tone." />
+          <Bubble dir="out" text="1" time="19:00" />
+          <Bubble dir="in" time="19:00" text={`🛡️ *Cyber Chaperone — Kieren*
+
+─── 🏠 Safe zone ───
+8️⃣  I need help 🆘
+9️⃣  Speak to André
+
+─── 🚗 On the road ───
+1️⃣  Start a monitored drive
+2️⃣  Clock me in — I'll be home later
+3️⃣  Update my trip
+5️⃣  I have arrived ✅
+
+Reply 0 for Main Menu.`} />
+
+          <Bubble dir="out" text="2" time="19:01" />
+          <Bubble dir="in" time="19:01" text={`Kieren, what time will you be home tonight? 🏠
+
+Just send the time — e.g. 11pm or 23:00
+
+We'll message you then to check you're safe.`} />
+
+          <Bubble dir="out" text="11pm" time="19:02" />
+          <StepLabel trigger="Member sets clock-in time — confirm warmly" intent="Evening tone. Friendly send-off. Let them go enjoy themselves." />
+          <Bubble dir="in" time="19:02" text={`✅ Done, Kieren.
+
+We'll ping you at 23:00.
+When you're home, just reply *SAFE*.
+
+If we don't hear from you — we'll follow up.
+
+Enjoy your evening. 🌙`} />
+
+          <StepLabel trigger="23:00 — scheduler fires deadline ping" intent="Soft, warm. Not alarming. One-word reply and everything is fine." />
+          <Bubble dir="in" time="23:00" text={`Hi Kieren 👋
+
+Are you home safely?
+
+Reply *SAFE* if yes.
+Reply *10* if you need help.`} />
+
+          <Bubble dir="out" text="SAFE 🏠" time="23:06" />
+          <StepLabel trigger="Member replies SAFE — close the clock-in warmly" intent="Warm close. Brief. They're home. Let them go to bed." />
+          <Bubble dir="in" time="23:06" text={`Good to hear. 🏠
+
+Sleep well, Kieren. 🌙`} />
+
+          <div style={{ height: 12 }} />
+          <StepLabel trigger="What if they DON'T reply to the 23:00 ping?" intent="Same 3-phase escalation: +20 min André nudge, +40 min ICE contact, trip → AMBER." />
+          <Bubble dir="in" time="23:00" text={`Hi Kieren 👋
+
+Are you home safely?
+
+Reply *SAFE* if yes.
+Reply *10* if you need help.`} />
+          <Bubble dir="in" time="23:20" text={`🏠 Kieren, still waiting to hear from you.
+
+Are you home okay?
+
+Reply *SAFE* · Reply *10* for help.`} />
+          <Bubble dir="in" time="23:42" text={`Hi Mary,
 
 This is eblockwatch. We look after *Kieren*.
 
@@ -510,115 +394,39 @@ Kieren was supposed to be home by 23:00.
 We have tried to reach them. No reply.
 
 Please check on them now.
-Message them here:
 👉 wa.me/27833263751
 
 Reply if you need us to do more.
 
-— eblockwatch` },
-    ],
-  },
-  {
-    label: "Operator Mirror — André's Phone",
-    sub: "ETA / AMBER / RED alerts",
-    msgs: [
-      { dir: "in", time: "15:30", text: `⏰ CYBER CHAPERONE — ETA REACHED
+— eblockwatch`} />
 
-Kieren should be arriving at Pretoria now.
-Trip #42 — arrival check sent. Awaiting confirmation.` },
-      { dir: "in", time: "15:42", text: `⚠️ CYBER CHAPERONE — AMBER
+        </Phone>
 
-Kieren is 12min past ETA for Home → Pretoria.
-Trip #42 → AMBER. No arrival confirmation yet.` },
-      { dir: "in", time: "15:58", text: `🚨 RED — No arrival confirmation after ETA.
+      </div>
 
-Member: Kieren · Trip: Home → Pretoria · Trip #42
-Overdue: 28 minutes
-ICE contact alerted: Mary (+27820000000)
-
-Next action: Human review required.` },
-    ],
-  },
-];
-
-export default function WhatsAppScreens() {
-  return (
-    <div style={{
-      fontFamily: "'Segoe UI', Helvetica, Arial, sans-serif",
-      height: "100vh",
-      display: "flex",
-      flexDirection: "column",
-      background: "#fff",
-      maxWidth: 480,
-      margin: "0 auto",
-      border: "1px solid #e0e0e0",
-    }}>
-
-      {/* ── Header ── */}
-      <div style={{
-        background: HEADER_BG,
-        borderBottom: "1px solid #E9EDEF",
-        padding: "10px 16px",
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        flexShrink: 0,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-      }}>
-        <img
-          src="/eblockwatch-logo.png"
-          alt="eblockwatch"
-          style={{ width: 40, height: 40, objectFit: "contain", borderRadius: 20 }}
-        />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: "#111" }}>Cyber Chaperone</div>
-          <div style={{ fontSize: 12, color: GREEN_DARK }}>eblockwatch · Always watching 🛡️</div>
-        </div>
-        <div style={{ display: "flex", gap: 16, color: "#54656F", fontSize: 20 }}>
-          <span>📞</span>
-          <span>⋮</span>
+      {/* Footer */}
+      <div style={{ marginTop: 36, padding: "14px 20px", background: "#fff", borderRadius: 10, border: "1px solid #e8e8e8", maxWidth: 980 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#111", marginBottom: 6 }}>Key UX principles across all flows</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px 20px" }}>
+          {[
+            ["Every message has one clear next action", "No dead ends — the member always knows what to reply"],
+            ["Warm, personal, first name always", "Not 'the user' — always Kieren. André's voice throughout."],
+            ["Trip count on arrival", "1st trip, 2nd trip, 3rd trip — they feel seen and valued"],
+            ["One-tap recovery", "Reply 1, 2 or SAFE — never more than that to stay green"],
+            ["ICE fires automatically", "No human relay — system WhatsApps the ICE contact directly"],
+            ["Escalation is a ladder, not a jump", "GREEN → AMBER → RED, never skipping, always giving a chance"],
+          ].map(([title, desc], i) => (
+            <div key={i} style={{ display: "flex", gap: 8 }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: GREEN, marginTop: 5, flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#111" }}>{title}</div>
+                <div style={{ fontSize: 11, color: "#666" }}>{desc}</div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* ── Chat body ── */}
-      <div style={{ flex: 1, overflowY: "auto", background: CHAT_BG, padding: "4px 0 12px" }}>
-        {flows.map((flow, fi) => (
-          <div key={fi}>
-            <FlowLabel label={flow.label} sub={flow.sub} />
-            {flow.msgs.map((m, mi) => (
-              <Bubble key={mi} text={m.text} dir={m.dir} time={m.time} />
-            ))}
-          </div>
-        ))}
-        <div style={{ height: 8 }} />
-      </div>
-
-      {/* ── Input bar ── */}
-      <div style={{
-        background: HEADER_BG,
-        borderTop: "1px solid #E9EDEF",
-        padding: "8px 12px",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        flexShrink: 0,
-      }}>
-        <span style={{ fontSize: 22, color: "#54656F" }}>😊</span>
-        <div style={{
-          flex: 1, background: "#F0F2F5", borderRadius: 22,
-          padding: "9px 16px", fontSize: 14, color: "#aaa",
-        }}>
-          Message
-        </div>
-        <span style={{ fontSize: 22, color: "#54656F" }}>📎</span>
-        <div style={{
-          width: 44, height: 44, borderRadius: "50%",
-          background: GREEN, display: "flex",
-          alignItems: "center", justifyContent: "center", fontSize: 20,
-        }}>
-          🎤
-        </div>
-      </div>
     </div>
   );
 }
