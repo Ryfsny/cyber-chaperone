@@ -5,26 +5,18 @@ const BUBBLE_IN = "#FFFFFF";
 const BUBBLE_OUT = "#D9FDD3";
 const TIME_COLOR = "#8696A0";
 
-function renderText(s: string) {
-  return s.split(/(\*[^*\n]+\*)/g).map((part, i) =>
-    part.startsWith("*") && part.endsWith("*")
-      ? <strong key={i} style={{ fontWeight: 600 }}>{part.slice(1, -1)}</strong>
-      : <span key={i}>{part}</span>
-  );
-}
-
-function Bubble({ text, dir, time = "09:41" }: { text: string; dir: "in" | "out"; time?: string }) {
-  const isIn = dir === "in";
+function Bubble({ text, from, time = "" }: { text: string; from: "member" | "system"; time?: string }) {
+  const isSystem = from === "system";
   return (
-    <div style={{ display: "flex", justifyContent: isIn ? "flex-start" : "flex-end", marginBottom: 2, padding: "0 8px" }}>
+    <div style={{ display: "flex", justifyContent: isSystem ? "flex-start" : "flex-end", marginBottom: 2, padding: "0 6px" }}>
       <div style={{
         position: "relative",
-        background: isIn ? BUBBLE_IN : BUBBLE_OUT,
-        borderRadius: isIn ? "0 10px 10px 10px" : "10px 0 10px 10px",
-        padding: "7px 46px 16px 9px",
-        maxWidth: "86%",
-        boxShadow: "0 1px 2px rgba(0,0,0,0.09)",
-        fontSize: 12.5,
+        background: isSystem ? BUBBLE_IN : BUBBLE_OUT,
+        borderRadius: isSystem ? "0 10px 10px 10px" : "10px 0 10px 10px",
+        padding: "6px 42px 14px 8px",
+        maxWidth: "88%",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+        fontSize: 11.5,
         lineHeight: 1.45,
         color: "#111",
         whiteSpace: "pre-wrap",
@@ -32,54 +24,94 @@ function Bubble({ text, dir, time = "09:41" }: { text: string; dir: "in" | "out"
       }}>
         <div style={{
           position: "absolute", top: 0,
-          ...(isIn ? { left: -6 } : { right: -6 }),
+          ...(isSystem ? { left: -6 } : { right: -6 }),
           width: 0, height: 0, borderStyle: "solid",
-          borderWidth: isIn ? "0 7px 9px 0" : "0 0 9px 7px",
-          borderColor: isIn
+          borderWidth: isSystem ? "0 7px 9px 0" : "0 0 9px 7px",
+          borderColor: isSystem
             ? `transparent ${BUBBLE_IN} transparent transparent`
             : `transparent transparent transparent ${BUBBLE_OUT}`,
         }} />
-        {renderText(text)}
-        <span style={{ position: "absolute", bottom: 4, right: 6, fontSize: 10, color: TIME_COLOR, whiteSpace: "nowrap" }}>
-          {time}{!isIn && <span style={{ color: GREEN_DARK }}> ✓✓</span>}
-        </span>
+        {text}
+        {time && <span style={{ position: "absolute", bottom: 3, right: 5, fontSize: 9.5, color: TIME_COLOR, whiteSpace: "nowrap" }}>{time}{from === "member" && <span style={{ color: GREEN_DARK }}> ✓✓</span>}</span>}
       </div>
     </div>
   );
 }
 
-function StepLabel({ trigger, intent }: { trigger: string; intent?: string }) {
+function Tag({ label, color }: { label: string; color: string }) {
   return (
-    <div style={{ margin: "12px 8px 4px", padding: "6px 10px", background: "#F0F7FF", borderLeft: "3px solid #90CAF9", borderRadius: "0 6px 6px 0" }}>
-      <div style={{ fontSize: 10.5, fontWeight: 700, color: "#1565C0", textTransform: "uppercase", letterSpacing: 0.4 }}>{trigger}</div>
-      {intent && <div style={{ fontSize: 10.5, color: "#555", marginTop: 2 }}>{intent}</div>}
+    <span style={{ display: "inline-block", background: color + "18", color, border: `1px solid ${color}40`, borderRadius: 4, fontSize: 9.5, fontWeight: 700, padding: "1px 5px", marginRight: 4 }}>
+      {label}
+    </span>
+  );
+}
+
+function Divider({ label }: { label: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", margin: "8px 6px 5px", gap: 6 }}>
+      <div style={{ flex: 1, height: 1, background: "#ddd" }} />
+      <div style={{ fontSize: 9.5, color: "#999", whiteSpace: "nowrap" }}>{label}</div>
+      <div style={{ flex: 1, height: 1, background: "#ddd" }} />
     </div>
   );
 }
 
-function Phone({ title, accent = GREEN_DARK, children }: { title: string; accent?: string; children: React.ReactNode }) {
+function Phone({ title, subtitle, accentColor = GREEN_DARK, children }: { title: string; subtitle: string; accentColor?: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", width: 310, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 16px rgba(0,0,0,0.10)", border: "1px solid #e8e8e8", flexShrink: 0 }}>
-      {/* Header */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #E9EDEF", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-        <img src="/eblockwatch-logo.png" alt="eblockwatch" style={{ width: 34, height: 34, objectFit: "contain", borderRadius: 17 }} />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: "#111" }}>Cyber Chaperone</div>
-          <div style={{ fontSize: 11, color: accent }}>eblockwatch · Always watching 🛡️</div>
+    <div style={{ display: "flex", flexDirection: "column", width: 300, background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 16px rgba(0,0,0,0.09)", border: "1px solid #e8e8e8", flexShrink: 0 }}>
+      <div style={{ background: "#fff", borderBottom: "1px solid #E9EDEF", padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+        <img src="/eblockwatch-logo.png" alt="" style={{ width: 32, height: 32, objectFit: "contain", borderRadius: 16 }} />
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 12.5, color: "#111" }}>Cyber Chaperone</div>
+          <div style={{ fontSize: 10, color: accentColor }}>{subtitle}</div>
         </div>
       </div>
-      {/* Title strip */}
-      <div style={{ background: accent, padding: "5px 14px" }}>
-        <div style={{ color: "#fff", fontSize: 11, fontWeight: 600 }}>{title}</div>
+      <div style={{ background: accentColor, padding: "4px 12px" }}>
+        <div style={{ color: "#fff", fontSize: 10.5, fontWeight: 600 }}>{title}</div>
       </div>
-      {/* Chat */}
-      <div style={{ background: "#F0F2F5", padding: "4px 0 12px", overflowY: "auto", flex: 1 }}>
+      <div style={{ background: "#F0F2F5", padding: "4px 0 10px", flex: 1, overflowY: "auto" }}>
         {children}
       </div>
-      {/* Input bar */}
-      <div style={{ background: "#fff", borderTop: "1px solid #E9EDEF", padding: "6px 10px", display: "flex", alignItems: "center", gap: 8 }}>
-        <div style={{ flex: 1, background: "#F0F2F5", borderRadius: 20, padding: "7px 14px", fontSize: 12, color: "#aaa" }}>Message</div>
-        <div style={{ width: 36, height: 36, borderRadius: "50%", background: GREEN, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🎤</div>
+    </div>
+  );
+}
+
+function Insight({ icon, title, body, tag, tagColor = "#1565C0" }: { icon: string; title: string; body: string; tag?: string; tagColor?: string }) {
+  return (
+    <div style={{ display: "flex", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F0F0F0" }}>
+      <div style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>{icon}</div>
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#111" }}>{title}</div>
+          {tag && <Tag label={tag} color={tagColor} />}
+        </div>
+        <div style={{ fontSize: 11, color: "#444", lineHeight: 1.5 }}>{body}</div>
+      </div>
+    </div>
+  );
+}
+
+function Rule({ n, title, what, howNow, howShouldBe }: { n: number; title: string; what: string; howNow: string; howShouldBe: string }) {
+  return (
+    <div style={{ borderRadius: 10, border: "1px solid #e8e8e8", overflow: "hidden", marginBottom: 12 }}>
+      <div style={{ background: "#1a1f2e", padding: "8px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ width: 22, height: 22, borderRadius: 11, background: GREEN, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#fff", flexShrink: 0 }}>{n}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: "#fff" }}>{title}</div>
+      </div>
+      <div style={{ padding: "10px 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 9.5, fontWeight: 700, color: "#999", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>What members actually do</div>
+          <div style={{ fontSize: 11, color: "#333", lineHeight: 1.5 }}>{what}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 9.5, fontWeight: 700, color: "#999", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>What it did / should do</div>
+          <div style={{ fontSize: 11, color: "#333", lineHeight: 1.5, marginBottom: 6 }}>
+            <span style={{ color: "#B71C1C" }}>Was: </span>{howNow}
+          </div>
+          <div style={{ fontSize: 11, color: "#333", lineHeight: 1.5 }}>
+            <span style={{ color: GREEN_DARK, fontWeight: 600 }}>Should: </span>{howShouldBe}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -87,344 +119,236 @@ function Phone({ title, accent = GREEN_DARK, children }: { title: string; accent
 
 export default function WhatsAppScreens() {
   return (
-    <div style={{ fontFamily: "'Segoe UI', Helvetica, Arial, sans-serif", background: "#FAFAFA", minHeight: "100vh", padding: "28px 28px 60px" }}>
+    <div style={{ fontFamily: "'Segoe UI', Helvetica, Arial, sans-serif", background: "#FAFAFA", minHeight: "100vh", padding: "24px 24px 60px" }}>
 
-      {/* Page title */}
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
-          <img src="/eblockwatch-logo.png" alt="eblockwatch" style={{ width: 44, height: 44, objectFit: "contain" }} />
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#111" }}>Cyber Chaperone — Complete Trip Journey</div>
-            <div style={{ fontSize: 13, color: "#666" }}>Full conversation walkthrough · annotated with triggers and intent</div>
-          </div>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+        <img src="/eblockwatch-logo.png" alt="eblockwatch" style={{ width: 42, height: 42, objectFit: "contain" }} />
+        <div>
+          <div style={{ fontSize: 19, fontWeight: 800, color: "#111" }}>Behavioral Model — From Real Conversations</div>
+          <div style={{ fontSize: 12, color: "#666" }}>Extracted from 24 live pilot sessions · André Snyman + Kieren Snyman · May 2026</div>
         </div>
       </div>
 
-      {/* Column headers */}
-      <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
-
-        {/* ─── PATH A: HAPPY PATH ─────────────────────────────────────────── */}
-        <Phone title="Path A — Everything Goes Smoothly" accent={GREEN_DARK}>
-
-          <StepLabel trigger="Member opens WhatsApp, says Hi" intent="First touch — show them the door, nothing overwhelming." />
-          <Bubble dir="out" text="Hi" time="14:00" />
-          <Bubble dir="in" time="14:00" text={`🛡️ *eblockwatch — Cyber Chaperone*
-
-Hi Kieren. I'm Arnie — André Snyman's digital assistant.
-We have one job: get you there safely, every time.
-
-✅ Verified member — Individual plan
-
-1️⃣  Cyber Chaperone 🛡️
-2️⃣  What is eblockwatch?
-3️⃣  Membership options
-4️⃣  Activate my membership
-5️⃣  👤 My Account
-7️⃣  Speak to a person
-8️⃣  📣 Invite a Friend
-9️⃣  📖 Getting Started Guide
-
-🚨 *EMERGENCY? Reply 10*`} />
-
-          <StepLabel trigger="Member wants to travel — replies 1" intent="Open Cyber Chaperone sub-menu. Keep it simple: home or road?" />
-          <Bubble dir="out" text="1" time="14:01" />
-          <Bubble dir="in" time="14:01" text={`🛡️ *Cyber Chaperone — Kieren*
-
-─── 🏠 Safe zone ───
-8️⃣  I need help 🆘
-9️⃣  Speak to André
-
-─── 🚗 On the road ───
-1️⃣  Start a monitored drive
-2️⃣  Clock me in — I'll be home later
-3️⃣  Update my trip
-4️⃣  Change destination
-5️⃣  I have arrived ✅
-
-6️⃣  How it works
-
-Reply 0 for Main Menu.`} />
-
-          <StepLabel trigger="Member starts a drive — replies 1" intent="Ask where they're coming from. If we have their home saved, make it a one-tap confirm." />
-          <Bubble dir="out" text="1" time="14:02" />
-          <Bubble dir="in" time="14:02" text={`Kieren, are you starting from Home 🏠?
-
-1. Yes — start from Home
-2. No — I'm somewhere else
-
-Or drop a location pin 📍
-
-Reply 0 for Main Menu.`} />
-
-          <Bubble dir="out" text="1" time="14:02" />
-          <Bubble dir="in" time="14:02" text={`Got it — starting from Home 🏠.
-
-Where are you heading today?`} />
-
-          <Bubble dir="out" text="Going to see my mom in Pretoria" time="14:03" />
-          <Bubble dir="in" time="14:03" text={`Lovely — Pretoria it is. 🏡
-
-What time do you expect to arrive? (e.g. 15:30)`} />
-
-          <StepLabel trigger="Member gives ETA — trip launches" intent="Confirm everything. Warm, personal. Let them feel covered without feeling watched." />
-          <Bubble dir="out" text="About 15:30" time="14:03" />
-          <Bubble dir="in" time="14:03" text={`✅ *You're covered, Kieren!*
-
-Home → Pretoria
-ETA: 15:30 · about 1h 25min
-
-I'll check in with you at Midrand.
-If you're not at your mom's by 15:30 — I'll message you.
-
-Enjoy the drive. 🛡️
-
-Reply *5* when you arrive.
-Reply *10* if you ever need us.`} />
-
-          <StepLabel trigger="Scheduler fires checkpoint ping at Midrand" intent="Friendly mid-route check. One reply and they're good. Don't make it feel like a test." />
-          <Bubble dir="in" time="14:52" text={`Kieren 👋 Just checking in — *Midrand* checkpoint.
-
-Are you through?
-
-1. ✅ Yes, passing through now
-2. 🕐 Still on the way
-3. 🆘 I need help`} />
-          <Bubble dir="out" text="1" time="14:53" />
-          <Bubble dir="in" time="14:53" text={`✅ On track to Pretoria!
-
-ETA still 15:28. We're with you all the way. 🛡️`} />
-
-          <StepLabel trigger="ETA reached — scheduler sends arrival check" intent="Soft ping. They probably arrived fine — just need the confirmation tap." />
-          <Bubble dir="in" time="15:30" text={`Kieren, you should be near Pretoria by now. 🏡
-
-Have you arrived safely?
-
-1. Yes — I'm there ✅
-2. Running a bit late
-3. I need help`} />
-          <Bubble dir="out" text="1" time="15:31" />
-
-          <StepLabel trigger="Member confirms arrival — trip closes. Personalise it." intent="Warm close. Acknowledge the trip. This is their 3rd — mention it. Make them feel seen." />
-          <Bubble dir="in" time="15:31" text={`🎉 *Made it, Kieren!*
-
-Pretoria ✅ · 15:31
-
-That's your *3rd trip* with Cyber Chaperone.
-Every one covered. Every one safe.
-
-Give your mom our regards. 😊
-See you on the next journey. 🛡️`} />
-
-        </Phone>
-
-        {/* ─── PATH B: ESCALATION PATH ───────────────────────────────────────── */}
-        <Phone title="Path B — Member Doesn't Respond" accent="#B71C1C">
-
-          <StepLabel trigger="Same trip start — same conversation" intent="Identical opening. The difference only happens after ETA is missed." />
-          <Bubble dir="out" text="Hi" time="14:00" />
-          <Bubble dir="in" time="14:00" text={`🛡️ *eblockwatch — Cyber Chaperone*
-
-Hi Kieren. Welcome back.
-
-✅ Verified member — Individual plan
-
-1️⃣  Cyber Chaperone 🛡️
-9️⃣  📖 Getting Started Guide
-🚨 *EMERGENCY? Reply 10*`} />
-          <Bubble dir="out" text="1" time="14:01" />
-          <Bubble dir="out" text="1" time="14:02" />
-          <Bubble dir="out" text="1" time="14:02" />
-          <Bubble dir="out" text="Going to Pretoria" time="14:03" />
-          <Bubble dir="out" text="15:30" time="14:03" />
-          <Bubble dir="in" time="14:03" text={`✅ *You're covered, Kieren!*
-
-Home → Pretoria · ETA 15:30
-
-I'll check in at Midrand.
-Reply *5* when you arrive. Reply *10* for help.
-
-Enjoy the drive. 🛡️`} />
-
-          <StepLabel trigger="Checkpoint passes without reply — ETA reached" intent="They missed the checkpoint ping too. Now ETA has passed. Phase 1 — gentle. Keep the tone calm." />
-          <Bubble dir="in" time="15:30" text={`Kieren, you should be near Pretoria by now. 🏡
-
-Have you arrived safely?
-
-1. Yes — I'm there ✅
-2. Running a bit late
-3. I need help`} />
-
-          <StepLabel trigger="No reply after 10 minutes — AMBER" intent="We're getting concerned. Tone shifts slightly — more direct, still human. Not alarming yet." />
-          <Bubble dir="in" time="15:40" text={`Kieren, we haven't had your arrival confirmation yet.
-
-You're overdue at Pretoria.
-
-Are you okay?
-
-1. I'm okay — I've arrived
-2. I'm delayed — give me time
-3. Send my location
-4. I need help`} />
-
-          <StepLabel trigger="Still no reply at +25 min — RED. ICE + André alerted." intent="Now it's serious. Message is short, clear. ICE gets alerted in the background simultaneously." />
-          <Bubble dir="in" time="15:55" text={`Kieren, we haven't been able to reach you.
-
-You are *28 minutes* overdue at Pretoria.
-
-We are escalating this now.
-
-Reply *1* if you're okay.
-Reply *10* if you need help.`} />
-
-          <StepLabel trigger="ICE contact (Mary) receives this alert simultaneously" intent="ICE gets a direct WhatsApp. No human relay needed — the system fires it automatically." />
-          <Bubble dir="in" time="15:55" text={`🆘 *eblockwatch — URGENT*
-
-Hi Mary,
-
-You are the emergency contact for *Kieren Snyman*.
-
-Kieren was due in Pretoria at 15:30 and has not responded to check-ins.
-They are now 28 minutes overdue.
-
-📍 Last known route: Home → Pretoria
-👉 Contact Kieren: wa.me/27833263751
-
-André at eblockwatch is monitoring.
-Reply with any update.
-
-— eblockwatch`} />
-
-          <StepLabel trigger="André receives operator mirror on his phone" intent="André is aware and can take over at any point. ICE note confirms who was contacted." />
-          <Bubble dir="in" time="15:55" text={`🚨 RED — No arrival confirmation.
-
-Member: Kieren Snyman
-Trip: Home → Pretoria · Trip #42
-Overdue: 28 minutes
-ICE alerted: Mary (+27820000000)
-
-Human review required.`} />
-
-          <StepLabel trigger="Member finally replies — they were in a dead zone" intent="Warm resolution. Relief, not lecture. Acknowledge what happened. Remind them the one-tap trick for next time." />
-          <Bubble dir="out" text="So sorry! Was in a tunnel with no signal. I'm at mom's, all good 😅" time="16:05" />
-          <Bubble dir="in" time="16:05" text={`Kieren! We're so relieved. 😊
-
-Trip closed — *Pretoria ✅ · 16:05*
-
-We did contact Mary — she'll be glad to hear you're safe.
-Quick message to let her know? 👉 wa.me/...
-
-Next time, a quick *2* (I'm delayed) keeps us calm.
-One tap. That's all it takes.
-
-That was your *3rd trip* with us. All safe, all good.
-
-See you on the next one. 🛡️`} />
-
-        </Phone>
-
-        {/* ─── PATH C: CLOCK-IN ─── */}
-        <Phone title="Path C — Evening Clock-in (Going Out)" accent="#6A1B9A">
-
-          <StepLabel trigger="Member is going out for the evening, not driving" intent="Different flow — no destination, just a home-by time. Relaxed, evening tone." />
-          <Bubble dir="out" text="1" time="19:00" />
-          <Bubble dir="in" time="19:00" text={`🛡️ *Cyber Chaperone — Kieren*
-
-─── 🏠 Safe zone ───
-8️⃣  I need help 🆘
-9️⃣  Speak to André
-
-─── 🚗 On the road ───
-1️⃣  Start a monitored drive
-2️⃣  Clock me in — I'll be home later
-3️⃣  Update my trip
-5️⃣  I have arrived ✅
-
-Reply 0 for Main Menu.`} />
-
-          <Bubble dir="out" text="2" time="19:01" />
-          <Bubble dir="in" time="19:01" text={`Kieren, what time will you be home tonight? 🏠
-
-Just send the time — e.g. 11pm or 23:00
-
-We'll message you then to check you're safe.`} />
-
-          <Bubble dir="out" text="11pm" time="19:02" />
-          <StepLabel trigger="Member sets clock-in time — confirm warmly" intent="Evening tone. Friendly send-off. Let them go enjoy themselves." />
-          <Bubble dir="in" time="19:02" text={`✅ Done, Kieren.
-
-We'll ping you at 23:00.
-When you're home, just reply *SAFE*.
-
-If we don't hear from you — we'll follow up.
-
-Enjoy your evening. 🌙`} />
-
-          <StepLabel trigger="23:00 — scheduler fires deadline ping" intent="Soft, warm. Not alarming. One-word reply and everything is fine." />
-          <Bubble dir="in" time="23:00" text={`Hi Kieren 👋
-
-Are you home safely?
-
-Reply *SAFE* if yes.
-Reply *10* if you need help.`} />
-
-          <Bubble dir="out" text="SAFE 🏠" time="23:06" />
-          <StepLabel trigger="Member replies SAFE — close the clock-in warmly" intent="Warm close. Brief. They're home. Let them go to bed." />
-          <Bubble dir="in" time="23:06" text={`Good to hear. 🏠
-
-Sleep well, Kieren. 🌙`} />
-
-          <div style={{ height: 12 }} />
-          <StepLabel trigger="What if they DON'T reply to the 23:00 ping?" intent="Same 3-phase escalation: +20 min André nudge, +40 min ICE contact, trip → AMBER." />
-          <Bubble dir="in" time="23:00" text={`Hi Kieren 👋
-
-Are you home safely?
-
-Reply *SAFE* if yes.
-Reply *10* if you need help.`} />
-          <Bubble dir="in" time="23:20" text={`🏠 Kieren, still waiting to hear from you.
-
-Are you home okay?
-
-Reply *SAFE* · Reply *10* for help.`} />
-          <Bubble dir="in" time="23:42" text={`Hi Mary,
-
-This is eblockwatch. We look after *Kieren*.
-
-Kieren was supposed to be home by 23:00.
-We have tried to reach them. No reply.
-
-Please check on them now.
-👉 wa.me/27833263751
-
-Reply if you need us to do more.
-
-— eblockwatch`} />
-
-        </Phone>
-
+      <div style={{ marginBottom: 20, padding: "10px 14px", background: "#EFF8F0", border: "1px solid #A5D6A7", borderRadius: 8, fontSize: 11.5, color: "#2E7D32", maxWidth: 960 }}>
+        This is the system's teaching document. Every pattern here came from real WhatsApp sessions — not imagination. The goal: build a system that speaks and listens the way real people do.
       </div>
 
-      {/* Footer */}
-      <div style={{ marginTop: 36, padding: "14px 20px", background: "#fff", borderRadius: 10, border: "1px solid #e8e8e8", maxWidth: 980 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#111", marginBottom: 6 }}>Key UX principles across all flows</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px 20px" }}>
-          {[
-            ["Every message has one clear next action", "No dead ends — the member always knows what to reply"],
-            ["Warm, personal, first name always", "Not 'the user' — always Kieren. André's voice throughout."],
-            ["Trip count on arrival", "1st trip, 2nd trip, 3rd trip — they feel seen and valued"],
-            ["One-tap recovery", "Reply 1, 2 or SAFE — never more than that to stay green"],
-            ["ICE fires automatically", "No human relay — system WhatsApps the ICE contact directly"],
-            ["Escalation is a ladder, not a jump", "GREEN → AMBER → RED, never skipping, always giving a chance"],
-          ].map(([title, desc], i) => (
-            <div key={i} style={{ display: "flex", gap: 8 }}>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: GREEN, marginTop: 5, flexShrink: 0 }} />
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#111" }}>{title}</div>
-                <div style={{ fontSize: 11, color: "#666" }}>{desc}</div>
-              </div>
+      {/* ─── SECTION 1: REAL CONVERSATION PANELS ──────────────────── */}
+      <div style={{ fontSize: 13, fontWeight: 800, color: "#111", marginBottom: 12, marginTop: 4 }}>Real pilot conversations — annotated</div>
+
+      <div style={{ display: "flex", gap: 20, alignItems: "flex-start", marginBottom: 28, flexWrap: "wrap" }}>
+
+        {/* ── Panel A: André's natural language trip starts ─── */}
+        <Phone title="André — Natural language trip starts" subtitle="Founder testing · May 4 2026" accentColor={GREEN_DARK}>
+          <div style={{ margin: "8px 8px 2px", padding: "5px 8px", background: "#E8F5E9", borderLeft: "3px solid #4CAF50", borderRadius: "0 6px 6px 0", fontSize: 10, color: "#2E7D32" }}>
+            ✅ This is André's natural format. One sentence. No menu. System parses it completely.
+          </div>
+          <Bubble from="member" text="TEST LIVE — Leaving Fourways now heading to Rosebank Mall. ETA 14:40." time="12:16" />
+          <Bubble from="system" text={`✅ Trip started, André.\n\nFourways → Rosebank Mall · ETA 14:40\n\nI'm watching. Reply 5 when you arrive.\nReply 10 for emergency.`} time="12:16" />
+          <Bubble from="member" text="ETA changed to 15:00. Traffic is slower than expected." time="14:12" />
+          <Bubble from="system" text={`Got it — updated ETA to 15:00. 🕐\n\nStill with you.`} time="14:12" />
+          <Bubble from="member" text="I have arrived safely at Rosebank Mall." time="14:58" />
+          <Bubble from="system" text={`🎉 Arrived! Rosebank Mall ✅\n\nTrip closed. Well done, André.\nSee you on the next one. 🛡️`} time="14:58" />
+
+          <Divider label="Second trip in same session" />
+
+          <Bubble from="member" text="Leaving Fourways now heading to Sandton City. ETA 15:30." time="13:03" />
+          <Bubble from="system" text={`✅ New trip, André.\n\nFourways → Sandton City · ETA 15:30\n\nReply 5 on arrival. Reply 10 for help.`} time="13:03" />
+          <Bubble from="member" text="I need help." time="13:04" />
+          <Bubble from="system" text={`🚨 André — sending RED alert.\n\nAndré has been notified immediately.\nICE contact is being reached.\n\nStay where you are if safe to do so.`} time="13:04" />
+
+          <div style={{ margin: "8px 8px 2px", padding: "5px 8px", background: "#FFF3E0", borderLeft: "3px solid #FF9800", borderRadius: "0 6px 6px 0", fontSize: 10, color: "#E65100" }}>
+            💡 LESSON: André uses full natural language and expects instant recognition. No menu steps needed for the experienced member.
+          </div>
+        </Phone>
+
+        {/* ── Panel B: Kieren's repeated loop ── */}
+        <Phone title="Kieren — The loop that repeated 4× " subtitle="First real member · May 4 2026 · 19:50" accentColor="#B71C1C">
+          <div style={{ margin: "8px 8px 2px", padding: "5px 8px", background: "#FFEBEE", borderLeft: "3px solid #F44336", borderRadius: "0 6px 6px 0", fontSize: 10, color: "#B71C1C" }}>
+            🚨 This exact sequence repeated 4 times. Kieren got no confirmation. The system was silent.
+          </div>
+          <Bubble from="member" text="Hi" time="19:50" />
+          <Bubble from="member" text="5" time="19:50" />
+          <Bubble from="member" text="1" time="19:50" />
+          <Bubble from="member" text="Durban Oyster Box" time="19:50" />
+          <Bubble from="member" text="ETA 19:30" time="19:50" />
+          <Bubble from="member" text="ETA 19:30" time="19:51" />
+          <div style={{ margin: "4px 8px", padding: "4px 8px", background: "#FCE4EC", borderRadius: 6, fontSize: 10, color: "#880E4F" }}>
+            ⬆️ Silence from system. So Kieren tried the same thing again. And again. And again.
+          </div>
+          <Bubble from="member" text="update" time="19:51" />
+          <Bubble from="member" text="1" time="19:51" />
+          <Bubble from="member" text="check" time="19:51" />
+          <Bubble from="member" text="hello" time="19:52" />
+          <Bubble from="member" text="HELP" time="19:53" />
+          <div style={{ margin: "8px 8px 2px", padding: "5px 8px", background: "#FFF3E0", borderLeft: "3px solid #FF9800", borderRadius: "0 6px 6px 0", fontSize: 10, color: "#E65100" }}>
+            💡 LESSON 1: Every trip start MUST send a clear confirmation. If the member doesn't get "✅ Trip started, Kieren" — they'll keep trying.{"\n\n"}💡 LESSON 2: "update", "check", "status check", "any update" must return the current trip status — not silence.{"\n\n"}💡 LESSON 3: Kieren pressed 5 thinking it was "start trip #5 option" — but 5 is "I have arrived". Menu numbers must be obvious.
+          </div>
+        </Phone>
+
+        {/* ── Panel C: Waze link + AI ETA ── */}
+        <Phone title="André — Waze link + AI ETA request" subtitle="Advanced tester · May 5–6 2026" accentColor="#6A1B9A">
+          <div style={{ margin: "8px 8px 2px", padding: "5px 8px", background: "#F3E5F5", borderLeft: "3px solid #9C27B0", borderRadius: "0 6px 6px 0", fontSize: 10, color: "#6A1B9A" }}>
+            André started sharing his Waze ETA links directly. The system needs to parse these.
+          </div>
+          <Bubble from="member" text="0" time="06:18" />
+          <Bubble from="member" text="5" time="06:18" />
+          <Bubble from="member" text="1" time="06:18" />
+          <Bubble from="member" text="Bloemfontein" time="06:19" />
+          <Bubble from="member" text="Yes" time="06:19" />
+          <Bubble from="member" text={`I'm using Waze to drive to Bloemfontein, FS, arriving at 12:10. Watch my drive in real-time on the Waze app.`} time="06:19" />
+
+          <Divider label="André's comment on what should happen" />
+
+          <Bubble from="member" text="5" time="05:18" />
+          <Bubble from="member" text="1" time="05:18" />
+          <Bubble from="member" text="Durban" time="05:18" />
+          <Bubble from="member" text={`This is where AI should calculate the route and get an ETA and the...`} time="05:18" />
+
+          <div style={{ margin: "8px 8px 2px", padding: "5px 8px", background: "#F3E5F5", borderLeft: "3px solid #9C27B0", borderRadius: "0 6px 6px 0", fontSize: 10, color: "#4A148C" }}>
+            💡 LESSON: André shared a Waze link — system should parse: destination="Bloemfontein, FS", ETA="12:10". Auto-confirm trip without further questions.{"\n\n"}💡 LESSON: When member types a destination only (no ETA), system should say: "Calculating your route to Durban... what time do you expect to arrive?" OR use OSRM to estimate it.
+          </div>
+
+          <Divider label="The home address session" />
+          <Bubble from="member" text="Home" time="09:52" />
+          <Bubble from="member" text={`College Road is my home. Best you get claude and ChatGPT to add this to the CRM so that the system can remember it.`} time="09:52" />
+          <div style={{ margin: "6px 8px 4px", padding: "5px 8px", background: "#E8EAF6", borderLeft: "3px solid #3F51B5", borderRadius: "0 6px 6px 0", fontSize: 10, color: "#1A237E" }}>
+            💡 LESSON: Members type "Home" as their departure. System needs to resolve this to their saved home address OR ask them to save one if not set. Natural language address saving ("College Road is my home") should be handled.
+          </div>
+        </Phone>
+
+        {/* ── Panel D: Kieren exploring all menus ── */}
+        <Phone title="Kieren — Learning the system" subtitle="Exploring every menu option · May 5 2026 · 17:12" accentColor="#1565C0">
+          <div style={{ margin: "8px 8px 2px", padding: "5px 8px", background: "#E3F2FD", borderLeft: "3px solid #1976D2", borderRadius: "0 6px 6px 0", fontSize: 10, color: "#0D47A1" }}>
+            Kieren went through every single menu option (0–10) systematically. She was learning what exists. This is what onboarding should prevent.
+          </div>
+          {[1,2,3,4,5,6,7,8,9,10].map(n => (
+            <div key={n} style={{ display: "flex", gap: 4, padding: "1px 6px" }}>
+              <Bubble from="member" text={`${n}`} time="17:12" />
             </div>
           ))}
-        </div>
+          <div style={{ margin: "8px 8px 2px", padding: "5px 8px", background: "#E3F2FD", borderLeft: "3px solid #1976D2", borderRadius: "0 6px 6px 0", fontSize: 10, color: "#0D47A1" }}>
+            💡 LESSON: A member who systematically sends 0,1,2,3...10 is doing your job for you. They don't know what the options do. The Getting Started Guide (reply 9) should be sent automatically on first interaction — not hidden behind a menu number.
+          </div>
+        </Phone>
+
+      </div>
+
+      {/* ─── SECTION 2: BEHAVIORAL RULES ──────────────────────────── */}
+      <div style={{ fontSize: 13, fontWeight: 800, color: "#111", marginBottom: 14 }}>Behavioral rules — extracted from real data</div>
+
+      <div style={{ maxWidth: 960 }}>
+        <Rule
+          n={1}
+          title="Always confirm trip start — immediately and clearly"
+          what={`Kieren sent "Hi → 5 → 1 → Durban → ETA 19:30" four times in a row. The system gave no clear confirmation. She didn't know if the trip had registered.`}
+          howNow="System may have confirmed, but the message wasn't clear or was missed."
+          howShouldBe={`Send "✅ Trip started, Kieren — Durban · ETA 19:30. I'm watching. Reply 5 when you arrive." Within 3 seconds of trip registration. Make it unmistakable.`}
+        />
+        <Rule
+          n={2}
+          title="Handle status checks mid-trip"
+          what={`Kieren sent "update", "check", "status check", "any update" repeatedly. André asked "Running late, any update?" These are real members checking in.`}
+          howNow="These messages hit the default fallback handler and probably returned the main menu — useless."
+          howShouldBe={`Detect "update", "check", "status", "any update", "where am I" → return current trip: "Your trip to Durban is active. ETA 19:30. You're at [checkpoint]. Reply 5 to close."`}
+        />
+        <Rule
+          n={3}
+          title="Parse Waze share links as trip starts"
+          what={`André shared Waze links: "I'm using Waze to drive to Bloemfontein, FS, arriving at 12:10." — he expected the system to read these.`}
+          howNow="System ignored the Waze text and asked for destination again."
+          howShouldBe={`Parse Waze link text: extract destination + ETA. Confirm: "✅ Waze trip to Bloemfontein · ETA 12:10. I've got it — reply 5 on arrival."`}
+        />
+        <Rule
+          n={4}
+          title="Send the Getting Started Guide automatically on first message"
+          what={`Kieren's first ever message was "Hi". She then pressed every menu number (1–10) trying to figure out what things do. Kieren and André both went through this learning phase.`}
+          howNow="Getting Started Guide is hidden behind reply 9 — nobody finds it unless told."
+          howShouldBe={`On first message from a new member, lead with a short welcome + single sentence summary, then immediately offer: "Reply 9 for your Getting Started Guide — it takes 1 minute to read."`}
+        />
+        <Rule
+          n={5}
+          title="Save home address from natural language"
+          what={`André typed "College Road is my home." He expected this to be saved. He also typed "Home" as his departure, expecting it to resolve.`}
+          howNow="No natural language address saving. 'Home' as departure didn't resolve to anything useful."
+          howShouldBe={`Detect "X is my home address" → save to member profile. Detect "Home" as departure → resolve to saved home, or ask "You haven't saved a home address yet — what is it?"`}
+        />
+        <Rule
+          n={6}
+          title="Natural language trip start is the primary path — not the menu"
+          what={`André settled on "Leaving X now heading to Y. ETA Z." as his natural format. He used this reliably across multiple sessions. It's faster than any menu.`}
+          howNow="The freeform parser handles this, but it's not advertised. Members don't know they can type naturally."
+          howShouldBe={`In the Getting Started Guide, show the natural format first: "The fastest way to start a trip: just tell us where you're going. Example: Leaving Joburg heading to Pretoria, ETA 15:30."`}
+        />
+      </div>
+
+      {/* ─── SECTION 3: VOICE + TONE MODEL ──────────────────── */}
+      <div style={{ fontSize: 13, fontWeight: 800, color: "#111", marginBottom: 12, marginTop: 8 }}>André's voice — what the real messages teach us</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, maxWidth: 960 }}>
+        {[
+          {
+            icon: "🗣️",
+            title: "Confident and direct",
+            example: `"Leaving Fourways now heading to Rosebank Mall. ETA 14:40."`,
+            lesson: "No hedging. No filler. Get to the point. The system should respond the same way."
+          },
+          {
+            icon: "📝",
+            title: "One thought per line",
+            example: `"ETA changed to 15:00.\nTraffic is slower than expected."`,
+            lesson: "André separates his thoughts clearly. System replies should do the same — never block text."
+          },
+          {
+            icon: "✅",
+            title: "Arrival is formal and clear",
+            example: `"I have arrived safely at Rosebank Mall."`,
+            lesson: "He uses full words on important moments. The system should match — 'Arrived ✅' not just 'ok'"
+          },
+          {
+            icon: "😤",
+            title: "Frustration is a signal, not abuse",
+            example: `"You need to work this out."`,
+            lesson: "This is André saying the system failed him. Not anger at a person — a clear product note. Build what makes this sentence impossible."
+          },
+          {
+            icon: "🧠",
+            title: "He expects the system to be intelligent",
+            example: `"This is where AI should calculate the route and get an ETA."`,
+            lesson: "He doesn't want to spell things out. If he gives a destination, the system should get the ETA — not ask for it every time."
+          },
+          {
+            icon: "🏠",
+            title: "He wants memory",
+            example: `"College Road is my home. Best you get Claude to add this to the CRM."`,
+            lesson: "Members want the system to remember them. Name, home, common destinations. Build it once, use it forever."
+          },
+        ].map((item, i) => (
+          <div key={i} style={{ background: "#fff", borderRadius: 10, border: "1px solid #e8e8e8", padding: "12px 14px" }}>
+            <div style={{ fontSize: 20, marginBottom: 6 }}>{item.icon}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#111", marginBottom: 5 }}>{item.title}</div>
+            <div style={{ fontSize: 11, color: "#888", fontStyle: "italic", marginBottom: 6, padding: "5px 8px", background: "#F9F9F9", borderRadius: 5, borderLeft: "2px solid #ddd" }}>{item.example}</div>
+            <div style={{ fontSize: 11, color: "#444", lineHeight: 1.5 }}>{item.lesson}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ─── SECTION 4: REAL TRIP DESTINATIONS ──────────────── */}
+      <div style={{ fontSize: 13, fontWeight: 800, color: "#111", marginBottom: 10, marginTop: 24 }}>Real destinations used in pilot — system must handle these</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, maxWidth: 960 }}>
+        {[
+          "Rosebank Mall", "Sandton City", "OR Tambo Airport", "Cape Town Waterfront",
+          "The Oyster Box, Durban", "Melrose Arch", "Salt Rock KZN", "Nelspruit",
+          "Bloemfontein", "Eaton Farm Witpoort, Midrand", "Bushbuck Ridge", "Hyde Park (stop)",
+          "Durban", "Home (→ College Road)", "Airport", "Pretoria",
+        ].map(d => (
+          <div key={d} style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 6, padding: "5px 10px", fontSize: 11, color: "#333" }}>
+            📍 {d}
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 8, fontSize: 11, color: "#888", maxWidth: 960 }}>
+        These are the real places members use. Geocoding via Nominatim (SA) must resolve all of these. The system should never ask "could not find that location" — it should try harder.
       </div>
 
     </div>
