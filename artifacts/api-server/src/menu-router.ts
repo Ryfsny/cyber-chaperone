@@ -160,6 +160,16 @@ const AMBIGUOUS_DEST_PATTERN =
   /\b(i'?m? (?:am )?going to|on my way to|heading to|going to)\s+(.+)/i;
 const START_FORMAT =
   /^START\s+(.+?)\s+to\s+(.+?)\s+ETA\s+(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)\s*$/i;
+// Natural language trip start: "I'm going to Oyster Box leaving from College Road now"
+// Also: "Going to Pretoria from Home", "Heading to Durban from Sandton"
+const NATURAL_TRIP_START_PATTERN =
+  /^(?:i'?m\s+(?:am\s+)?)?(?:going|heading|travelling|traveling|driving)\s+to\s+(.+?)\s+(?:leaving\s+from|from|departing\s+from|starting\s+(?:from|at))\s+(.+?)(?:\s*,?\s*(?:(?:leaving|departing)?\s*now))?(?:\s*[,.]?\s*(?:eta|arriving(?:\s+at)?)\s*:?\s*(\d{1,2}[:.]\d{2}(?:\s*[aApP][mM])?))?\.?\s*$/i;
+// Waze share text: "I'm using Waze to drive to [DEST], arriving at [TIME]."
+const WAZE_SHARE_PATTERN =
+  /i'?m\s+using\s+waze\s+to\s+drive\s+to\s+(.+?),\s+arriving\s+at\s+(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)/i;
+// Status check during active trip: "update", "any update", "status check", "check"
+const STATUS_CHECK_PATTERN =
+  /^(?:update|check|status(?:\s+check)?|any\s+updates?|how(?:'?m|\s+am)\s+i|still\s+watching|you\s+there|still\s+there)\.?$/i;
 const DISTRESS_WORDS = [
   "help", "sos", "emergency", "danger", "accident",
   "hijack", "hijacked", "crash", "police", "ambulance", "urgent", "call me",
@@ -767,23 +777,23 @@ async function createTrip(
         : `https://waze.com/ul?q=${encDest}&navigate=yes`;
 
       return [
-        `✅ *Cyber Chaperone is watching this trip.* 🛡️`,
+        `✅ *Your trip is registered. We are watching.* 🛡️`,
         ``,
         `*Route:* ${startLocation} → ${destination}`,
         etaLine,
         nearbyLine ? nearbyLine.trim() : null,
         checkInLine ? `\n${checkInLine}` : null,
+        `We will contact you automatically if you go silent past your ETA.`,
+        `Your emergency contact is on standby if needed.`,
         ``,
-        `Please use your normal navigation app:`,
-        `1. Open Google Maps: ${gmLink}`,
-        `2. Open Waze: ${wazeLink}`,
-        `3. Send us your location pin (tap 📎 → Location → Send Current Location)`,
-        `0. Main Menu`,
+        `Open your route:`,
+        `📍 Google Maps: ${gmLink}`,
+        `📍 Waze: ${wazeLink}`,
         ``,
-        `When you arrive safely, reply:`,
-        `*SAFE* 🏁`,
+        `When you arrive safely, reply *5* or type *SAFE*.`,
+        `Need help at any time — reply *10*. 🆘`,
         ``,
-        `Any time you need help: reply *10* 🆘`,
+        `Live monitoring in your Situation Room. 🛡️`,
       ].filter((l) => l !== null).join("\n");
     })(),
   );
@@ -5173,6 +5183,32 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     return { handled: true };
   }
 
+  // 4b. Natural language trip start — intercept before menu for known members
+  // Fires when not inside an active flow step (TRIP_FLOW etc. are already handled above)
+  if (state.currentFlow === FLOW_MAIN_MENU || state.currentFlow === null) {
+    // Waze share link: "I'm using Waze to drive to [DEST], arriving at [TIME]"
+    const wazeMatch = trimmed.match(WAZE_SHARE_PATTERN);
+    if (wazeMatch) {
+      const wazeDest = wazeMatch[1].trim();
+      const wazeEta = wazeMatch[2].trim();
+      const wazeStart = member?.homeAddress ?? "Home";
+      await createTrip(from, to, member, wazeStart, wazeDest, wazeEta, body, messageSid, log);
+      log.info({ from }, "Menu router: Waze link — trip auto-started");
+      return { handled: true };
+    }
+    // "I'm going to [DEST] leaving from [PLACE]" / "Going to [DEST] from [PLACE] now"
+    const natMatch = trimmed.match(NATURAL_TRIP_START_PATTERN);
+    if (natMatch) {
+      const natDest = natMatch[1].trim();
+      const rawStart = natMatch[2].replace(/\bnow\.?$/i, "").trim();
+      const natStart = rawStart || member?.homeAddress || "Home";
+      const natEta = natMatch[3]?.replace(".", ":")?.trim() ?? null;
+      await createTrip(from, to, member, natStart, natDest, natEta, body, messageSid, log);
+      log.info({ from }, "Menu router: natural language trip start — no menu needed");
+      return { handled: true };
+    }
+  }
+
   // 5. Main menu numeric choices (when in MAIN_MENU flow or no flow)
   if (state.currentFlow === FLOW_MAIN_MENU || state.currentFlow === null) {
     const handled = await handleMainMenuChoice(ctx, state);
@@ -5195,6 +5231,29 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
 
   // Fetch active trip once for the remaining checks
   const activeTrip = await findActiveTrip(from);
+
+  // 6b. Status check — member asking for trip status mid-route
+  if (STATUS_CHECK_PATTERN.test(trimmed)) {
+    if (activeTrip && activeTrip.status !== "completed" && activeTrip.status !== "red") {
+      const dest = activeTrip.title.includes(" → ") ? activeTrip.title.split(" → ").pop()! : activeTrip.title;
+      const etaStr = activeTrip.routeEtaTime ?? activeTrip.originalMemberEta ?? "calculating";
+      const statusEmoji = activeTrip.status === "green" ? "🟢" : activeTrip.status === "amber" ? "🟠" : "🔴";
+      await saveMessage(from, to, body, messageSid, activeTrip.id);
+      await sendWhatsApp(from, to, [
+        `${statusEmoji} *Trip update — ${member?.displayName ?? "you"}*`,
+        ``,
+        `Route: ${activeTrip.title}`,
+        `Status: ${activeTrip.status === "green" ? "On track" : activeTrip.status === "amber" ? "Under review" : "Alert"}`,
+        `ETA: ${etaStr}`,
+        ``,
+        `We are watching. Reply *5* when you arrive safely.\nReply *10* for emergency.`,
+      ].join("\n"));
+    } else {
+      await saveMessage(from, to, body, messageSid, null);
+      await sendWhatsApp(from, to, `You don't have an active trip right now.\n\nReply *1* to start a monitored drive.\nReply *2* to clock in for the evening.\n\nReply 0 for Main Menu.`);
+    }
+    return { handled: true };
+  }
 
   // 6c. Planned stop — member declaring a voluntary pause (fuel, coffee, rest, etc.)
   // Acknowledges the stop, pauses ETA drift monitoring, and waits for member to resume.
