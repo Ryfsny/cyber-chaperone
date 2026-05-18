@@ -7,6 +7,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { AiAssistant } from "@/components/ai/AiAssistant";
+import { AgentReporter } from "@/components/agent-reporter/AgentReporter";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 
@@ -336,6 +337,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <span className="text-[9px] uppercase tracking-wide font-bold leading-none">More</span>
         </button>
       </div>
+
+      {/* ── Reporter Agent (floating) ───────────────────────────────────── */}
+      <AgentReporter />
 
       {/* ── Main content ───────────────────────────────────────────────── */}
       <main className="flex-1 flex min-w-0 overflow-hidden pt-12 pb-16 md:pt-0 md:pb-0">
