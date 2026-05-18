@@ -10,6 +10,13 @@ import { reverseGeocodeStreetAddress } from "../route-service.js";
 import { isVoiceNote, downloadTwilioMedia, transcribeVoiceNote } from "../voice-service.js";
 import { callOperatorClaude } from "../operator-ai-service.js";
 import { callMemberClaude } from "../member-ai-service.js";
+import {
+  FLOW_FIELD_007,
+  fieldMenuText,
+  setFieldMenuState,
+  clearFieldMenuState,
+  handleFieldState,
+} from "../field-ops-service.js";
 
 const router: IRouter = Router();
 
@@ -496,12 +503,22 @@ router.post(
     if (OPERATOR_NUMBERS.has(senderDigits)) {
       const trimmedBody = body.trim();
 
-      // "007" → boss mode (Claude AI)
+      // "007" → toggle field command menu (enter if not in it, exit if already in it)
       if (/^007$/.test(trimmedBody)) {
-        await db.delete(conversationStatesTable)
+        const [existingFs] = await db
+          .select({ currentFlow: conversationStatesTable.currentFlow })
+          .from(conversationStatesTable)
           .where(eq(conversationStatesTable.whatsappNumber, from))
-          .catch(() => {});
-        await sendReply(from, to, "Switched back to operator mode. You're talking to Claude again. 🛡️");
+          .limit(1)
+          .catch(() => []);
+        if (existingFs?.currentFlow === FLOW_FIELD_007) {
+          await clearFieldMenuState(from);
+          await sendReply(from, to, "🔒 Field mode exited. Back to operator mode — you're talking to Claude again. 🛡️");
+        } else {
+          const opName = senderDigits === "27825611065" ? "André" : "Kriszti";
+          await setFieldMenuState(from, null);
+          await sendReply(from, to, fieldMenuText(opName));
+        }
         res.set("Content-Type", "text/xml");
         res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
         return;
@@ -520,13 +537,40 @@ router.post(
         req.log.info({ from }, "operator-ai: MEMBER MODE activated — routing to member menu");
         body = "Hi"; // reset so menu router fires global override and shows main menu
       } else {
-        // Check if Andre is currently in an active member flow
+        // Check if Andre/Kriszti is in an active flow
         const [convRow] = await db
-          .select({ currentFlow: conversationStatesTable.currentFlow })
+          .select({
+            currentFlow: conversationStatesTable.currentFlow,
+            currentStep: conversationStatesTable.currentStep,
+            pendingTripData: conversationStatesTable.pendingTripData,
+          })
           .from(conversationStatesTable)
           .where(eq(conversationStatesTable.whatsappNumber, from))
           .limit(1)
           .catch(() => []);
+
+        // FIELD_007 — handle field command menu before Claude or member routing
+        if (convRow?.currentFlow === FLOW_FIELD_007) {
+          const opName = senderDigits === "27825611065" ? "André" : "Kriszti";
+          await handleFieldState(
+            from,
+            to,
+            body,
+            convRow.currentStep ?? null,
+            (convRow.pendingTripData ?? null) as Record<string, unknown> | null,
+            numMedia,
+            mediaUrl,
+            mediaContentType,
+            latitude,
+            longitude,
+            opName,
+            sendReply,
+            req.log,
+          );
+          res.set("Content-Type", "text/xml");
+          res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+          return;
+        }
 
         const inMemberMode = convRow?.currentFlow != null;
 
