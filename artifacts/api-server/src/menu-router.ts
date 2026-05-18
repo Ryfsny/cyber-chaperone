@@ -161,9 +161,18 @@ const AMBIGUOUS_DEST_PATTERN =
 const START_FORMAT =
   /^START\s+(.+?)\s+to\s+(.+?)\s+ETA\s+(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)\s*$/i;
 // Natural language trip start: "I'm going to Oyster Box leaving from College Road now"
-// Also: "Going to Pretoria from Home", "Heading to Durban from Sandton"
+// "I am going to The Oyster Box in Durban from College Road"
+// "Going to Pretoria from Home", "Heading to Durban from Sandton"
 const NATURAL_TRIP_START_PATTERN =
-  /^(?:i'?m\s+(?:am\s+)?)?(?:going|heading|travelling|traveling|driving)\s+to\s+(.+?)\s+(?:leaving\s+from|from|departing\s+from|starting\s+(?:from|at))\s+(.+?)(?:\s*,?\s*(?:(?:leaving|departing)?\s*now))?(?:\s*[,.]?\s*(?:eta|arriving(?:\s+at)?)\s*:?\s*(\d{1,2}[:.]\d{2}(?:\s*[aApP][mM])?))?\.?\s*$/i;
+  /^(?:i(?:'?m|'?m\s+am|\s+am)\s+)?(?:going|heading|travelling|traveling|driving)\s+to\s+(.+?)\s+(?:leaving\s+from|from|departing\s+from|starting\s+(?:from|at))\s+(.+?)(?:\s*,?\s*(?:(?:leaving|departing)?\s*now))?(?:\s*[,.]?\s*(?:eta|arriving(?:\s+at)?)\s*:?\s*(\d{1,2}[:.]\d{2}(?:\s*[aApP][mM])?))?\.?\s*$/i;
+// "Going from College Road to Skukuza leaving now" — FROM first, DEST second
+// "Driving from Sandton to Airport ETA 15:00"
+const NATURAL_TRIP_FROM_FIRST_PATTERN =
+  /^(?:i(?:'?m|'?m\s+am|\s+am)\s+)?(?:going|heading|travelling|traveling|driving|leaving)\s+from\s+(.+?)\s+to\s+(.+?)(?:\s*,?\s*(?:leaving\s*)?now)?(?:\s*[,.]?\s*(?:eta|arriving(?:\s+at)?)\s*:?\s*(\d{1,2}[:.]\d{2}(?:\s*[aApP][mM])?))?\.?\s*$/i;
+// "Leaving Fourways now heading to Rosebank Mall. ETA 14:40." — André's natural format
+// Also without comma: "Leaving Sandton heading to Airport ETA 15:00"
+const NATURAL_TRIP_LEAVING_PATTERN =
+  /^Leaving\s+(.+?)\s+(?:now\s+)?(?:heading|going)\s+to\s+(.+?)(?:[.,]?\s*ETA\s+(\d{1,2}:\d{2}(?:\s*[aApP][mM])?))?\.?\s*$/i;
 // Waze share text: "I'm using Waze to drive to [DEST], arriving at [TIME]."
 const WAZE_SHARE_PATTERN =
   /i'?m\s+using\s+waze\s+to\s+drive\s+to\s+(.+?),\s+arriving\s+at\s+(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)/i;
@@ -5196,7 +5205,7 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
       log.info({ from }, "Menu router: Waze link — trip auto-started");
       return { handled: true };
     }
-    // "I'm going to [DEST] leaving from [PLACE]" / "Going to [DEST] from [PLACE] now"
+    // "I'm going to [DEST] from [PLACE]" / "Going to [DEST] leaving from [PLACE] now"
     const natMatch = trimmed.match(NATURAL_TRIP_START_PATTERN);
     if (natMatch) {
       const natDest = natMatch[1].trim();
@@ -5204,7 +5213,27 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
       const natStart = rawStart || member?.homeAddress || "Home";
       const natEta = natMatch[3]?.replace(".", ":")?.trim() ?? null;
       await createTrip(from, to, member, natStart, natDest, natEta, body, messageSid, log);
-      log.info({ from }, "Menu router: natural language trip start — no menu needed");
+      log.info({ from }, "Menu router: natural trip start (to-from)");
+      return { handled: true };
+    }
+    // "Going from [START] to [DEST] leaving now" / "Driving from Sandton to Airport ETA 15:00"
+    const fromFirstMatch = trimmed.match(NATURAL_TRIP_FROM_FIRST_PATTERN);
+    if (fromFirstMatch) {
+      const ffStart = fromFirstMatch[1].replace(/\s*,?\s*(?:leaving\s+)?now\.?$/i, "").trim() || member?.homeAddress || "Home";
+      const ffDest  = fromFirstMatch[2].replace(/\s*,?\s*(?:leaving\s+)?now\.?$/i, "").trim();
+      const ffEta   = fromFirstMatch[3]?.replace(".", ":")?.trim() ?? null;
+      await createTrip(from, to, member, ffStart, ffDest, ffEta, body, messageSid, log);
+      log.info({ from }, "Menu router: natural trip start (from-to)");
+      return { handled: true };
+    }
+    // "Leaving Fourways now heading to Rosebank Mall. ETA 14:40." — André's natural format
+    const leavingMatch = trimmed.match(NATURAL_TRIP_LEAVING_PATTERN);
+    if (leavingMatch) {
+      const lvStart = leavingMatch[1].trim() || member?.homeAddress || "Home";
+      const lvDest  = leavingMatch[2].trim();
+      const lvEta   = leavingMatch[3]?.trim() ?? null;
+      await createTrip(from, to, member, lvStart, lvDest, lvEta, body, messageSid, log);
+      log.info({ from }, "Menu router: natural trip start (leaving-heading)");
       return { handled: true };
     }
   }
