@@ -782,6 +782,9 @@ async function createTrip(
         ``,
         `When you arrive: reply *ARRIVED* ✅`,
         `Need help any time: reply *10* 🆘`,
+        ``,
+        `📡 *For live tracking in our Situation Room:*`,
+        `Tap 📎 → Location → *Share Live Location* → set to 4 hours`,
       ].filter((l) => l !== null).join("\n");
     })(),
   );

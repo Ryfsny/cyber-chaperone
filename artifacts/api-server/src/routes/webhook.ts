@@ -412,10 +412,27 @@ router.post(
   const address: string = (rb["Address"] ?? rb["address"] ?? "").toString();
   const label: string = (rb["Label"] ?? rb["label"] ?? "").toString();
 
-  // BUG 1 FIX: Native WhatsApp location pin arrives with empty Body but populated
-  // Latitude/Longitude/Address fields. Synthesise a text body so the full pipeline
-  // (member lookup, menu router, active-trip handler) can process it normally.
-  if (body === "" && latitude !== "" && longitude !== "") {
+  // ── Live location update (WhatsApp "Share Live Location") ───────────────
+  // Twilio sends periodic lat/lon updates when a member has shared their live
+  // location. We update the trip silently — no reply, return early.
+  if (latitude !== "" && longitude !== "") {
+    try {
+      const liveTrip = await findActiveTrip(from);
+      if (liveTrip) {
+        await db
+          .update(tripsTable)
+          .set({ lastKnownLat: latitude, lastKnownLon: longitude, lastKnownAt: new Date() })
+          .where(eq(tripsTable.id, liveTrip.id));
+        req.log.info({ tripId: liveTrip.id, lat: latitude, lon: longitude }, "Live GPS position updated");
+        // Silent ACK — no reply so the member isn't spammed on every location tick
+        res.set("Content-Type", "text/xml");
+        res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+        return;
+      }
+    } catch (err) {
+      req.log.warn({ err }, "Live location update failed — falling through");
+    }
+    // No active trip — synthesise a body so the menu router can handle it
     const locationLabel = [label, address].filter(Boolean).join(", ");
     body = `📍 Location: ${locationLabel || `${latitude},${longitude}`}`;
   }

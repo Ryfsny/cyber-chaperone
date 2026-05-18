@@ -49,6 +49,12 @@ export interface Trip {
   checkpointList?: string | null;
   /** @nullable */
   mediaPhotos?: string | null;
+  /** @nullable */
+  lastKnownLat?: string | null;
+  /** @nullable */
+  lastKnownLon?: string | null;
+  /** @nullable */
+  lastKnownAt?: Date | null;
   messageCount: number;
   createdAt: Date;
   updatedAt: Date;

@@ -711,7 +711,24 @@ export default function Dashboard() {
       // ── Moving vehicle icon ────────────────────────────────────
       let pos: [number, number] | null = null;
       let bearing = 0;
-      if (coords.length > 1) {
+      const hasLiveGps = !!(trip.lastKnownLat && trip.lastKnownLon);
+
+      if (hasLiveGps) {
+        // Real GPS from WhatsApp live location sharing
+        const lat = parseFloat(trip.lastKnownLat!);
+        const lon = parseFloat(trip.lastKnownLon!);
+        pos = [lat, lon];
+        // Calculate bearing: find closest route point and use its forward bearing
+        if (coords.length > 1) {
+          let minDist = Infinity;
+          let closestIdx = 0;
+          for (let i = 0; i < coords.length; i++) {
+            const d = Math.hypot(coords[i][0] - lon, coords[i][1] - lat);
+            if (d < minDist) { minDist = d; closestIdx = i; }
+          }
+          bearing = interpolateBearing(coords, closestIdx / Math.max(coords.length - 1, 1));
+        }
+      } else if (coords.length > 1) {
         pos = interpolatePosition(coords, progress);
         bearing = interpolateBearing(coords, progress);
       } else if (trip.startLat && trip.startLon) {
@@ -729,12 +746,21 @@ export default function Dashboard() {
         const etaLine = trip.originalMemberEta
           ? `<br/><span style="color:#aaa">ETA ${trip.originalMemberEta}</span>`
           : "";
+        const gpsLine = hasLiveGps
+          ? (() => {
+              const age = trip.lastKnownAt
+                ? Math.round((Date.now() - new Date(trip.lastKnownAt).getTime()) / 1000)
+                : null;
+              const ageStr = age !== null ? (age < 60 ? `${age}s ago` : `${Math.round(age / 60)}m ago`) : "";
+              return `<br/><span style="color:#22c55e">📡 Live GPS ${ageStr}</span>`;
+            })()
+          : `<br/><span style="color:#f59e0b">⏱️ Estimated position</span>`;
         marker.bindPopup(
           `<div style="font-family:monospace;font-size:12px;min-width:190px;line-height:1.6;">
             <div style="font-weight:bold;color:${color};font-size:10px;letter-spacing:2px;">${trip.status.toUpperCase()}</div>
             <div style="font-weight:bold;font-size:13px;margin-bottom:2px;">${trip.travelerName}</div>
             <div style="color:#aaa;font-size:11px;margin-bottom:4px;">${trip.title}</div>
-            <div style="font-size:11px;">🛣️ ${Math.round(progress * 100)}% of route${etaLine}${cpLine}</div>
+            <div style="font-size:11px;">🛣️ ${Math.round(progress * 100)}% of route${etaLine}${cpLine}${gpsLine}</div>
             <button id="sr-goto-${trip.id}" style="background:#1e293b;color:#fff;border:1px solid #334155;padding:5px 8px;font-size:11px;cursor:pointer;font-family:monospace;width:100%;margin-top:7px;border-radius:2px;">View Trip →</button>
           </div>`
         );

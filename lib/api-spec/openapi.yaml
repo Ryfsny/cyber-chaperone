@@ -515,6 +515,13 @@ components:
           type: ["string", "null"]
         mediaPhotos:
           type: ["string", "null"]
+        lastKnownLat:
+          type: ["string", "null"]
+        lastKnownLon:
+          type: ["string", "null"]
+        lastKnownAt:
+          type: ["string", "null"]
+          format: date-time
         messageCount:
           type: integer
         createdAt:
