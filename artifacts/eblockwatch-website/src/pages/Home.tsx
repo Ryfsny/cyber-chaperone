@@ -192,7 +192,7 @@ export default function HomePage() {
                 style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}
               >
                 <WhatsAppIcon />
-                Chat to AI Command on WhatsApp
+                Chat to Arnie on WhatsApp
               </a>
             </div>
             <div className="ebw-callout-red" style={{ marginTop: "28px", maxWidth: "440px" }}>
@@ -255,13 +255,13 @@ export default function HomePage() {
         <div style={{ maxWidth: "1200px", margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "64px", alignItems: "center" }}>
           <div>
             <h2 className="ebw-heading" style={{ fontSize: "clamp(24px, 3vw, 38px)", color: "#0d1117", marginBottom: "12px" }}>
-              Ask AI Command
+              Ask Arnie
             </h2>
             <p style={{ fontSize: "17px", color: "#4b5563", marginBottom: "28px", lineHeight: 1.6 }}>
               Your eblockwatch safety companion
             </p>
             <p style={{ color: "#4b5563", lineHeight: 1.7, marginBottom: "32px", fontSize: "15px" }}>
-              Have a safety question? AI Command is available 24/7 to guide you through Cyber Chaperone, explain how trips work, and give you peace of mind before you travel.
+              Have a safety question? Arnie is available 24/7 to guide you through Cyber Chaperone, explain how trips work, and give you peace of mind before you travel.
             </p>
             <a
               href={WA_LINK_HI}
@@ -271,11 +271,11 @@ export default function HomePage() {
               style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}
             >
               <WhatsAppIcon />
-              Chat with AI Command on WhatsApp
+              Chat with Arnie on WhatsApp
             </a>
           </div>
           <div style={{ display: "flex", justifyContent: "center" }}>
-            <img src={AI_CHAT_IMG} alt="AI Command chat interface" style={{ maxWidth: "100%", borderRadius: "16px", boxShadow: "0 20px 60px rgba(0,0,0,0.12)" }} />
+            <img src={AI_CHAT_IMG} alt="Arnie chat interface" style={{ maxWidth: "100%", borderRadius: "16px", boxShadow: "0 20px 60px rgba(0,0,0,0.12)" }} />
           </div>
         </div>
       </section>
@@ -474,7 +474,7 @@ export default function HomePage() {
                 style={{ display: "inline-flex", alignItems: "center", gap: "8px", marginBottom: "20px" }}
               >
                 <WhatsAppIcon />
-                Chat with AI Command on WhatsApp
+                Chat with Arnie on WhatsApp
               </a>
               <div style={{ borderTop: "1px solid #e5e7eb", marginTop: "28px", paddingTop: "24px" }}>
                 <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "12px" }}>Want to pay right away? Please use one of the links below.</p>

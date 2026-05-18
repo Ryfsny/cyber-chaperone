@@ -8,7 +8,7 @@ const FEATURES = [
   {
     icon: "🛡️",
     title: "Cyber Chaperone",
-    desc: "Tell AI Command where you're going. We watch your route and ping your family if anything looks wrong.",
+    desc: "Tell Arnie where you're going. We watch your route and ping your family if anything looks wrong.",
   },
   {
     icon: "📍",
@@ -18,7 +18,7 @@ const FEATURES = [
   {
     icon: "🆘",
     title: "One-message emergency",
-    desc: "Say \u2018Help\u2019 on WhatsApp. AI Command alerts your emergency contact and the Situation Room immediately.",
+    desc: "Say \u2018Help\u2019 on WhatsApp. Arnie alerts your emergency contact and the Situation Room immediately.",
   },
   {
     icon: "👨‍👩‍👧",
@@ -29,7 +29,7 @@ const FEATURES = [
 
 const STEPS = [
   { num: "1", text: "Save *+27 82 561 1065* in your contacts as *eblockwatch*" },
-  { num: "2", text: 'Send *"Hi"* on WhatsApp — AI Command answers immediately' },
+  { num: "2", text: 'Send *"Hi"* on WhatsApp — Arnie answers immediately' },
   { num: "3", text: "Follow the 3-step setup — under 2 minutes" },
 ];
 
@@ -196,7 +196,7 @@ export default function JoinPage() {
               Activate free on WhatsApp
             </a>
             <p style={{ color: "#475569", fontSize: 13, marginTop: 12 }}>
-              Upgrade to paid from inside WhatsApp — AI Command guides you through it.
+              Upgrade to paid from inside WhatsApp — Arnie guides you through it.
             </p>
           </div>
         </div>

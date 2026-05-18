@@ -300,7 +300,7 @@ export async function sendMemberWelcomeEmail(
       💬 &nbsp;OPEN WHATSAPP NOW &nbsp;→
     </a>
     <p style="margin:12px 0 0;font-size:12px;color:#374151;font-family:Arial,sans-serif;">
-      AI Command walks you through it step by step — takes under 2 minutes.
+      Arnie, our digital safety companion, walks you through it step by step — takes under 2 minutes.
     </p>
   </div>
 

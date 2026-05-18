@@ -722,19 +722,26 @@ async function createTrip(
   await sendWhatsApp(
     from,
     to,
-    [
-      `✅ *You are now under Cyber Chaperone protection.*`,
-      ``,
-      `${name}, we have your route to *${destination}* locked in.`,
-      `From this moment we are watching. You will not face anything alone.`,
-      cpLine ? cpLine.trim() : null,
-      nearbyLine ? nearbyLine.trim() : null,
-      ``,
-      `When you arrive, reply *ARRIVED* — that closes your trip.`,
-      ``,
-      `🚨 Any time: reply *10* if you need a human right now.`,
-      `Reply 0 for Main Menu.`,
-    ].filter((l) => l !== null).join("\n"),
+    (() => {
+      const durationLine = routeInfo
+        ? `This journey is about ${Math.floor(routeInfo.durationMinutes / 60)}h ${routeInfo.durationMinutes % 60}min — your ETA is around ${routeInfo.etaTime}.`
+        : (effectiveEta ? `Your ETA: ${normaliseEta(effectiveEta)}.` : null);
+      return [
+        `✅ *Arnie's on it, ${name}.* 🛡️`,
+        ``,
+        `I've got your route to *${destination}* locked in.`,
+        durationLine,
+        cpLine ? cpLine.trim() : null,
+        ``,
+        `I'm with you every kilometre. You will not face this road alone.`,
+        nearbyLine ? nearbyLine.trim() : null,
+        ``,
+        `When you arrive safely, reply *ARRIVED* — that closes your trip.`,
+        ``,
+        `🚨 Any time: reply *10* if you need urgent help.`,
+        `Reply 0 for Main Menu.`,
+      ].filter((l) => l !== null).join("\n");
+    })(),
   );
 
   await sendWhatsApp(from, to, mainMenuText(name, member));
@@ -1245,7 +1252,7 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
   return [
     `🛡️ *eblockwatch — Cyber Chaperone*`,
     ``,
-    `Hi ${name}. I'm AI Command — André Snyman's digital assistant.`,
+    `Hi ${name}. I'm Arnie — André Snyman's digital safety companion.`,
     `We have one job: get you there safely, every time.`,
     ``,
     statusLine,
@@ -3704,7 +3711,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
       `   Payment is secure via Paystack — card, bank or EFT.`,
       ``,
       `3️⃣  *Travel with Cyber Chaperone*`,
-      `   Reply 5 and tell AI Command where you're going.`,
+      `   Reply 1 and tell Arnie where you're going.`,
       `   We watch your route. If you don't arrive — we act.`,
       ``,
       `4️⃣  *Set up your ICE contact*`,

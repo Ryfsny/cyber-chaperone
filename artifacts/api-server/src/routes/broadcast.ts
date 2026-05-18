@@ -351,7 +351,7 @@ function buildWelcomeBackEmailHtml(firstName: string, waNumber: string): string 
         </td>
         <td style="vertical-align:top;padding-left:14px;padding-top:4px;">
           <div style="font-weight:bold;color:#111827;font-size:14px;font-family:Arial,sans-serif;margin-bottom:3px;">Send "Hi"</div>
-          <div style="color:#4b5563;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">Open WhatsApp and send the word <strong style="color:#16a34a;">Hi</strong>. AI Command, our system, responds with your member menu.</div>
+          <div style="color:#4b5563;font-size:13px;line-height:1.6;font-family:Arial,sans-serif;">Open WhatsApp and send the word <strong style="color:#16a34a;">Hi</strong>. Arnie, our digital safety companion, responds with your member menu.</div>
         </td>
       </tr>
     </table>
@@ -693,7 +693,7 @@ router.post("/broadcast/welcome-campaign", async (req: Request, res: Response): 
   }
 
   const SUBJECT = (fn: string) => `André here — welcome home, ${fn}.`;
-  const TEXT    = (fn: string) => `Hi ${fn},\n\nWelcome home to eblockwatch.\n\nActivate on WhatsApp now — save +27 82 561 1065, send "Hi", and AI Command walks you through everything.\n\nAndre Snyman\nFounder · eblockwatch`;
+  const TEXT    = (fn: string) => `Hi ${fn},\n\nWelcome home to eblockwatch.\n\nActivate on WhatsApp now — save +27 82 561 1065, send "Hi", and Arnie (our digital safety companion) walks you through everything.\n\nAndre Snyman\nFounder · eblockwatch`;
 
   const lastIdx = valid.length - 1;
   const job = makeJob("email", valid.length);
