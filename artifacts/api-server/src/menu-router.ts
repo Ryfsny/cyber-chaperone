@@ -1540,7 +1540,7 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
     return [
       `${name} 👋 Situation Room — you're in.`,
       ``,
-      `1️⃣  Cyber Chaperone 🛡️ — connected in your safe zone, monitored when you roam`,
+      `1️⃣  Cyber Chaperone 🛡️ — your WhatsApp line to the Situation Room`,
       `2️⃣  What is eblockwatch?`,
       `3️⃣  Membership options`,
       `4️⃣  Activate my membership`,
@@ -1571,7 +1571,7 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
     statusLine,
     ``,
     isUnknown ? `0️⃣  Join eblockwatch — register now (it's free)` : null,
-    `1️⃣  Cyber Chaperone 🛡️ — connected in your safe zone, monitored when you roam`,
+    `1️⃣  Cyber Chaperone 🛡️ — your WhatsApp line to the Situation Room`,
     `2️⃣  What is eblockwatch?`,
     `3️⃣  Membership options`,
     `4️⃣  Activate my membership`,
@@ -1811,8 +1811,8 @@ function ccMenuText(name: string): string {
   return [
     `🛡️ *Cyber Chaperone — ${name}*`,
     ``,
-    `In your safe zone: stay connected to eblockwatch.`,
-    `When you roam: we monitor you until you're safe again.`,
+    `Your WhatsApp connection to the eblockwatch Situation Room.`,
+    `In your safe zone, we're here. When you roam — kick-start your trip.`,
     ``,
     `─── 🏠 In your safe zone ───`,
     `5️⃣  I need help 🆘`,
@@ -1867,10 +1867,13 @@ async function sendStartLocationPrompt(from: string, to: string, name: string): 
 
 function ccInfoText(name: string): string {
   return [
-    `${name}, *Cyber Chaperone* is your connection to eblockwatch.`,
+    `${name}, *Cyber Chaperone* is your WhatsApp connection to the eblockwatch Situation Room.`,
     ``,
     `eblockwatch has been keeping South Africans safe for over 20 years.`,
-    `Cyber Chaperone is how every member stays connected to that network — from their phone.`,
+    `Every member connects to that network through this WhatsApp chat.`,
+    ``,
+    `When you roam — kick-start your trip and we monitor you.`,
+    `When you're in your safe zone — we're still here.`,
     ``,
     `It works in two modes:`,
     ``,
