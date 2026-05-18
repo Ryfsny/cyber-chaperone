@@ -189,6 +189,13 @@ const PILOT_MEMBERS: Record<string, MemberInfo> = {
     membershipTier: null,
     isKnown: true,
   },
+  "whatsapp:+27716845443": {
+    displayName: "Kriszti Newell",
+    role: "PA / test operator",
+    memberStatus: "verified",
+    membershipTier: null,
+    isKnown: true,
+  },
 };
 
 async function lookupMember(whatsappNumber: string): Promise<MemberInfo | null> {
@@ -485,7 +492,8 @@ router.post(
   // Strip whatsapp: prefix and + so we match regardless of Twilio formatting.
   {
     const senderDigits = from.replace("whatsapp:+", "").replace("whatsapp:", "");
-    if (senderDigits === "27825611065") {
+    const OPERATOR_NUMBERS = new Set(["27825611065", "27716845443"]);
+    if (OPERATOR_NUMBERS.has(senderDigits)) {
       const trimmedBody = body.trim();
 
       // "007" → boss mode (Claude AI)
