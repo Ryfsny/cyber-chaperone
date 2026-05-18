@@ -4004,51 +4004,6 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
     return true;
   }
 
-  if (choice === "9") {
-    if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_GETTING_STARTED");
-    await saveMessage(from, to, body, messageSid, null);
-    await sendWhatsApp(from, to, [
-      `📖 *Getting Started with eblockwatch*`,
-      ``,
-      `Watch the 2-minute intro first 👇`,
-      `https://www.facebook.com/share/v/1ACByM44QZ/?mibextid=wwXIfr`,
-      ``,
-      `Then follow your 5-step journey to safer living:`,
-      ``,
-      `━━━━━━━━━━━━━━━━━━━━`,
-      `1️⃣  *Register* — it's free`,
-      `   Reply 0 → choose "Join eblockwatch"`,
-      ``,
-      `2️⃣  *Activate your membership*`,
-      `   Reply 3 from the main menu.`,
-      `   Individual R150/mo or Family R250/mo.`,
-      `   Payment is secure via Paystack — card, bank or EFT.`,
-      ``,
-      `3️⃣  *Travel with Cyber Chaperone*`,
-      `   Reply 1 and tell Arnie where you're going.`,
-      `   We watch your route. If you don't arrive — we act.`,
-      ``,
-      `4️⃣  *Set up your ICE contact*`,
-      `   Reply 4 → Update my profile.`,
-      `   We only contact them if we genuinely cannot reach you.`,
-      ``,
-      `5️⃣  *Invite a Friend*`,
-      `   Reply 8 to get a message you can forward to anyone.`,
-      `   The more people in your network, the safer you all are.`,
-      `━━━━━━━━━━━━━━━━━━━━`,
-      ``,
-      `At any time:`,
-      `• Reply 0 → Main Menu`,
-      `• Reply 10 → Emergency`,
-      `• Reply Hi → Start over`,
-      ``,
-      `You're in good hands. André and 250 000 members have your back. 🛡️`,
-    ].join("\n"));
-    await sendMainMenuWithNearby(from, to, name, member);
-    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
-    return true;
-  }
-
   if (choice === "10") {
     const activeTrip = await findActiveTrip(from);
     await saveMessage(from, to, body, messageSid, activeTrip?.id ?? null);
@@ -4760,6 +4715,56 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
       );
     }
     log.info({ from, handler: "GLOBAL_EMERGENCY_10", iceAlerted: !!ice10 }, "menu-router: global emergency 10 triggered");
+    return { handled: true };
+  }
+
+  // GLOBAL "9" — Getting Started Guide works from any flow/state
+  if (/^9$/.test(trimmed)) {
+    if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_GETTING_STARTED");
+    await saveMessage(from, to, body, messageSid, null);
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    const isNewMember = !member || member.memberStatus === "unverified";
+    await sendWhatsApp(from, to, [
+      `📖 *Getting Started with eblockwatch*`,
+      ``,
+      `Watch the 2-minute intro first 👇`,
+      `https://www.facebook.com/share/v/1ACByM44QZ/?mibextid=wwXIfr`,
+      ``,
+      `Then follow your 5-step journey to safer living:`,
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      isNewMember
+        ? `1️⃣  *Register* — it's free\n   Reply *0* right now to sign up. Takes 2 minutes.`
+        : `1️⃣  *Register* ✅ Already done!`,
+      ``,
+      `2️⃣  *Activate your membership*`,
+      `   Reply *4* from the main menu.`,
+      `   Individual R150/mo or Family R250/mo.`,
+      `   Secure payment via Paystack — card, bank or EFT.`,
+      ``,
+      `3️⃣  *Travel with Cyber Chaperone*`,
+      `   Reply *1* and tell Arnie where you're going.`,
+      `   We watch your route. If you don't arrive — we act.`,
+      ``,
+      `4️⃣  *Set up your ICE contact*`,
+      `   Reply *5* → My Account → Update ICE contact.`,
+      `   We only contact them if we genuinely cannot reach you.`,
+      ``,
+      `5️⃣  *Invite a Friend*`,
+      `   Reply *8* to get a message you can forward to anyone.`,
+      `   The more people in your network, the safer you all are.`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      ``,
+      `At any time:`,
+      `• Reply *0* → Main Menu`,
+      `• Reply *10* → Emergency`,
+      `• Reply *Hi* → Start over`,
+      ``,
+      `You're in good hands. André and 250 000 members have your back. 🛡️`,
+    ].join("\n"));
+    await sendMainMenuWithNearby(from, to, name, member);
+    log.info({ from, handler: "GLOBAL_GETTING_STARTED_9" }, "menu-router: global getting started guide triggered");
     return { handled: true };
   }
 
