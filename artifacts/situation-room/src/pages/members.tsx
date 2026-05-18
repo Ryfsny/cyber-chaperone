@@ -338,6 +338,9 @@ function MemberMapView() {
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Cluster member list panel
+  const [clusterMembers, setClusterMembers] = useState<MapMember[] | null>(null);
+
   const { data: mapMembers = [], isLoading } = useQuery<MapMember[]>({
     queryKey: ["/api/members/map"],
     queryFn: () => fetch("/api/members/map", { credentials: "include" }).then((r) => r.json()),
@@ -392,7 +395,7 @@ function MemberMapView() {
       maxClusterRadius: 50,
       spiderfyOnMaxZoom: true,
       showCoverageOnHover: false,
-      zoomToBoundsOnClick: true,
+      zoomToBoundsOnClick: false,
       iconCreateFunction: (c: any) => {
         const n = c.getChildCount();
         const sz = n < 50 ? 34 : n < 200 ? 40 : 48;
@@ -401,6 +404,17 @@ function MemberMapView() {
           className: "", iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2],
         });
       },
+    });
+
+    // Cluster click → show member list panel
+    cluster.on("clusterclick", (e: any) => {
+      const childMarkers: any[] = e.layer.getAllChildMarkers();
+      const members: MapMember[] = childMarkers
+        .map((mk: any) => mk._ebw_member as MapMember)
+        .filter(Boolean);
+      setClusterMembers(members);
+      setSelected(null);
+      setSendResult(null);
     });
 
     const bounds: [number, number][] = [];
@@ -415,7 +429,10 @@ function MemberMapView() {
         iconSize: [14, 14], iconAnchor: [7, 7],
       });
       const marker = L.marker([lat, lon], { icon });
+      // Store member data on marker so cluster click can retrieve it
+      (marker as any)._ebw_member = m;
       marker.on("click", () => {
+        setClusterMembers(null);
         setSelected(m);
         setMsg("");
         setSendResult(null);
@@ -618,6 +635,108 @@ function MemberMapView() {
                   Cancel
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Cluster member list panel */}
+        {clusterMembers && !selected && (
+          <div className="absolute top-3 left-3 w-72 bg-card border border-border shadow-2xl z-[1000] flex flex-col"
+               style={{ maxHeight: "calc(100% - 24px)" }}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-secondary shrink-0">
+              <div>
+                <div className="font-bold text-sm text-foreground">
+                  {clusterMembers.length} member{clusterMembers.length !== 1 ? "s" : ""} in this area
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Click a name to message them</div>
+              </div>
+              <button onClick={() => setClusterMembers(null)} className="text-muted-foreground hover:text-foreground shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Member list */}
+            <div className="overflow-y-auto flex-1 divide-y divide-border">
+              {clusterMembers.map((m) => {
+                const isActive = m.memberStatus === "active" || m.memberStatus === "verified";
+                const isFbMember = m.whatsappNumber.startsWith("fb:");
+                const phone = m.whatsappNumber.replace(/^whatsapp:\+?/, "");
+                const waLink = isFbMember ? null : `https://wa.me/${phone}`;
+                const smsPhone = m.mobile ?? (isFbMember ? null : `+${phone}`);
+                const smsLink = smsPhone ? `sms:${smsPhone}` : null;
+                const area = [m.suburb, m.city].filter(Boolean).join(", ");
+                return (
+                  <div key={m.id} className="px-4 py-2.5 hover:bg-secondary/60 transition-colors">
+                    <div className="flex items-start gap-2.5">
+                      {/* Status dot */}
+                      <span
+                        className="mt-1 shrink-0 rounded-full"
+                        style={{ width: 8, height: 8, background: isActive ? "#22c55e" : "#f59e0b", display: "inline-block" }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        {/* Clickable name → open full contact panel */}
+                        <button
+                          className="text-left font-semibold text-xs text-foreground hover:text-primary transition-colors truncate w-full"
+                          onClick={() => {
+                            setClusterMembers(null);
+                            setSelected(m);
+                            setMsg("");
+                            setSendResult(null);
+                            if (isFbMember) setChannel("messenger");
+                            else setChannel("whatsapp");
+                          }}
+                        >
+                          {m.displayName}
+                        </button>
+                        {area && <div className="text-[10px] text-muted-foreground truncate">{area}</div>}
+                        {/* Quick contact buttons */}
+                        <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                          {waLink && (
+                            <a
+                              href={waLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium bg-green-900/60 text-green-300 border border-green-700/60 rounded-sm hover:bg-green-800/80 transition-colors"
+                              title={`WhatsApp ${m.displayName}`}
+                            >
+                              📱 WhatsApp
+                            </a>
+                          )}
+                          {isFbMember && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium bg-blue-900/60 text-blue-300 border border-blue-700/60 rounded-sm">
+                              💬 Messenger
+                            </span>
+                          )}
+                          {smsLink && (
+                            <a
+                              href={smsLink}
+                              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium bg-amber-900/60 text-amber-300 border border-amber-700/60 rounded-sm hover:bg-amber-800/80 transition-colors"
+                              title={`SMS ${m.displayName}`}
+                            >
+                              📨 SMS
+                            </a>
+                          )}
+                          <button
+                            className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium bg-secondary text-muted-foreground border border-border rounded-sm hover:text-foreground transition-colors"
+                            onClick={() => {
+                              setClusterMembers(null);
+                              setSelected(m);
+                              setMsg("");
+                              setSendResult(null);
+                              if (isFbMember) setChannel("messenger");
+                              else setChannel("whatsapp");
+                            }}
+                            title="Open full message panel"
+                          >
+                            ✉️ Message
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
