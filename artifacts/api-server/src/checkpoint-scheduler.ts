@@ -445,12 +445,12 @@ async function clockinTick(log: Logger): Promise<void> {
       // ── Phase 1: deadline passed, first ping not sent ─────────────────────
       if (nowMs >= deadlineMs && !notes.includes("[CLOCKIN-PING-SENT]")) {
         await sendWhatsApp(trip.travelerPhone, [
-          `${name} 🏠 — it's clock-in time!`,
+          `Hi ${name} 👋`,
           ``,
-          `Are you safely home?`,
+          `Are you home safely?`,
           ``,
-          `Reply *SAFE* to confirm you're home.`,
-          `Reply *10* if you need help right now.`,
+          `Reply *SAFE* if yes.`,
+          `Reply *10* if you need help.`,
         ].join("\n"));
         const ts = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
         await db.update(tripsTable).set({
@@ -518,19 +518,20 @@ async function clockinTick(log: Logger): Promise<void> {
               from: TWILIO_WHATSAPP_FROM,
               to: iceWa,
               body: [
-                `👋 Hi ${ice.iceContactName} — eblockwatch Cyber Chaperone here.`,
+                `Hi ${ice.iceContactName},`,
                 ``,
-                `You are the emergency contact for *${name}*.`,
+                `This is eblockwatch. We look after *${name}*.`,
                 ``,
-                `${name} was expected home by *${sastTime}* and is ${minsLate} minutes overdue.`,
-                `We have not been able to reach them.`,
+                `${name} was supposed to be home by *${sastTime}*.`,
+                `We have tried to reach them. No reply.`,
                 ``,
-                `Please check on them:`,
+                `Please check on them now.`,
+                `Message them here:`,
                 `👉 wa.me/${memberE164}`,
                 ``,
-                `*Reply here if you need assistance* — we will escalate immediately.`,
+                `Reply to this message if you need us to do more.`,
                 ``,
-                `— eblockwatch Cyber Chaperone`,
+                `— eblockwatch`,
               ].join("\n"),
             });
             iceNote = `ICE nudged: ${ice.iceContactName} (${ice.iceContactPhone})`;
