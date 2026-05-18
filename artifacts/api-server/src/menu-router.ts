@@ -745,53 +745,77 @@ async function createTrip(
     from,
     to,
     (() => {
-      const durationLine = routeInfo
-        ? `This journey is about ${Math.floor(routeInfo.durationMinutes / 60)}h ${routeInfo.durationMinutes % 60}min — your ETA is around ${routeInfo.etaTime}.`
-        : (effectiveEta ? `Your ETA: ${normaliseEta(effectiveEta)}.` : null);
+      const etaLine = routeInfo
+        ? `Your drive is about ${Math.floor(routeInfo.durationMinutes / 60)}h ${routeInfo.durationMinutes % 60}min. Expected arrival: *${routeInfo.etaTime}*.`
+        : effectiveEta
+          ? `Expected arrival: *${normaliseEta(effectiveEta)}*.`
+          : `No arrival time set yet — we are calculating your route now.`;
+
+      const checkInLine = cpLine
+        ? cpLine.trim()
+        : `We will check in with you along the way.`;
+
+      const encStart = encodeURIComponent(startLocation);
+      const encDest = encodeURIComponent(destination);
+      const gmLink = routeInfo
+        ? `https://www.google.com/maps/dir/?api=1&origin=${routeInfo.startCoords.lat},${routeInfo.startCoords.lon}&destination=${routeInfo.destCoords.lat},${routeInfo.destCoords.lon}`
+        : `https://www.google.com/maps/dir/?api=1&origin=${encStart}&destination=${encDest}`;
+      const wazeLink = routeInfo
+        ? `https://waze.com/ul?ll=${routeInfo.destCoords.lat},${routeInfo.destCoords.lon}&navigate=yes`
+        : `https://waze.com/ul?q=${encDest}&navigate=yes`;
+
       return [
-        `✅ *Arnie's on it, ${name}.* 🛡️`,
+        `✅ *Trip registered — we're watching, ${name}.* 🛡️`,
         ``,
-        `I've got your route to *${destination}* locked in.`,
-        durationLine,
-        cpLine ? cpLine.trim() : null,
-        ``,
-        `I'm with you every kilometre. You will not face this road alone.`,
+        `*Route:* ${startLocation} → ${destination}`,
+        etaLine,
         nearbyLine ? nearbyLine.trim() : null,
         ``,
-        `When you arrive safely, reply *ARRIVED* — that closes your trip.`,
+        `🗺️ *Open your route now:*`,
+        `Google Maps: ${gmLink}`,
+        `Waze: ${wazeLink}`,
         ``,
-        `🚨 Any time: reply *10* if you need urgent help.`,
-        `Reply 0 for Main Menu.`,
+        checkInLine,
+        ``,
+        `We will contact you automatically if you go silent past your ETA.`,
+        `Your emergency contact is on standby if needed.`,
+        ``,
+        `When you arrive: reply *ARRIVED* ✅`,
+        `Need help any time: reply *10* 🆘`,
       ].filter((l) => l !== null).join("\n");
     })(),
   );
-
-  await sendWhatsApp(from, to, mainMenuText(name, member));
 
   log.info(
     { tripId: newTrip.id, title, startLocation, destination, eta: effectiveEta, isKnownMember: member?.isKnown ?? false },
     "New trip created from menu flow",
   );
 
+  const etaStatus = effectiveEta
+    ? `ETA: ${effectiveEta}`
+    : `⚠️ No ETA set — route calculating. Overdue check armed once ETA is confirmed.`;
+
+  const checkpointStatus = routeInfo && routeInfo.checkpoints.length > 0
+    ? `${routeInfo.checkpoints.length} waypoint pings scheduled`
+    : `Waypoints: calculating in background`;
+
   await sendOperatorMirror(
     to,
     [
-      `CYBER CHAPERONE — NEW TRIP`,
+      `🟢 NEW TRIP`,
       ``,
-      `Member: ${member?.displayName ?? from}`,
-      `Known member: ${member?.isKnown ? "YES" : "NO"}`,
-      `Trip: ${title}${etaNote}`,
-      `Trip ID: ${newTrip.id}`,
-      `Status: GREEN`,
-      routeInfo ? `Route duration: ${Math.floor(routeInfo.durationMinutes / 60)}h ${routeInfo.durationMinutes % 60}min` : null,
+      `${member?.displayName ?? from} is travelling to *${destination}*`,
+      `Trip #${newTrip.id}`,
+      routeInfo
+        ? `Drive time: ${Math.floor(routeInfo.durationMinutes / 60)}h ${routeInfo.durationMinutes % 60}min`
+        : null,
+      etaStatus,
       ``,
-      `Location layers:`,
-      `1. Situation Room trip monitor: ACTIVE`,
-      `2. WhatsApp live location backup: PENDING`,
-      `3. Waze / Google Maps route link: PENDING`,
-      ``,
-      `ETA bullseye: ${effectiveEta ?? "not set"}`,
-      `Next action: Monitor route and checkpoint behaviour.`,
+      `Monitoring active:`,
+      `• Situation Room: tracking`,
+      `• ${checkpointStatus}`,
+      `• Overdue escalation: ${effectiveEta ? `armed — fires if no reply by ${effectiveEta}` : "pending ETA calculation"}`,
+      `• ICE escalation: automatic if RED`,
     ].filter((l) => l !== null).join("\n"),
     "trip-started",
   );
@@ -1691,11 +1715,11 @@ async function handleMembershipChoice(ctx: MenuContext): Promise<void> {
 
 function ccMenuText(name: string): string {
   return [
-    `${name}, you are in Cyber Chaperone. 🛡️`,
+    `🛡️ *Cyber Chaperone — ${name}*`,
     ``,
-    `We've got your back. What do you need?`,
+    `Choose an option:`,
     ``,
-    `1. Start a new trip`,
+    `1. Start a trip — get route, navigation links & live monitoring`,
     `2. Update my current trip`,
     `3. Change my destination`,
     `4. I have arrived safely ✅`,
