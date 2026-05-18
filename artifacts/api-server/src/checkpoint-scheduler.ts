@@ -1,6 +1,6 @@
 import twilio from "twilio";
 import { db, tripsTable, conversationStatesTable, membersTable } from "@workspace/db";
-import { ne, eq } from "drizzle-orm";
+import { ne, eq, and, isNull, lte } from "drizzle-orm";
 import type { Logger } from "pino";
 
 const TWILIO_SID = process.env.TWILIO_ACCOUNT_SID ?? "";
@@ -413,9 +413,168 @@ async function tick(log: Logger): Promise<void> {
   }
 }
 
+// ── Safe Zone Clock-in scheduler ──────────────────────────────────────────────
+// Escalation:
+//   T+0   Deadline reached → ping member ("are you home?")
+//   T+20  No reply → nudge André (soft awareness)
+//   T+40  André didn't resolve → ICE nudged + trip → AMBER
+
+async function clockinTick(log: Logger): Promise<void> {
+  try {
+    const now = new Date();
+    const nowMs = now.getTime();
+
+    const clockinTrips = await db
+      .select()
+      .from(tripsTable)
+      .where(
+        and(
+          eq(tripsTable.tripType, "clockin"),
+          ne(tripsTable.status, "completed"),
+        )
+      );
+
+    for (const trip of clockinTrips) {
+      if (!trip.clockinDeadline) continue;
+
+      const deadlineMs = new Date(trip.clockinDeadline).getTime();
+      const name = trip.travelerName;
+      const notes = trip.evidenceNotes ?? "";
+      const sastTime = trip.originalMemberEta ?? "your set time";
+
+      // ── Phase 1: deadline passed, first ping not sent ─────────────────────
+      if (nowMs >= deadlineMs && !notes.includes("[CLOCKIN-PING-SENT]")) {
+        await sendWhatsApp(trip.travelerPhone, [
+          `${name} 🏠 — it's clock-in time!`,
+          ``,
+          `Are you safely home?`,
+          ``,
+          `Reply *SAFE* to confirm you're home.`,
+          `Reply *10* if you need help right now.`,
+        ].join("\n"));
+        const ts = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
+        await db.update(tripsTable).set({
+          clockinAlertSentAt: now,
+          evidenceNotes: [notes, `[CLOCKIN-PING-SENT] ${ts}`].join("\n"),
+          nextAction: `Clock-in ping sent at ${ts}. Awaiting reply — André nudge in 20 min.`,
+        }).where(eq(tripsTable.id, trip.id));
+        log.info({ tripId: trip.id }, "Clockin: deadline ping sent");
+        continue;
+      }
+
+      const alertSentMs = trip.clockinAlertSentAt
+        ? new Date(trip.clockinAlertSentAt).getTime()
+        : null;
+
+      // ── Phase 2: +20 min → nudge André ───────────────────────────────────
+      if (
+        alertSentMs &&
+        nowMs >= alertSentMs + 20 * 60_000 &&
+        notes.includes("[CLOCKIN-PING-SENT]") &&
+        !notes.includes("[CLOCKIN-ANDRE-NUDGE]")
+      ) {
+        const minsLate = Math.floor((nowMs - deadlineMs) / 60_000);
+        if (FOUNDER_WHATSAPP !== trip.travelerPhone) {
+          await sendWhatsApp(FOUNDER_WHATSAPP, [
+            `🏠 CLOCK-IN OVERDUE — ${name}`,
+            ``,
+            `${name} was expected home by *${sastTime}* and has not replied.`,
+            `Overdue: ${minsLate} minutes`,
+            `Trip #${trip.id}`,
+            ``,
+            `No action needed yet — just be aware.`,
+            `If still no reply in 20 minutes, ICE contact will be nudged automatically.`,
+          ].join("\n"));
+        }
+        const ts = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
+        await db.update(tripsTable).set({
+          evidenceNotes: [notes, `[CLOCKIN-ANDRE-NUDGE] ${ts} — André nudged`].join("\n"),
+          nextAction: `André nudged at +20 min. ICE contact auto-notified at +40 min if no reply.`,
+        }).where(eq(tripsTable.id, trip.id));
+        log.info({ tripId: trip.id }, "Clockin: André nudged at +20 min");
+        continue;
+      }
+
+      // ── Phase 3: +40 min → ICE nudge + trip → AMBER ──────────────────────
+      if (
+        alertSentMs &&
+        nowMs >= alertSentMs + 40 * 60_000 &&
+        notes.includes("[CLOCKIN-ANDRE-NUDGE]") &&
+        !notes.includes("[CLOCKIN-ICE-NUDGE]")
+      ) {
+        const minsLate = Math.floor((nowMs - deadlineMs) / 60_000);
+        const ice = await getMemberIce(trip.travelerPhone);
+        let iceNote = "ICE contact: not set";
+
+        if (ice) {
+          try {
+            let raw = ice.iceContactPhone.replace(/[\s\-().]/g, "");
+            if (raw.startsWith("0")) raw = "+27" + raw.slice(1);
+            if (!raw.startsWith("+")) raw = "+" + raw;
+            const iceWa = `whatsapp:${raw}`;
+            const memberE164 = trip.travelerPhone.replace(/^whatsapp:\+?/, "");
+            const client = twilio(TWILIO_SID, TWILIO_TOKEN);
+            await client.messages.create({
+              from: TWILIO_WHATSAPP_FROM,
+              to: iceWa,
+              body: [
+                `👋 Hi ${ice.iceContactName} — eblockwatch Cyber Chaperone here.`,
+                ``,
+                `You are the emergency contact for *${name}*.`,
+                ``,
+                `${name} was expected home by *${sastTime}* and is ${minsLate} minutes overdue.`,
+                `We have not been able to reach them.`,
+                ``,
+                `Please check on them:`,
+                `👉 wa.me/${memberE164}`,
+                ``,
+                `*Reply here if you need assistance* — we will escalate immediately.`,
+                ``,
+                `— eblockwatch Cyber Chaperone`,
+              ].join("\n"),
+            });
+            iceNote = `ICE nudged: ${ice.iceContactName} (${ice.iceContactPhone})`;
+          } catch {
+            iceNote = `ICE contact set but message failed: ${ice.iceContactName}`;
+          }
+        }
+
+        const ts = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
+        await db.update(tripsTable).set({
+          status: "amber",
+          iceEscalationStatus: "SENT",
+          evidenceNotes: [notes, `[CLOCKIN-ICE-NUDGE] ${ts} — ${iceNote} — trip → AMBER`].join("\n"),
+          nextAction: `AMBER: ${minsLate} min overdue. ${iceNote}. Human review recommended.`,
+        }).where(eq(tripsTable.id, trip.id));
+
+        if (FOUNDER_WHATSAPP !== trip.travelerPhone) {
+          await sendWhatsApp(FOUNDER_WHATSAPP, [
+            `⚠️ CLOCK-IN — AMBER`,
+            ``,
+            `Member: ${name}`,
+            `Expected home: ${sastTime}`,
+            `Overdue: ${minsLate} minutes`,
+            `Trip #${trip.id}`,
+            ``,
+            iceNote,
+            ``,
+            `Status → AMBER. Human review recommended.`,
+          ].join("\n"));
+        }
+
+        log.info({ tripId: trip.id }, "Clockin: ICE nudged at +40 min, trip → AMBER");
+      }
+    }
+  } catch (err) {
+    log.error({ err }, "Clockin scheduler error");
+  }
+}
+
 export function startCheckpointScheduler(log: Logger): void {
   const INTERVAL_MS = 3 * 60 * 1000; // every 3 minutes
   void tick(log);
+  void clockinTick(log);
   setInterval(() => void tick(log), INTERVAL_MS);
-  log.info("Checkpoint scheduler started — 3 min interval");
+  setInterval(() => void clockinTick(log), INTERVAL_MS);
+  log.info("Checkpoint scheduler started — 3 min interval (trip monitor + clock-in)");
 }

@@ -32,6 +32,9 @@ export const tripsTable = pgTable("trips", {
   lastLocationSource: text("last_location_source"),
   checkinStage: text("checkin_stage"),
   overdueMinutes: integer("overdue_minutes"),
+  tripType: text("trip_type").default("drive"),
+  clockinDeadline: timestamp("clockin_deadline", { withTimezone: true }),
+  clockinAlertSentAt: timestamp("clockin_alert_sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

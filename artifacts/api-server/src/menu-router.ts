@@ -123,6 +123,8 @@ const WIZARD_STEP_ORDER = [
   STEP_WIZARD_PROVINCE,
   STEP_WIZARD_ICE,
 ] as const;
+const FLOW_CLOCKIN = "CLOCKIN";
+const STEP_WAITING_FOR_CLOCKIN_TIME = "WAITING_FOR_CLOCKIN_TIME";
 const FLOW_EBLOCKWATCH_INFO = "EBLOCKWATCH_INFO";
 const FLOW_REGISTRATION = "REGISTRATION";
 const STEP_REG_FIRST_NAME = "REG_FIRST_NAME";
@@ -902,6 +904,118 @@ async function sendCheckinPrompt(
 }
 
 // ── Check-in flow handler ─────────────────────────────────────────────────────
+
+// ── Safe Zone Clock-in time parser ───────────────────────────────────────────
+
+function parseClockinTime(input: string): Date | null {
+  const now = new Date();
+  const clean = input.trim().toLowerCase().replace(/\./g, ":");
+
+  let hours = -1;
+  let mins = 0;
+
+  if (clean === "midnight") { hours = 0; }
+  else if (clean === "noon" || clean === "midday") { hours = 12; }
+  else {
+    const m = clean.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+    if (!m) return null;
+    hours = parseInt(m[1], 10);
+    mins = m[2] ? parseInt(m[2], 10) : 0;
+    if (m[3] === "pm" && hours < 12) hours += 12;
+    if (m[3] === "am" && hours === 12) hours = 0;
+  }
+
+  if (hours < 0 || hours > 23 || mins < 0 || mins > 59) return null;
+
+  // SAST = UTC+2
+  const utcH = ((hours - 2) + 24) % 24;
+  const candidate = new Date(now);
+  candidate.setUTCHours(utcH, mins, 0, 0);
+  if (candidate.getTime() <= now.getTime()) candidate.setUTCDate(candidate.getUTCDate() + 1);
+  if (candidate.getTime() - now.getTime() > 24 * 60 * 60_000) return null;
+  return candidate;
+}
+
+function formatSast(d: Date): string {
+  const h = (d.getUTCHours() + 2) % 24;
+  const m = d.getUTCMinutes();
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+// ── Safe Zone Clock-in flow handler ──────────────────────────────────────────
+
+async function handleClockinFlowStep(ctx: MenuContext, state: ConvState): Promise<void> {
+  const { from, to, body, member, messageSid, log } = ctx;
+  const name = member?.displayName ?? from;
+  const trimmed = body.trim();
+
+  if (trimmed === "0") {
+    await resetConvState(from);
+    await sendMainMenuWithNearby(from, to, name, member);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await saveMessage(from, to, body, messageSid, null);
+    return;
+  }
+
+  if (state.currentStep === STEP_WAITING_FOR_CLOCKIN_TIME) {
+    const deadline = parseClockinTime(trimmed);
+    if (!deadline) {
+      await sendWhatsApp(from, to, [
+        `Sorry ${name}, I didn't catch that time.`,
+        ``,
+        `Send a time like *11pm*, *23:00*, or *midnight*.`,
+        ``,
+        `Reply 0 to cancel.`,
+      ].join("\n"));
+      return;
+    }
+
+    const displayTime = formatSast(deadline);
+
+    const [newTrip] = await db.insert(tripsTable).values({
+      title: `${name} — home by ${displayTime}`,
+      travelerName: name,
+      travelerPhone: from,
+      status: "green",
+      tripType: "clockin",
+      clockinDeadline: deadline,
+      originalMemberEta: displayTime,
+      evidenceNotes: `[CLOCKIN-STARTED] Deadline set: ${displayTime} SAST`,
+      nextAction: `Clock-in set for ${displayTime}. Ping member at deadline. André +20 min. ICE +40 min → AMBER.`,
+    }).returning({ id: tripsTable.id });
+
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await saveMessage(from, to, body, messageSid, newTrip?.id ?? null);
+
+    await sendWhatsApp(from, to, [
+      `✅ Clock-in set, ${name}!`,
+      ``,
+      `We'll check on you at *${displayTime}*.`,
+      `If you don't reply within 20 minutes — we act.`,
+      ``,
+      `When you're home, just reply *SAFE* and we'll close it.`,
+      ``,
+      `Enjoy your evening 🌙`,
+    ].join("\n"));
+
+    await sendOperatorMirror(to, [
+      `🏠 CLOCK-IN SET`,
+      `Member: ${name}`,
+      `Expected home: ${displayTime} SAST`,
+      `Trip ID: ${newTrip?.id ?? "?"}`,
+      `Escalation: André +20 min → ICE +40 min → AMBER`,
+    ].join("\n"));
+
+    log.info({ from, deadline: deadline.toISOString() }, "Clockin trip created");
+    return;
+  }
+
+  // Unknown step — back to CC menu
+  await resetConvState(from);
+  await setConvState(from, { currentFlow: FLOW_CYBER_CHAPERONE });
+  await sendWhatsApp(from, to, ccMenuText(name));
+}
 
 async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<void> {
   const { from, to, body, member, messageSid, log } = ctx;
@@ -1815,14 +1929,15 @@ function ccMenuText(name: string): string {
     `In your safe zone, we're here. When you roam — kick-start your trip.`,
     ``,
     `─── 🏠 In your safe zone ───`,
-    `5️⃣  I need help 🆘`,
-    `7️⃣  Speak to André / Situation Room`,
+    `8️⃣  I need help 🆘`,
+    `9️⃣  Speak to André / Situation Room`,
     ``,
     `─── 🚗 On the road ───`,
     `1️⃣  Start a monitored drive`,
-    `2️⃣  Update my current trip`,
-    `3️⃣  Change my destination`,
-    `4️⃣  I have arrived safely ✅`,
+    `2️⃣  I'm going out — clock me in when I'm home`,
+    `3️⃣  Update my current trip`,
+    `4️⃣  Change my destination`,
+    `5️⃣  I have arrived safely ✅`,
     ``,
     `6️⃣  How Cyber Chaperone works`,
     ``,
@@ -2531,6 +2646,28 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
   }
 
   if (choice === "2") {
+    // Safe Zone Clock-in — going out, clock in when home
+    await saveMessage(from, to, body, messageSid, null);
+    await setConvState(from, {
+      currentFlow: FLOW_CLOCKIN,
+      currentStep: STEP_WAITING_FOR_CLOCKIN_TIME,
+      pendingTripData: {},
+    });
+    await sendWhatsApp(from, to, [
+      `${name}, what time will you be home? 🏠`,
+      ``,
+      `Just send the time you expect to be back at your safe zone.`,
+      `(e.g. *11pm*, *23:00*, *midnight*)`,
+      ``,
+      `We'll check on you then. If you don't reply within 20 minutes — we act.`,
+      ``,
+      `Reply 0 to cancel.`,
+    ].join("\n"));
+    log.info({ from }, "CC menu: clock-in flow started");
+    return true;
+  }
+
+  if (choice === "3") {
     const activeTrip = await findActiveTrip(from);
     await saveMessage(from, to, body, messageSid, activeTrip?.id ?? null);
     if (!activeTrip) {
@@ -2541,7 +2678,7 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
     return true;
   }
 
-  if (choice === "3") {
+  if (choice === "4") {
     const activeTrip = await findActiveTrip(from);
     await saveMessage(from, to, body, messageSid, activeTrip?.id ?? null);
     if (!activeTrip) {
@@ -2557,15 +2694,9 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
     return true;
   }
 
-  if (choice === "4") {
-    const activeTrip = await findActiveTrip(from);
-    await handleArrival(ctx, activeTrip);
-    return true;
-  }
-
   if (choice === "5") {
     const activeTrip = await findActiveTrip(from);
-    await handleDistress(ctx, activeTrip);
+    await handleArrival(ctx, activeTrip);
     return true;
   }
 
@@ -2575,7 +2706,13 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
     return true;
   }
 
-  if (choice === "7") {
+  if (choice === "8") {
+    const activeTrip = await findActiveTrip(from);
+    await handleDistress(ctx, activeTrip);
+    return true;
+  }
+
+  if (choice === "9") {
     await saveMessage(from, to, body, messageSid, null);
     await sendWhatsApp(
       from,
@@ -4974,6 +5111,11 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
 
   if (state.currentFlow === FLOW_SAFETY_PROFILE) {
     await handleSafetyProfileStep(ctx, state);
+    return { handled: true };
+  }
+
+  if (state.currentFlow === FLOW_CLOCKIN) {
+    await handleClockinFlowStep(ctx, state);
     return { handled: true };
   }
 
