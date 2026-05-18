@@ -3893,6 +3893,22 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   const choice = body.trim();
 
   if (choice === "1" || CC_KEYWORDS.test(body)) {
+    // Unregistered members must join eblockwatch before using Cyber Chaperone
+    if (!member || member.memberStatus === "unverified") {
+      await saveMessage(from, to, body, messageSid, null);
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+      await sendWhatsApp(from, to, [
+        `🛡️ *Cyber Chaperone* is an eblockwatch member benefit.`,
+        ``,
+        `To travel with Cyber Chaperone, André needs to know who you are — your name, your route, and who to call if you don't arrive.`,
+        ``,
+        `*Step 1: Join eblockwatch first — it's free.*`,
+        `Reply *0* to register now. It takes 2 minutes.`,
+        ``,
+        `Once you're registered, reply *1* to start your first monitored trip. 🛡️`,
+      ].join("\n"));
+      return true;
+    }
     await setConvState(from, { currentFlow: FLOW_CYBER_CHAPERONE, currentStep: null, pendingTripData: null });
     await sendWhatsApp(from, to, ccMenuText(name));
     await saveMessage(from, to, body, messageSid, null);
