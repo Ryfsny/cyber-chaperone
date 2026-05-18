@@ -65,16 +65,88 @@ function estimateProgress(trip: Trip): number {
   return Math.min((Date.now() - new Date(trip.createdAt).getTime()) / 60000 / trip.routeEtaMinutes, 1.0);
 }
 
-function makeTripIcon(color: string, pulse: boolean) {
-  const size = 18;
+// ── Bearing (degrees, 0=North) from GeoJSON [lon,lat] pair ───────
+function computeBearing(lon1: number, lat1: number, lon2: number, lat2: number): number {
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+// coords is GeoJSON [lon, lat][]
+function interpolateBearing(coords: [number, number][], progress: number): number {
+  if (coords.length < 2) return 0;
+  const p = Math.max(0, Math.min(0.9999, progress));
+  const lo = Math.min(Math.floor(p * (coords.length - 1)), coords.length - 2);
+  const hi = lo + 1;
+  return computeBearing(coords[lo][0], coords[lo][1], coords[hi][0], coords[hi][1]);
+}
+
+// Returns [lat, lon] for Leaflet from GeoJSON [lon, lat][] coords + fraction
+function getCheckpointLatLng(coords: [number, number][], fraction: number): [number, number] | null {
+  if (coords.length < 2) return null;
+  const clamp = Math.max(0, Math.min(1, fraction));
+  const idx = clamp * (coords.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.min(lo + 1, coords.length - 1);
+  const f = idx - lo;
+  return [
+    coords[lo][1] + (coords[hi][1] - coords[lo][1]) * f,
+    coords[lo][0] + (coords[hi][0] - coords[lo][0]) * f,
+  ];
+}
+
+// ── Car icon (top-down SVG, rotates with bearing) ─────────────────
+function makeTripCarIcon(color: string, bearing: number, pulse: boolean) {
+  const sz = 28;
   const ring = pulse
-    ? `<div style="position:absolute;top:-6px;left:-6px;width:${size + 12}px;height:${size + 12}px;border-radius:50%;border:2px solid ${color};opacity:0.6;animation:sr-pulse 1.4s ease-out infinite;"></div>`
+    ? `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:${sz + 18}px;height:${sz + 18}px;border-radius:50%;border:2.5px solid ${color};animation:sr-pulse 1.4s ease-out infinite;pointer-events:none;"></div>`
     : "";
   return L.divIcon({
     className: "",
-    html: `<div style="position:relative;width:${size}px;height:${size}px;">${ring}<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2.5px solid #fff;box-shadow:0 0 6px rgba(0,0,0,0.5);"></div></div>`,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
+    html: `
+      <div style="position:relative;width:${sz}px;height:${sz}px;">
+        ${ring}
+        <div style="width:${sz}px;height:${sz}px;transform:rotate(${Math.round(bearing)}deg);filter:drop-shadow(0 2px 5px rgba(0,0,0,0.75));">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 30" width="${sz}" height="${sz}">
+            <polygon points="12,1 7,9 17,9" fill="white" opacity="0.95"/>
+            <rect x="3" y="8" width="18" height="20" rx="5" fill="${color}" stroke="white" stroke-width="1.8"/>
+            <rect x="5.5" y="10" width="13" height="7" rx="2" fill="rgba(255,255,255,0.72)"/>
+            <rect x="5.5" y="23" width="13" height="3.5" rx="1.5" fill="rgba(255,255,255,0.35)"/>
+          </svg>
+        </div>
+      </div>`,
+    iconSize: [sz, sz],
+    iconAnchor: [sz / 2, sz / 2],
+  });
+}
+
+// ── Checkpoint dot (past=green, next=pulsing amber, future=faded) ─
+function makeCheckpointDotIcon(state: "past" | "next" | "future") {
+  if (state === "past") {
+    return L.divIcon({
+      className: "",
+      html: `<div style="width:9px;height:9px;border-radius:50%;background:#22c55e;border:2px solid white;opacity:0.8;box-shadow:0 0 3px rgba(0,0,0,0.5);"></div>`,
+      iconSize: [9, 9], iconAnchor: [4.5, 4.5],
+    });
+  }
+  if (state === "next") {
+    return L.divIcon({
+      className: "",
+      html: `
+        <div style="position:relative;width:14px;height:14px;">
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;border:2.5px solid #f59e0b;animation:sr-pulse 1.4s ease-out infinite;pointer-events:none;"></div>
+          <div style="width:14px;height:14px;border-radius:50%;background:#f59e0b;border:2.5px solid white;box-shadow:0 0 7px rgba(245,158,11,0.9);"></div>
+        </div>`,
+      iconSize: [14, 14], iconAnchor: [7, 7],
+    });
+  }
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:9px;height:9px;border-radius:50%;background:#f59e0b;border:2px solid white;opacity:0.55;box-shadow:0 0 3px rgba(0,0,0,0.4);"></div>`,
+    iconSize: [9, 9], iconAnchor: [4.5, 4.5],
   });
 }
 
@@ -423,7 +495,7 @@ export default function Dashboard() {
   const [radiusCenter, setRadiusCenter] = useState<{ lat: number; lon: number } | null>(null);
   const [membersInRadius, setMembersInRadius] = useState<MapMember[]>([]);
   const [showCompleted, setShowCompleted] = useState(false);
-  const [view, setView] = useState<"board" | "list">("board");
+  const [view, setView] = useState<"board" | "list" | "routes">("board");
 
   // Data fetching — auto-refresh every 30 s
   const { data: trips = [], isLoading: tripsLoading, refetch: refetchTrips } = useListTrips();
@@ -565,7 +637,14 @@ export default function Dashboard() {
     }
   }, [radiusMode]);
 
-  // ── Trip markers ──────────────────────────────────────────────
+  // ── Animation tick — re-render vehicle positions every 15 s ────
+  const [animTick, setAnimTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setAnimTick((n) => n + 1), 15_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ── Trip markers (routes + car icons + checkpoint dots) ────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -574,27 +653,89 @@ export default function Dashboard() {
 
     for (const trip of trips.filter((t) => t.status !== "completed")) {
       const color = STATUS_COLORS[trip.status] ?? "#6b7280";
-      let coords: [number, number][] = [];
-      if (trip.routePolyline) { try { coords = JSON.parse(trip.routePolyline).coordinates ?? []; } catch {} }
 
-      if (coords.length > 1) {
-        const latLngs = coords.map(([lon, lat]) => [lat, lon] as [number, number]);
-        tripLayersRef.current.push(L.polyline(latLngs, { color, weight: 3, opacity: 0.65 }).addTo(map));
+      // Parse GeoJSON polyline [lon, lat][]
+      let coords: [number, number][] = [];
+      if (trip.routePolyline) {
+        try { coords = (JSON.parse(trip.routePolyline) as { coordinates: [number, number][] }).coordinates ?? []; }
+        catch { /* ignore */ }
       }
 
+      // Convert to Leaflet [lat, lon][]
+      const latLngs = coords.length > 1
+        ? coords.map(([lon, lat]) => [lat, lon] as [number, number])
+        : [];
+
+      // ── Route polyline ─────────────────────────────────────────
+      if (latLngs.length > 1) {
+        tripLayersRef.current.push(
+          L.polyline(latLngs, { color, weight: 4, opacity: 0.78, lineJoin: "round" }).addTo(map)
+        );
+      }
+
+      // ── Progress & checkpoints ─────────────────────────────────
+      const progress = estimateProgress(trip);
+      type CheckpointItem = { label: string; minutesFromStart: number; fraction: number };
+      let checkpoints: CheckpointItem[] = [];
+      if (trip.checkpointList) { try { checkpoints = JSON.parse(trip.checkpointList) as CheckpointItem[]; } catch { /* ignore */ } }
+
+      // Index of the next upcoming checkpoint
+      const nextCpIdx = checkpoints.findIndex((cp) => cp.fraction > progress);
+
+      if (coords.length > 1 && checkpoints.length > 0) {
+        checkpoints.forEach((cp, i) => {
+          const coord = getCheckpointLatLng(coords, cp.fraction);
+          if (!coord) return;
+          const state: "past" | "next" | "future" =
+            cp.fraction <= progress ? "past" : i === nextCpIdx ? "next" : "future";
+          const icon = makeCheckpointDotIcon(state);
+          const m = L.marker(coord, { icon, zIndexOffset: 20 }).addTo(map);
+          m.bindTooltip(
+            `<span style="font-family:monospace;font-size:11px">📍 ${cp.label}<br/><span style="color:#aaa">Checkpoint ${i + 1}/${checkpoints.length} · ${cp.minutesFromStart} min</span></span>`,
+            { permanent: false, direction: "top" }
+          );
+          tripLayersRef.current.push(m);
+        });
+      }
+
+      // ── Start dot (green) & destination dot (indigo) ───────────
+      if (latLngs.length > 1) {
+        tripLayersRef.current.push(
+          L.circleMarker(latLngs[0], { radius: 5, color: "#fff", fillColor: "#22c55e", fillOpacity: 1, weight: 2 }).addTo(map)
+        );
+        tripLayersRef.current.push(
+          L.circleMarker(latLngs[latLngs.length - 1], { radius: 6, color: "#fff", fillColor: "#6366f1", fillOpacity: 1, weight: 2.5 }).addTo(map)
+        );
+      }
+
+      // ── Moving vehicle icon ────────────────────────────────────
       let pos: [number, number] | null = null;
-      if (coords.length > 1) pos = interpolatePosition(coords, estimateProgress(trip));
-      else if (trip.startLat && trip.startLon) pos = [parseFloat(trip.startLat), parseFloat(trip.startLon)];
+      let bearing = 0;
+      if (coords.length > 1) {
+        pos = interpolatePosition(coords, progress);
+        bearing = interpolateBearing(coords, progress);
+      } else if (trip.startLat && trip.startLon) {
+        pos = [parseFloat(trip.startLat), parseFloat(trip.startLon)];
+      }
 
       if (pos) {
-        const icon = makeTripIcon(color, trip.status === "red");
-        const marker = L.marker(pos, { icon }).addTo(map);
+        const pulse = trip.status === "red" || trip.status === "amber";
+        const icon = makeTripCarIcon(color, bearing, pulse);
+        const marker = L.marker(pos, { icon, zIndexOffset: 1000 }).addTo(map);
+        const passedCps = checkpoints.filter((c) => c.fraction <= progress).length;
+        const cpLine = checkpoints.length > 0
+          ? `<br/><span style="color:#aaa">📍 Checkpoint ${passedCps}/${checkpoints.length} passed</span>`
+          : "";
+        const etaLine = trip.originalMemberEta
+          ? `<br/><span style="color:#aaa">ETA ${trip.originalMemberEta}</span>`
+          : "";
         marker.bindPopup(
-          `<div style="font-family:monospace;font-size:12px;min-width:160px;">
-            <div style="font-weight:bold;color:${color};margin-bottom:3px;">${trip.status.toUpperCase()}</div>
-            <div style="font-weight:bold;">${trip.travelerName}</div>
-            <div style="color:#aaa;margin-bottom:6px;">${trip.title}</div>
-            <button id="sr-goto-${trip.id}" style="background:#1e293b;color:#fff;border:1px solid #334155;padding:4px 8px;font-size:11px;cursor:pointer;font-family:monospace;width:100%;">View Trip →</button>
+          `<div style="font-family:monospace;font-size:12px;min-width:190px;line-height:1.6;">
+            <div style="font-weight:bold;color:${color};font-size:10px;letter-spacing:2px;">${trip.status.toUpperCase()}</div>
+            <div style="font-weight:bold;font-size:13px;margin-bottom:2px;">${trip.travelerName}</div>
+            <div style="color:#aaa;font-size:11px;margin-bottom:4px;">${trip.title}</div>
+            <div style="font-size:11px;">🛣️ ${Math.round(progress * 100)}% of route${etaLine}${cpLine}</div>
+            <button id="sr-goto-${trip.id}" style="background:#1e293b;color:#fff;border:1px solid #334155;padding:5px 8px;font-size:11px;cursor:pointer;font-family:monospace;width:100%;margin-top:7px;border-radius:2px;">View Trip →</button>
           </div>`
         );
         marker.on("popupopen", () => {
@@ -603,7 +744,7 @@ export default function Dashboard() {
         tripLayersRef.current.push(marker);
       }
     }
-  }, [trips, navigate]);
+  }, [trips, navigate, animTick]);
 
   // ── Member cluster ────────────────────────────────────────────
   useEffect(() => {
@@ -705,28 +846,21 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           {/* View toggle */}
           <div className="flex border border-border rounded-sm overflow-hidden text-[10px] uppercase tracking-wider">
-            <button
-              onClick={() => setView("board")}
-              className={cn(
-                "px-3 py-1.5 transition-colors",
-                view === "board"
-                  ? "bg-primary text-primary-foreground font-bold"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary",
-              )}
-            >
-              Board
-            </button>
-            <button
-              onClick={() => setView("list")}
-              className={cn(
-                "px-3 py-1.5 border-l border-border transition-colors",
-                view === "list"
-                  ? "bg-primary text-primary-foreground font-bold"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary",
-              )}
-            >
-              Live Trips
-            </button>
+            {(["board", "routes", "list"] as const).map((v, i) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={cn(
+                  "px-3 py-1.5 transition-colors",
+                  i > 0 && "border-l border-border",
+                  view === v
+                    ? "bg-primary text-primary-foreground font-bold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary",
+                )}
+              >
+                {v === "board" ? "Board" : v === "routes" ? "Routes" : "Live Trips"}
+              </button>
+            ))}
           </div>
           {/* Legend — board only */}
           {view === "board" && (
@@ -740,9 +874,59 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* ── Map — board view only (always rendered for leaflet lifecycle) ── */}
-      <div className={view === "board" ? "shrink-0 relative" : "hidden"} style={{ height: "50vh" }}>
+      {/* ── Map — board + routes view (always rendered for leaflet lifecycle) ── */}
+      <div
+        className={view === "list" ? "hidden" : "relative"}
+        style={{ height: view === "routes" ? "calc(100% - 56px)" : "50vh", flexShrink: view === "routes" ? 1 : 0 }}
+      >
         <div ref={mapDivRef} className="absolute inset-0" />
+
+        {/* Routes view: floating trip cards overlay */}
+        {view === "routes" && (
+          <div className="absolute top-3 right-3 z-[1000] flex flex-col gap-2 w-56 max-h-[calc(100%-24px)] overflow-y-auto pointer-events-none">
+            {activeTrips.length === 0 ? (
+              <div className="bg-card/90 border border-border rounded-lg px-3 py-2 text-[10px] text-muted-foreground uppercase tracking-widest backdrop-blur-sm">
+                No active trips
+              </div>
+            ) : (
+              activeTrips.map((t) => {
+                const color = STATUS_COLORS[t.status] ?? "#6b7280";
+                const progress = estimateProgress(t);
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => navigate(`/trips/${t.id}`)}
+                    className="pointer-events-auto text-left bg-card/90 border border-border rounded-lg px-3 py-2 hover:bg-card transition-colors backdrop-blur-sm"
+                    style={{ borderLeftColor: color, borderLeftWidth: 3 }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-foreground truncate">{t.travelerName}</span>
+                      <span className="text-[10px] font-mono shrink-0" style={{ color }}>{t.status.toUpperCase()}</span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground truncate mt-0.5">{t.title}</div>
+                    <div className="mt-1.5 h-1 bg-secondary rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${Math.round(progress * 100)}%`, background: color }} />
+                    </div>
+                    <div className="text-[9px] text-muted-foreground mt-0.5">{Math.round(progress * 100)}% of route</div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* Routes view: bottom map legend */}
+        {view === "routes" && (
+          <div className="absolute bottom-3 left-3 z-[1000] bg-card/90 border border-border rounded-lg px-3 py-2 flex items-center gap-4 text-[10px] text-muted-foreground backdrop-blur-sm pointer-events-none">
+            <span className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-green-500"/>Clear</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-amber-500"/>Caution</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-red-500"/>Critical</span>
+            <span className="text-border">·</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse"/>Next checkpoint</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-green-400 opacity-70"/>Passed</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-2 h-2 rounded-full bg-indigo-500"/>Destination</span>
+          </div>
+        )}
       </div>
 
       {/* ── Live Trips list — list view only ────────────────────── */}
@@ -751,7 +935,7 @@ export default function Dashboard() {
       )}
 
       {/* ── Filter toolbar — board view only ────────────────────── */}
-      {view === "board" && <div className="shrink-0 border-b border-t border-border bg-card px-4 py-2.5 flex items-center gap-2.5 flex-wrap">
+      {view === "board" && <div className="shrink-0 border-b border-t border-border bg-card px-4 py-2.5 flex items-center gap-2.5 flex-wrap" style={{display: view === "board" ? undefined : "none"}}>
 
         {/* Hierarchical location dropdowns */}
         <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
