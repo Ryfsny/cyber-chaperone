@@ -29,6 +29,9 @@ export const tripsTable = pgTable("trips", {
   lastKnownLat: text("last_known_lat"),
   lastKnownLon: text("last_known_lon"),
   lastKnownAt: timestamp("last_known_at", { withTimezone: true }),
+  lastLocationSource: text("last_location_source"),
+  checkinStage: text("checkin_stage"),
+  overdueMinutes: integer("overdue_minutes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

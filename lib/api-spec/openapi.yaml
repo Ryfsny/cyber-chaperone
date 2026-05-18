@@ -522,6 +522,12 @@ components:
         lastKnownAt:
           type: ["string", "null"]
           format: date-time
+        lastLocationSource:
+          type: ["string", "null"]
+        checkinStage:
+          type: ["string", "null"]
+        overdueMinutes:
+          type: ["integer", "null"]
         messageCount:
           type: integer
         createdAt:

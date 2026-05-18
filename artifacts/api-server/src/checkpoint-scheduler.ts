@@ -8,12 +8,6 @@ const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN ?? "";
 const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM ?? "whatsapp:+14155238886";
 const FOUNDER_WHATSAPP = "whatsapp:+27825611065";
 
-interface Checkpoint {
-  label: string;
-  minutesFromStart: number;
-  fraction: number;
-}
-
 async function sendWhatsApp(to: string, body: string): Promise<void> {
   if (!TWILIO_SID || !TWILIO_TOKEN) return;
   try {
@@ -24,7 +18,6 @@ async function sendWhatsApp(to: string, body: string): Promise<void> {
   }
 }
 
-// Look up a member's ICE contact by their WhatsApp number
 async function getMemberIce(
   whatsappNumber: string,
 ): Promise<{ iceContactName: string; iceContactPhone: string } | null> {
@@ -43,7 +36,6 @@ async function getMemberIce(
   return null;
 }
 
-// Send ICE contact alert when a trip goes RED (replicates menu-router pattern)
 async function sendIceContactAlert(
   memberName: string,
   memberPhone: string,
@@ -89,43 +81,54 @@ async function sendIceContactAlert(
   }
 }
 
-// ── Overdue ping messages ──────────────────────────────────────────────────────
-
-function buildOverduePing(name: string, destination: string, minsOverdue: number): string {
-  const overdueLine = minsOverdue <= 1
-    ? `You should be arriving at *${destination}* right about now.`
-    : `You are *${minsOverdue} minutes* past your arrival time at *${destination}*.`;
+// ── Phase 1 — ETA arrival check (sent at ETA, trip stays GREEN) ───────────────
+function buildEtaCheckin(name: string, destination: string): string {
   return [
-    `${name} 👋 Cyber Chaperone — quick safety check.`,
+    `${name}, you should be near *${destination}* by now.`,
     ``,
-    overdueLine,
+    `Are you there and okay?`,
     ``,
-    `1. ✅ I have arrived safely`,
-    `2. 🕐 Running late — still on the way`,
-    `3. 🛑 Stopped — give me more time`,
-    `4. 🆘 I need help right now`,
+    `1. I have arrived safely`,
+    `2. I am delayed`,
+    `3. I will send my location pin`,
+    `4. I need help`,
     ``,
     `Reply 0 for Main Menu.`,
   ].join("\n");
 }
 
+// ── Phase 2 — Grace period expired (AMBER at +10 min) ─────────────────────────
+function buildAmberPing(name: string, destination: string): string {
+  return [
+    `${name}, we have not had your arrival confirmation yet.`,
+    ``,
+    `You are overdue at *${destination}*.`,
+    ``,
+    `Please reply:`,
+    ``,
+    `1. I am okay — I have arrived`,
+    `2. I am delayed`,
+    `3. Send location pin`,
+    `4. I need help`,
+  ].join("\n");
+}
+
+// ── Phase 3 — Escalation (RED at +25 min) ─────────────────────────────────────
 function buildRedEscalationPing(name: string, destination: string, minsOverdue: number): string {
   return [
-    `🚨 *URGENT — Cyber Chaperone safety check*`,
+    `${name}, we have not had a reply after your expected arrival time.`,
     ``,
-    `${name}, you are *${minsOverdue} minutes* overdue at *${destination}* and have not responded.`,
+    `You are *${minsOverdue} minutes* overdue at *${destination}*.`,
     ``,
-    `We are escalating this now.`,
+    `Cyber Chaperone is escalating this for human attention.`,
     ``,
-    `Reply *1* if you are safe.`,
-    `Reply *10* or *HELP* if you need immediate assistance.`,
-    ``,
-    `Your emergency contact is being notified.`,
+    `Reply:`,
+    `1. I am okay`,
+    `4. I need help`,
   ].join("\n");
 }
 
 // ── Checkpoint prompt messages ─────────────────────────────────────────────────
-
 function buildStopPingPrompt(name: string, destination: string): string {
   return [
     `${name} 👋 This is Cyber Chaperone — André's Situation Room.`,
@@ -169,7 +172,6 @@ function buildCheckpointPrompt(name: string, label: string, destination: string,
   ].join("\n");
 }
 
-// Set member's conversation state to CHECKIN flow so their reply is handled correctly
 async function setCheckinState(
   whatsappNumber: string,
   tripId: number,
@@ -189,6 +191,12 @@ async function setCheckinState(
   } catch {
     // best-effort
   }
+}
+
+interface Checkpoint {
+  label: string;
+  minutesFromStart: number;
+  fraction: number;
 }
 
 async function tick(log: Logger): Promise<void> {
@@ -225,29 +233,24 @@ async function tick(log: Logger): Promise<void> {
         }
       }
 
-      // ── ETA overdue escalation ─────────────────────────────────────────────────
-      // Fires when the route ETA has passed and the member hasn't confirmed arrival.
-      // Works on ALL active trips (with or without a checkpoint list).
-      // Primary: routeEtaMinutes (route calculation). Fallback: SAST time string from routeEtaTime or originalMemberEta.
+      // ── ETA overdue monitoring — 3 phases ─────────────────────────────────────
+      // Resolve the expected arrival time from routeEtaMinutes or ETA string.
       const resolvedExpectedArrivalMs = (() => {
         const tripStartMs = new Date(trip.createdAt).getTime();
         if (trip.routeEtaMinutes && trip.routeEtaMinutes > 0) {
           return tripStartMs + trip.routeEtaMinutes * 60_000;
         }
-        // Fallback: parse "HH:MM" SAST time (UTC+2)
         const etaStr = trip.routeEtaTime ?? trip.originalMemberEta ?? null;
         if (etaStr) {
           const m = etaStr.match(/(\d{1,2}):(\d{2})/);
           if (m) {
             const hSast = parseInt(m[1], 10);
             const min = parseInt(m[2], 10);
-            // Convert SAST → UTC by subtracting 2 hours
             const hUtc = hSast - 2;
             const tripDate = new Date(trip.createdAt);
             const candidate = new Date(tripDate);
             candidate.setUTCHours(hUtc, min, 0, 0);
-            // If computed ETA is before trip start, advance by one day
-            if (candidate.getTime() < tripStartMs) candidate.setUTCDate(candidate.getUTCDate() + 1);
+            if (candidate.getTime() < tripDate.getTime()) candidate.setUTCDate(candidate.getUTCDate() + 1);
             return candidate.getTime();
           }
         }
@@ -257,63 +260,109 @@ async function tick(log: Logger): Promise<void> {
       if (resolvedExpectedArrivalMs !== null) {
         const minsOverdue = Math.floor((now - resolvedExpectedArrivalMs) / 60_000);
 
-        // Phase 1 — Overdue ping: ETA passed but within 45 min, not yet sent
-        if (
-          minsOverdue >= 0 &&
-          minsOverdue < 45 &&
-          !evidenceNotes.includes("[OVERDUE-PING-SENT]")
-        ) {
-          await sendWhatsApp(trip.travelerPhone, buildOverduePing(name, destination, minsOverdue));
+        // Backward-compat: treat old [OVERDUE-PING-SENT] as Phase 1 already done
+        const phase1Sent = evidenceNotes.includes("[ETA-CHECKIN-SENT]") || evidenceNotes.includes("[OVERDUE-PING-SENT]");
+        const phase2Sent = evidenceNotes.includes("[AMBER-PING-SENT]");
+        const phase3Sent = evidenceNotes.includes("[OVERDUE-ESCALATED]");
+
+        // ── Phase 1 — ETA reached (0–10 min): send arrival check, keep GREEN ──
+        if (minsOverdue >= 0 && minsOverdue < 10 && !phase1Sent) {
+          await sendWhatsApp(trip.travelerPhone, buildEtaCheckin(name, destination));
           const ts = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
-          const updatedNotes = [evidenceNotes, `[OVERDUE-PING-SENT] Sent at ${ts} — ${minsOverdue}min past ETA`]
-            .filter(Boolean).join("\n");
+          const updatedNotes = [
+            evidenceNotes,
+            `[ETA-CHECKIN-SENT] ${ts} — ETA reached. Arrival check sent.`,
+          ].filter(Boolean).join("\n");
           await db.update(tripsTable).set({
-            status: "amber",
             evidenceNotes: updatedNotes,
-            nextAction: "ETA passed, no arrival confirmed. Overdue safety ping sent. Awaiting member response.",
+            inferenceNotes: `ETA reached. Awaiting member confirmation.`,
+            nextAction: "ETA reached. Arrival check-in sent. Wait for reply.",
+            checkinStage: "ETA_CHECKIN",
+            overdueMinutes: minsOverdue,
           }).where(eq(tripsTable.id, trip.id));
-          await setCheckinState(trip.travelerPhone, trip.id, "OVERDUE", 1.0, true);
-          // Mirror to operator
+          await setCheckinState(trip.travelerPhone, trip.id, "OVERDUE_PING", 1.0, false);
           if (FOUNDER_WHATSAPP !== trip.travelerPhone) {
             await sendWhatsApp(
               FOUNDER_WHATSAPP,
-              `⚠️ CYBER CHAPERONE — OVERDUE\n\n${name} is ${minsOverdue}min past ETA for ${trip.title}.\n\nOverdue ping sent. Trip #${trip.id} → AMBER.`,
+              `⏰ CYBER CHAPERONE — ETA REACHED\n\n${name} should be arriving at ${destination} now.\nTrip #${trip.id} — arrival check sent.\n\nAwaiting confirmation.`,
             );
           }
-          log.info({ tripId: trip.id, minsOverdue }, "Overdue ping sent — ETA passed");
+          log.info({ tripId: trip.id, minsOverdue }, "Phase 1: ETA arrival check sent");
         }
 
-        // Phase 2 — RED escalation: 45+ min overdue, ping was sent but no arrival reply
-        if (
-          minsOverdue >= 45 &&
-          evidenceNotes.includes("[OVERDUE-PING-SENT]") &&
-          !evidenceNotes.includes("[OVERDUE-ESCALATED]")
-        ) {
+        // ── Phase 2 — Grace period expired (+10 min): AMBER ──────────────────
+        if (minsOverdue >= 10 && phase1Sent && !phase2Sent && !phase3Sent) {
+          await sendWhatsApp(trip.travelerPhone, buildAmberPing(name, destination));
+          const ts = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
+          const updatedNotes = [
+            evidenceNotes,
+            `[AMBER-PING-SENT] ${ts} — ${minsOverdue}min overdue. Grace period expired. AMBER.`,
+          ].filter(Boolean).join("\n");
+          await db.update(tripsTable).set({
+            status: "amber",
+            evidenceNotes: updatedNotes,
+            inferenceNotes: `ETA passed with no arrival confirmation. Grace period expired.`,
+            nextAction: `ETA passed. No arrival confirmation. AMBER — awaiting response.`,
+            checkinStage: "AMBER_PING",
+            overdueMinutes: minsOverdue,
+          }).where(eq(tripsTable.id, trip.id));
+          await setCheckinState(trip.travelerPhone, trip.id, "OVERDUE_PING", 1.0, false);
+          if (FOUNDER_WHATSAPP !== trip.travelerPhone) {
+            await sendWhatsApp(
+              FOUNDER_WHATSAPP,
+              `⚠️ CYBER CHAPERONE — AMBER\n\n${name} is ${minsOverdue}min past ETA for ${trip.title}.\nTrip #${trip.id} → AMBER.\n\nAmber ping sent. No arrival confirmation yet.`,
+            );
+          }
+          log.info({ tripId: trip.id, minsOverdue }, "Phase 2: AMBER — grace period expired");
+        }
+
+        // ── Phase 3 — Escalation (+25 min): RED + ICE + operator alert ───────
+        if (minsOverdue >= 25 && phase2Sent && !phase3Sent) {
           await sendWhatsApp(trip.travelerPhone, buildRedEscalationPing(name, destination, minsOverdue));
           const ts = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
-          const updatedNotes = [evidenceNotes, `[OVERDUE-ESCALATED] ${ts} — ${minsOverdue}min past ETA — escalated to RED`]
-            .filter(Boolean).join("\n");
+          const updatedNotes = [
+            evidenceNotes,
+            `[OVERDUE-ESCALATED] ${ts} — ${minsOverdue}min overdue — escalated to RED`,
+          ].filter(Boolean).join("\n");
           await db.update(tripsTable).set({
             status: "red",
             evidenceNotes: updatedNotes,
-            nextAction: `URGENT: ${minsOverdue}min overdue, no response. Trip RED. ICE contact notified.`,
+            inferenceNotes: `ETA missed. No response after escalation window. Emergency protocol active.`,
+            nextAction: `URGENT: ${minsOverdue}min overdue, no response. RED. ICE contact notified. Human review required.`,
             iceEscalationStatus: "SENT",
+            checkinStage: "RED_ESCALATION",
+            overdueMinutes: minsOverdue,
           }).where(eq(tripsTable.id, trip.id));
 
-          // Send ICE contact alert
           const ice = await getMemberIce(trip.travelerPhone);
           if (ice) {
             await sendIceContactAlert(name, trip.travelerPhone, ice.iceContactName, ice.iceContactPhone, trip, minsOverdue);
           }
-          // Mirror to operator
           const iceNote = ice ? `ICE contact alerted: ${ice.iceContactName}` : "ICE contact: not set";
           if (FOUNDER_WHATSAPP !== trip.travelerPhone) {
             await sendWhatsApp(
               FOUNDER_WHATSAPP,
-              `🚨 CYBER CHAPERONE — RED ALERT\n\n${name} is ${minsOverdue}min overdue on ${trip.title}.\n\nTrip #${trip.id} → RED.\n${iceNote}.`,
+              [
+                `🚨 RED — No arrival confirmation after ETA.`,
+                ``,
+                `Member: ${name}`,
+                `Trip: ${trip.title}`,
+                `Trip #${trip.id}`,
+                `Overdue: ${minsOverdue} minutes`,
+                `${iceNote}`,
+                ``,
+                `Next action: Human review required.`,
+              ].join("\n"),
             );
           }
-          log.info({ tripId: trip.id, minsOverdue }, "Trip escalated RED — ETA overdue, no response");
+          log.info({ tripId: trip.id, minsOverdue }, "Phase 3: RED — escalated, ICE notified");
+        }
+
+        // Keep overdueMinutes fresh on every tick for already-escalated trips
+        if (minsOverdue > 0 && (phase1Sent || phase2Sent || phase3Sent)) {
+          await db.update(tripsTable)
+            .set({ overdueMinutes: minsOverdue })
+            .where(eq(tripsTable.id, trip.id));
         }
       }
 
@@ -337,10 +386,8 @@ async function tick(log: Logger): Promise<void> {
         const label = isPreArrival ? "Pre-arrival check" : cp.label;
         const sentMarker = `[CHECKPOINT-PROMPT: ${cp.label}]`;
 
-        if (evidenceNotes.includes(sentMarker)) continue;   // already sent
-        if (now < scheduledMs - 2 * 60_000) continue;       // not yet due
-        // Extended stale window: 60 min (was 30) so server-restart gaps don't drop pings
-        // PRE_ARRIVAL gets a 90-min window because it's the most important checkpoint
+        if (evidenceNotes.includes(sentMarker)) continue;
+        if (now < scheduledMs - 2 * 60_000) continue;
         const staleWindowMs = isPreArrival ? 90 * 60_000 : 60 * 60_000;
         if (now > scheduledMs + staleWindowMs) continue;
 

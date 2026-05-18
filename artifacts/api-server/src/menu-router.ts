@@ -765,26 +765,23 @@ async function createTrip(
         : `https://waze.com/ul?q=${encDest}&navigate=yes`;
 
       return [
-        `✅ *Trip registered — we're watching, ${name}.* 🛡️`,
+        `✅ *Cyber Chaperone is watching this trip.* 🛡️`,
         ``,
         `*Route:* ${startLocation} → ${destination}`,
         etaLine,
         nearbyLine ? nearbyLine.trim() : null,
+        checkInLine ? `\n${checkInLine}` : null,
         ``,
-        `🗺️ *Open your route now:*`,
-        `Google Maps: ${gmLink}`,
-        `Waze: ${wazeLink}`,
+        `Please use your normal navigation app:`,
+        `1. Open Google Maps: ${gmLink}`,
+        `2. Open Waze: ${wazeLink}`,
+        `3. Send us your location pin (tap 📎 → Location → Send Current Location)`,
+        `0. Main Menu`,
         ``,
-        checkInLine,
+        `When you arrive safely, reply:`,
+        `*SAFE* 🏁`,
         ``,
-        `We will contact you automatically if you go silent past your ETA.`,
-        `Your emergency contact is on standby if needed.`,
-        ``,
-        `When you arrive: reply *ARRIVED* ✅`,
-        `Need help any time: reply *10* 🆘`,
-        ``,
-        `📡 *For live tracking in our Situation Room:*`,
-        `Tap 📎 → Location → *Share Live Location* → set to 4 hours`,
+        `Any time you need help: reply *10* 🆘`,
       ].filter((l) => l !== null).join("\n");
     })(),
   );
@@ -1014,6 +1011,100 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
       await setConvState(from, { currentFlow: FLOW_CHECKIN, currentStep: STEP_WAITING_FOR_NEW_ETA, pendingTripData: pending });
       await sendWhatsApp(from, to, `📍 *${reportedLocation}* noted.\n\nWhat is your updated ETA? (e.g. 18:30)\n\nReply 0 for Main Menu.`);
     }
+    return;
+  }
+
+  // ── OVERDUE_PING replies — sent by scheduler when ETA is missed ──────────────
+  // 1 = arrived safely, 2 = delayed, 3 = send location pin, 4 = need help
+  if (pending.checkpointLabel === "OVERDUE_PING") {
+    const destination = trip?.title.includes(" → ") ? trip.title.split(" → ").pop()! : trip?.title ?? "your destination";
+
+    if (choice === "1") {
+      // Safe — close trip
+      if (trip) {
+        await db.update(tripsTable).set({
+          status: "completed",
+          currentRouteConfidence: "green",
+          lastMemberCheckinTime: new Date(),
+          checkinStage: "COMPLETED",
+          overdueMinutes: 0,
+          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] SAFE: Member confirmed arrival after overdue check.`),
+          nextAction: "Trip closed as SAFE.",
+        }).where(eq(tripsTable.id, trip.id));
+      }
+      await resetConvState(from);
+      await sendWhatsApp(from, to, `Good. Your Cyber Chaperone trip is closed as *SAFE*. 🏁\n\nThank you for travelling with us. Stay safe.`);
+      if (trip) {
+        await sendOperatorMirror(to, [
+          `✅ CYBER CHAPERONE — TRIP CLOSED SAFE`,
+          `Member: ${name}`,
+          `Trip: ${trip.title} (ID: ${trip.id})`,
+          `Member confirmed arrival after overdue check.`,
+        ].join("\n"), "arrived");
+      }
+      log.info({ from, tripId: trip?.id }, "OVERDUE_PING: member confirmed safe — trip closed");
+      return;
+    }
+
+    if (choice === "2") {
+      // Delayed — ask for new ETA
+      if (trip) {
+        await db.update(tripsTable).set({
+          status: "amber",
+          currentRouteConfidence: "amber",
+          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] DELAYED: Member confirmed delay via overdue check.`),
+          nextAction: "Member delayed. Awaiting new ETA.",
+        }).where(eq(tripsTable.id, trip.id));
+      }
+      await setConvState(from, { currentFlow: FLOW_CHECKIN, currentStep: STEP_WAITING_FOR_NEW_ETA, pendingTripData: pending });
+      await sendWhatsApp(from, to, `Understood — you are delayed.\n\nPlease send your updated ETA (e.g. 18:30).\n\nReply 0 for Main Menu.`);
+      log.info({ from, tripId: trip?.id }, "OVERDUE_PING: member delayed — asking for new ETA");
+      return;
+    }
+
+    if (choice === "3") {
+      // Send location pin
+      await setConvState(from, { currentFlow: FLOW_CHECKIN, currentStep: STEP_WAITING_FOR_LOCATION, pendingTripData: pending });
+      await sendWhatsApp(from, to, `Please send your current location.\n\nTap 📎 → Location → *Send Your Current Location*.\n\nReply 0 for Main Menu.`);
+      log.info({ from, tripId: trip?.id }, "OVERDUE_PING: member asked to send location pin");
+      return;
+    }
+
+    if (choice === "4") {
+      // Need help — RED + operator alert
+      if (trip) {
+        await db.update(tripsTable).set({
+          status: "red",
+          checkinStage: "DISTRESS",
+          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] DISTRESS: Member pressed help (4) at overdue check.`),
+          nextAction: "URGENT: Member requested help at overdue check. Immediate review required.",
+        }).where(eq(tripsTable.id, trip.id));
+      }
+      await resetConvState(from);
+      await sendWhatsApp(from, to, `${name}, I have alerted the Situation Room. Help is being arranged.\n\nStay where you are if possible.\n\nReply *10* at any time for immediate escalation.`);
+      if (trip) {
+        await sendOperatorMirror(to, [
+          `🚨 CYBER CHAPERONE — RED (OVERDUE DISTRESS)`,
+          `Member: ${name}`,
+          `Trip: ${trip.title} (ID: ${trip.id})`,
+          `Status: RED`,
+          `Triggered: Member pressed HELP (4) at overdue check-in.`,
+          `Next action: Immediate human review required.`,
+        ].join("\n"), "red-alert");
+      }
+      log.info({ from, tripId: trip?.id }, "OVERDUE_PING: member pressed help — RED");
+      return;
+    }
+
+    // Unrecognised — resend the overdue prompt
+    await sendWhatsApp(from, to, [
+      `${name}, please reply with a number:`,
+      ``,
+      `1. I have arrived safely`,
+      `2. I am delayed`,
+      `3. I will send my location pin`,
+      `4. I need help`,
+    ].join("\n"));
     return;
   }
 

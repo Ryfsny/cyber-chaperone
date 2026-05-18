@@ -55,6 +55,12 @@ export interface Trip {
   lastKnownLon?: string | null;
   /** @nullable */
   lastKnownAt?: Date | null;
+  /** @nullable */
+  lastLocationSource?: string | null;
+  /** @nullable */
+  checkinStage?: string | null;
+  /** @nullable */
+  overdueMinutes?: number | null;
   messageCount: number;
   createdAt: Date;
   updatedAt: Date;

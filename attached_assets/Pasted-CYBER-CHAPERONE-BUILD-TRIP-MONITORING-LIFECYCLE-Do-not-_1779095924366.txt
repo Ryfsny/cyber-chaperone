@@ -1,0 +1,190 @@
+CYBER CHAPERONE — BUILD TRIP MONITORING LIFECYCLE
+
+Do not rebuild the app.
+Do not change Twilio credentials.
+Do not change webhook URL.
+Do not change the main menu.
+Do not remove existing trip-start logic.
+Do not claim WhatsApp live location is available through Twilio.
+
+Build the missing Situation Room trip-monitoring lifecycle.
+
+Problem:
+A trip can be created with an ETA, but the system does not currently behave like a real Situation Room. It must watch the ETA, send arrival check-ins, change risk colour, show a car icon, and escalate if the member does not reply.
+
+Required flow:
+
+1. When a trip starts:
+- Create the trip as GREEN.
+- Store:
+  - member name
+  - WhatsApp number
+  - start location
+  - destination
+  - departure time
+  - ETA
+  - last update time
+  - status
+  - evidence notes
+  - inference notes
+  - next action
+  - last_checkin_sent_at
+  - checkin_stage
+  - overdue_minutes
+  - last_known_latitude
+  - last_known_longitude
+  - last_location_source
+
+2. Trip confirmation WhatsApp:
+Send the member a clear confirmation message:
+
+“Cyber Chaperone is watching this trip.
+Route: [start] → [destination]
+ETA: [ETA]
+
+Please use your normal navigation app:
+1. Open Google Maps
+2. Open Waze
+3. Send location pin
+0. Main Menu
+
+When you arrive, reply:
+SAFE”
+
+Do not say the Situation Room is receiving WhatsApp live location unless there is verified GPS evidence.
+
+3. Arrival check at ETA:
+At ETA time, send this WhatsApp:
+
+“Andre, you should be near [destination] by now.
+Are you there and okay?
+
+1. I have arrived safely
+2. I am delayed
+3. I will send my location pin
+4. I need help
+0. Main Menu”
+
+Log this as:
+Evidence: ETA reached. Arrival check-in sent.
+Inference: Awaiting member confirmation.
+Next action: Wait for reply.
+
+4. Grace period:
+If no reply 10 minutes after ETA:
+- Change trip status to AMBER.
+- Dashboard must show AMBER.
+- Show reason: “ETA passed. No arrival confirmation.”
+- Send WhatsApp:
+
+“Andre, we have not had your arrival confirmation yet.
+Please reply:
+
+1. I am okay
+2. I am delayed
+3. Send location pin
+4. I need help”
+
+5. Escalation:
+If no reply 25 minutes after ETA:
+- Change trip status to RED.
+- Dashboard must show RED.
+- Show reason: “ETA missed and no response after escalation window.”
+- Send WhatsApp:
+
+“Andre, we have not had a reply after your expected arrival time.
+Cyber Chaperone is escalating this for human attention.
+
+Reply:
+1. I am okay
+4. I need help”
+
+- Create operator alert:
+“RED — No arrival confirmation after ETA.
+Member: [name]
+Trip: [start] → [destination]
+ETA: [ETA]
+Last update: [time]
+Next action: Human review.”
+
+6. Replies:
+If member replies “SAFE”, “arrived”, “1”, or “I have arrived safely”:
+- Mark trip CLOSED / SAFE.
+- Send confirmation:
+“Good. Your Cyber Chaperone trip is closed as SAFE.”
+- Dashboard must remove it from active red/amber monitoring or show it as completed.
+
+If member replies “2” or says delayed/traffic:
+- Keep trip active.
+- Status becomes AMBER.
+- Ask for new ETA:
+“Understood. Please send your updated ETA.”
+- Log the delay as evidence.
+
+If member replies “3”:
+- Ask for static WhatsApp location pin:
+“Please tap 📎 → Location → Send your current location.”
+- Do not call it live tracking.
+
+If member replies “4” or uses distress words:
+- Status becomes RED immediately.
+- Alert operator immediately.
+
+If member replies “0”:
+- Return to the existing main eblockwatch menu.
+- Do not close the trip.
+- Do not store 0 as a trip note.
+
+7. Dashboard:
+The Situation Room dashboard must show active trips first, sorted:
+RED first
+AMBER second
+GREEN third
+Then by last update time.
+
+Each trip card must show:
+- car icon
+- member name
+- route
+- ETA
+- current status
+- overdue minutes
+- last WhatsApp sent
+- last reply received
+- next action
+- evidence
+- inference
+- action log
+
+Car icon rule:
+- If a verified location pin exists, show the car at that static pin.
+- If no verified location pin exists, show estimated route position and label it clearly:
+“Estimated position — not verified.”
+- Do not present estimated position as fact.
+
+8. Scheduled monitor:
+Add or verify a scheduled job that runs every 1 minute or every 5 minutes.
+It must:
+- find active trips
+- compare current time to ETA
+- send arrival check-ins
+- move GREEN to AMBER when overdue
+- move AMBER to RED when no reply
+- avoid duplicate WhatsApps by checking last_checkin_sent_at and checkin_stage
+
+9. Testing required:
+Create test trip:
+Member: Andre Snyman
+Route: Home → Sandton City
+ETA: 2 minutes from now
+
+Show proof:
+- trip created as GREEN
+- arrival WhatsApp sent at ETA
+- trip becomes AMBER after grace period if no reply
+- trip becomes RED after escalation period if no reply
+- dashboard shows car icon and RED status
+- SAFE closes the trip
+- 0 returns main menu but does not close trip
+
+Return a pass/fail checklist with evidence from logs and database.

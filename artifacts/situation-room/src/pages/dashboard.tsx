@@ -237,6 +237,27 @@ function TripCard({ trip }: { trip: Trip }) {
             <h3 className="text-xl font-bold text-foreground mb-1 group-hover:text-primary transition-colors">{trip.title}</h3>
             <p className="text-sm text-muted-foreground">{trip.travelerName} · {trip.travelerPhone}</p>
           </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            {trip.originalMemberEta && (
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                ETA {trip.originalMemberEta}
+              </span>
+            )}
+            {trip.overdueMinutes != null && trip.overdueMinutes > 0 && (
+              <span className={cn(
+                "flex items-center gap-1 font-bold",
+                trip.status === "red" ? "text-status-red" : "text-status-amber"
+              )}>
+                <AlertTriangle className="w-3 h-3" />
+                {trip.overdueMinutes}min overdue
+              </span>
+            )}
+            {trip.lastKnownLat && trip.lastKnownLon
+              ? <span className="flex items-center gap-1 text-green-600"><MapPin className="w-3 h-3" />Live GPS</span>
+              : <span className="flex items-center gap-1 text-amber-500"><MapPin className="w-3 h-3" />Est. position</span>
+            }
+          </div>
           {(trip.nextAction || trip.operatorNotes) && (
             <div className="pt-3 border-t border-border space-y-2">
               {trip.nextAction && (
