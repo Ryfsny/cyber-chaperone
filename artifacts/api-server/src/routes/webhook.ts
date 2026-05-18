@@ -9,6 +9,7 @@ import { sendOperatorEmail, logMessageToGmail, type EmailCategory } from "../ema
 import { reverseGeocodeStreetAddress } from "../route-service.js";
 import { isVoiceNote, downloadTwilioMedia, transcribeVoiceNote } from "../voice-service.js";
 import { callOperatorClaude } from "../operator-ai-service.js";
+import { callMemberClaude } from "../member-ai-service.js";
 
 const router: IRouter = Router();
 
@@ -913,11 +914,8 @@ router.post(
             `${locationHint}\n\nWhere are you heading? Reply with your destination and ETA and I will open a trip for you.\n\nExample:\nHeading to Sandton. ETA 18:30\n\nReply 0 for Main Menu.`,
           );
         } else {
-          await sendReply(
-            from,
-            to,
-            "Message received, but there is no active trip open. Please start a new trip with: Leaving [start] heading to [destination]. ETA [time].\n\nReply 0 for Main Menu.",
-          );
+          const aiReply = await callMemberClaude(body, from, member?.displayName ?? null);
+          await sendReply(from, to, aiReply || "Not sure what you meant — reply 0 for the main menu or type where you're heading to start a trip.");
         }
       } else {
         const ts = nowUtc();
