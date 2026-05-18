@@ -1,5 +1,5 @@
 import twilio from "twilio";
-import { db, tripsTable } from "@workspace/db";
+import { db, tripsTable, conversationStatesTable } from "@workspace/db";
 import { ne, eq } from "drizzle-orm";
 import type { Logger } from "pino";
 
@@ -53,14 +53,13 @@ function buildPrompt(name: string, label: string, destination: string, isPreArri
     ].join("\n");
   }
   return [
-    `${name} 👋 Cyber Chaperone checkpoint — *${label}*.`,
+    `${name} 👋 Cyber Chaperone — *${label}* checkpoint.`,
     ``,
-    `You're on your way to *${destination}*. We are still with you.`,
-    `Quick check-in — one reply is all we need.`,
+    `You should be at or near *${label}* on your way to *${destination}*.`,
     ``,
-    `1. ✅ I'm okay`,
-    `2. 🕐 I'm delayed`,
-    `3. 📍 Send my location pin`,
+    `1. ✅ Yes — passing through now`,
+    `2. 🕐 Not yet — running behind`,
+    `3. 📍 Somewhere else — tell us where`,
     `4. 🆘 I need help`,
     ``,
     `Reply 0 for Main Menu.`,
@@ -140,6 +139,25 @@ async function tick(log: Logger): Promise<void> {
           .update(tripsTable)
           .set({ evidenceNotes: updatedNotes })
           .where(eq(tripsTable.id, trip.id));
+
+        // Set conversation state so the member's reply routes to the check-in handler
+        try {
+          const pendingData = JSON.stringify({
+            clarificationActiveTripId: trip.id,
+            checkpointLabel: cp.label,
+            checkpointFraction: cp.fraction,
+            isPreArrival,
+          });
+          await db
+            .insert(conversationStatesTable)
+            .values({ whatsappNumber: trip.travelerPhone, currentFlow: "CHECKIN", currentStep: null, pendingTripData: pendingData })
+            .onConflictDoUpdate({
+              target: conversationStatesTable.whatsappNumber,
+              set: { currentFlow: "CHECKIN", currentStep: null, pendingTripData: pendingData },
+            });
+        } catch {
+          // best-effort — never crash the scheduler
+        }
 
         log.info({ tripId: trip.id, checkpoint: cp.label }, "Proactive checkpoint prompt sent");
       }

@@ -21,6 +21,7 @@ export interface MemberInfo {
   isKnown: boolean;
   discType?: DiscDimension | null;
   memberId?: number | null;
+  email?: string | null;
 }
 
 interface PendingTripData {
@@ -35,6 +36,8 @@ interface PendingTripData {
   clarificationNewDestination?: string;
   clarificationOriginalMessage?: string;
   isPreArrival?: boolean;
+  checkpointFraction?: number;
+  checkpointLabel?: string;
   // Registration-specific fields
   regSuburb?: string;
   regCity?: string;
@@ -91,6 +94,7 @@ const STEP_WAITING_FOR_DEPARTURE_TIME = "WAITING_FOR_DEPARTURE_TIME";
 
 const FLOW_CHECKIN = "CHECKIN";
 const STEP_WAITING_FOR_NEW_ETA = "WAITING_FOR_NEW_ETA";
+const STEP_WAITING_FOR_LOCATION = "WAITING_FOR_LOCATION";
 const FLOW_MEMBERSHIP = "MEMBERSHIP";
 const STEP_WAITING_FOR_PAYMENT_CONFIRMATION = "WAITING_FOR_PAYMENT_CONFIRMATION";
 const FLOW_PROFILE_UPDATE = "PROFILE_UPDATE";
@@ -228,6 +232,24 @@ function shouldSendCheckin(trip: { lastMemberCheckinTime: Date | null | undefine
   const duration = trip.routeEtaMinutes ?? 60;
   const interval = duration <= 60 ? 25 : duration <= 180 ? 45 : 90;
   return mins > interval;
+}
+
+function recalcEtaFromFraction(routeEtaMinutes: number, fraction: number): { newEtaTime: string; remainingMinutes: number } {
+  const remainingMinutes = Math.max(1, Math.round(routeEtaMinutes * (1 - fraction)));
+  const newEtaMs = Date.now() + remainingMinutes * 60_000;
+  const newEtaTime = new Date(newEtaMs).toLocaleTimeString("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return { newEtaTime, remainingMinutes };
+}
+
+function formatTimeLeft(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h}h ${m}min` : `${m}min`;
 }
 
 // ── Nearby responder count (haversine) ────────────────────────────────────────
@@ -822,17 +844,16 @@ function checkinText(
     ].join("\n");
   }
 
-  // Named checkpoint (First checkpoint, Second checkpoint, Midpoint)
+  // Named checkpoint — confirm presence and recalculate ETA
   return [
-    `${name} 👋 Cyber Chaperone — ${checkpointLabel}.`,
+    `${name} 👋 Cyber Chaperone — *${checkpointLabel}* checkpoint.`,
     ``,
-    `On your way to ${destination}. We've got your back. Quick tap:`,
+    `You should be at or near *${checkpointLabel}* on your way to *${destination}*.`,
     ``,
-    `🚔 1 — Pulled over`,
-    `⛽ 2 — Fuel / rest stop`,
-    `🚧 3 — Roadblock`,
-    `🚑 4 — Accident / breakdown`,
-    `✅ 5 — All good, still moving`,
+    `1. ✅ Yes — passing through now`,
+    `2. 🕐 Not yet — running behind`,
+    `3. 📍 Somewhere else — tell us where`,
+    `4. 🆘 I need help`,
     ``,
     `Reply 0 for Main Menu.`,
   ].join("\n");
@@ -911,6 +932,64 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
     return;
   }
 
+  // STEP_WAITING_FOR_LOCATION: member texted where they are
+  if (state.currentStep === STEP_WAITING_FOR_LOCATION) {
+    const reportedLocation = body.trim();
+    const destination = trip?.title.includes(" → ") ? trip.title.split(" → ").pop()! : trip?.title ?? "your destination";
+    let matchedFraction: number | null = null;
+    let matchedLabel: string | null = null;
+    if (trip?.checkpointList) {
+      try {
+        const cps = JSON.parse(trip.checkpointList) as Array<{ label: string; minutesFromStart: number; fraction: number }>;
+        const matched = cps.find(
+          (cp) =>
+            cp.label.toLowerCase().includes(reportedLocation.toLowerCase()) ||
+            reportedLocation.toLowerCase().includes(cp.label.toLowerCase()),
+        );
+        if (matched) { matchedFraction = matched.fraction; matchedLabel = matched.label; }
+      } catch { /* ignore */ }
+    }
+    // Fall back to the checkpoint that triggered this conversation
+    if (matchedFraction === null && pending.checkpointFraction != null) {
+      matchedFraction = pending.checkpointFraction;
+      matchedLabel = pending.checkpointLabel ?? null;
+    }
+    if (trip && matchedFraction !== null && trip.routeEtaMinutes) {
+      const { newEtaTime, remainingMinutes } = recalcEtaFromFraction(trip.routeEtaMinutes, matchedFraction);
+      const timeStr = formatTimeLeft(remainingMinutes);
+      await db.update(tripsTable).set({
+        originalMemberEta: newEtaTime,
+        lastMemberCheckinTime: new Date(),
+        etaDriftMinutes: 0,
+        status: "green",
+        currentRouteConfidence: "green",
+        evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] LOCATION: Member at "${reportedLocation}". ETA recalculated → ${newEtaTime}`),
+        nextAction: `Location confirmed: ${reportedLocation}. Updated ETA: ${newEtaTime}`,
+      }).where(eq(tripsTable.id, trip.id));
+      await resetConvState(from);
+      await sendWhatsApp(from, to, `📍 *${reportedLocation}* noted — ETA updated.\n\nEstimated arrival at *${destination}*: *${newEtaTime}* (${timeStr} to go).\n\nWe're still watching. Safe travels! 🛡️`);
+      await sendOperatorMirror(to, [
+        `CYBER CHAPERONE — LOCATION UPDATE`,
+        `Member: ${name}`,
+        `Trip: ${trip.title} (ID: ${trip.id})`,
+        `Location reported: ${reportedLocation}${matchedLabel ? ` (matched checkpoint: ${matchedLabel})` : ""}`,
+        `Updated ETA: ${newEtaTime} (${timeStr} remaining)`,
+        `Status: GREEN`,
+      ].join("\n"), "checkpoint");
+    } else {
+      // Can't match location — accept as note, ask for ETA
+      if (trip) {
+        await db.update(tripsTable).set({
+          lastMemberCheckinTime: new Date(),
+          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] LOCATION NOTE: "${reportedLocation.slice(0, 80)}"`),
+        }).where(eq(tripsTable.id, trip.id));
+      }
+      await setConvState(from, { currentFlow: FLOW_CHECKIN, currentStep: STEP_WAITING_FOR_NEW_ETA, pendingTripData: pending });
+      await sendWhatsApp(from, to, `📍 *${reportedLocation}* noted.\n\nWhat is your updated ETA? (e.g. 18:30)\n\nReply 0 for Main Menu.`);
+    }
+    return;
+  }
+
   // Pre-arrival checkpoint: 1 = arrived, 2 = delayed, 3 = help
   if (pending.isPreArrival) {
     if (choice === "1") {
@@ -972,7 +1051,123 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
     return;
   }
 
-  // Stop-reason menu: 1=pulled over, 2=fuel/rest, 3=roadblock, 4=accident, 5=all good
+  // ── Named checkpoint confirmation (set by scheduler or in-flow prompt) ────────
+  if (pending.checkpointLabel && !pending.isPreArrival) {
+    const fraction = pending.checkpointFraction ?? 0.5;
+    const label = pending.checkpointLabel;
+    const destination = trip?.title.includes(" → ") ? trip.title.split(" → ").pop()! : trip?.title ?? "your destination";
+
+    if (choice === "1") {
+      // Passing through — recalculate ETA from this checkpoint fraction
+      if (trip && trip.routeEtaMinutes) {
+        const { newEtaTime, remainingMinutes } = recalcEtaFromFraction(trip.routeEtaMinutes, fraction);
+        const timeStr = formatTimeLeft(remainingMinutes);
+        await db.update(tripsTable).set({
+          originalMemberEta: newEtaTime,
+          lastMemberCheckinTime: new Date(),
+          etaDriftMinutes: 0,
+          status: "green",
+          currentRouteConfidence: "green",
+          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] CHECKPOINT ✅: ${label} confirmed. ETA recalculated → ${newEtaTime}`),
+          nextAction: `${label} confirmed. Updated ETA: ${newEtaTime}`,
+        }).where(eq(tripsTable.id, trip.id));
+        await resetConvState(from);
+        await sendWhatsApp(from, to, `✅ *${label}* — confirmed, you're on track!\n\nUpdated ETA to *${destination}*: *${newEtaTime}* (${timeStr} to go).\n\nWe're still with you. Safe travels! 🛡️`);
+        await sendOperatorMirror(to, [
+          `CYBER CHAPERONE — CHECKPOINT CONFIRMED ✅`,
+          `Member: ${name}`,
+          `Trip: ${trip.title} (ID: ${trip.id})`,
+          `Checkpoint: ${label}`,
+          `Updated ETA: ${newEtaTime} (${timeStr} remaining)`,
+          `Status: GREEN`,
+        ].join("\n"), "checkpoint");
+      } else {
+        if (trip) {
+          await db.update(tripsTable).set({
+            lastMemberCheckinTime: new Date(),
+            etaDriftMinutes: 0,
+            status: "green",
+            evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] CHECKPOINT ✅: ${label} confirmed.`),
+            nextAction: `${label} confirmed. Monitoring continues.`,
+          }).where(eq(tripsTable.id, trip.id));
+        }
+        await resetConvState(from);
+        await sendWhatsApp(from, to, `✅ *${label}* confirmed. We're still with you — safe travels! 🛡️`);
+      }
+      log.info({ from, tripId: trip?.id, checkpoint: label }, "Named checkpoint confirmed — ETA recalculated");
+      return;
+    }
+
+    if (choice === "2") {
+      // Running behind — ask for new ETA
+      if (trip) {
+        await db.update(tripsTable).set({
+          status: "amber",
+          currentRouteConfidence: "amber",
+          lastMemberCheckinTime: new Date(),
+          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] DELAYED: Not yet at ${label}.`),
+          nextAction: `Member delayed at ${label} checkpoint.`,
+        }).where(eq(tripsTable.id, trip.id));
+      }
+      await setConvState(from, { currentFlow: FLOW_CHECKIN, currentStep: STEP_WAITING_FOR_NEW_ETA, pendingTripData: pending });
+      await sendWhatsApp(from, to, `Understood — no rush.\n\nWhat is your new ETA to *${destination}*? (e.g. 18:30)\n\nReply 0 for Main Menu.`);
+      if (trip) {
+        await sendOperatorMirror(to, [
+          `CYBER CHAPERONE — DELAYED AT CHECKPOINT`,
+          `Member: ${name}`,
+          `Trip: ${trip.title} (ID: ${trip.id})`,
+          `Checkpoint: ${label}`,
+          `Status: ⚠️ AMBER — awaiting new ETA`,
+        ].join("\n"));
+      }
+      return;
+    }
+
+    if (choice === "3") {
+      // Somewhere else — ask them to text their location
+      await setConvState(from, { currentFlow: FLOW_CHECKIN, currentStep: STEP_WAITING_FOR_LOCATION, pendingTripData: pending });
+      await sendWhatsApp(from, to, `No problem — just tell us where you are right now (e.g. *Vrede* or *just passed Standerton*) and we will update your ETA.\n\nReply 0 for Main Menu.`);
+      return;
+    }
+
+    if (choice === "4") {
+      // Need help — RED + full ICE alert
+      if (trip) {
+        await db.update(tripsTable).set({
+          status: "red",
+          nextAction: `Member needs help at ${label} checkpoint — immediate review.`,
+          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] 🆘 HELP requested at checkpoint ${label}.`),
+        }).where(eq(tripsTable.id, trip.id));
+      }
+      await resetConvState(from);
+      await sendWhatsApp(from, to, `${name}, we are on it. 🆘\n\nAndré has been notified and the Situation Room is on alert. You are not alone.\n\nReply 0 for Main Menu.`);
+      await sendEmergencyAlert(to, name, from);
+      const iceHelp = await getMemberIce(from);
+      if (iceHelp) {
+        await sendIceContactAlert(to, name, from, iceHelp.iceContactName, iceHelp.iceContactPhone, trip ?? null,
+          `${name} has signalled they need help at the *${label}* checkpoint during a trip.`);
+      }
+      if (trip) {
+        await sendOperatorMirror(to, [
+          `🚨 CYBER CHAPERONE — RED (CHECKPOINT HELP REQUEST)`,
+          `Member: ${name}`,
+          `Trip: ${trip.title} (ID: ${trip.id})`,
+          `Checkpoint: ${label}`,
+          `Status: RED`,
+          iceHelp ? `ICE alerted: ${iceHelp.iceContactName} (${iceHelp.iceContactPhone})` : `ICE: not set`,
+          `Next action: Immediate human review required.`,
+        ].join("\n"), "red-alert");
+      }
+      log.info({ from, tripId: trip?.id, checkpoint: label }, "Named checkpoint: member needs help — RED");
+      return;
+    }
+
+    // Unrecognised — re-send checkpoint menu
+    if (trip) await sendCheckinPrompt(ctx, trip, 0, label);
+    return;
+  }
+
+  // Stop-reason menu (ETA drift check-in): 1=pulled over, 2=fuel/rest, 3=roadblock, 4=accident, 5=all good
   if (choice === "5") {
     // All good — still moving: reset drift, stay GREEN
     if (trip) {
@@ -2659,6 +2854,7 @@ async function handleProfileUpdateChoice(ctx: MenuContext, state: ConvState): Pr
   const { from, to, body, member, messageSid } = ctx;
   const name = member?.displayName ?? from;
   const trimmedBody = body.trim();
+  const choice = trimmedBody;
   const letter = trimmedBody.toUpperCase();
 
   await saveMessage(from, to, body, messageSid, null);
@@ -4738,6 +4934,8 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
             pendingTripData: {
               clarificationActiveTripId: activeTrip.id,
               isPreArrival: cp.label === "PRE_ARRIVAL",
+              checkpointLabel: cp.label,
+              checkpointFraction: cp.fraction,
             },
           });
           await saveMessage(from, to, body, messageSid, activeTrip.id);
@@ -4747,6 +4945,57 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
       }
     } catch {
       // best-effort
+    }
+  }
+
+  // 7b. Free-text location during active trip ("driving past Warden", "just passed Harrismith")
+  if (
+    member?.isKnown &&
+    activeTrip &&
+    activeTrip.status !== "completed" &&
+    activeTrip.status !== "red" &&
+    activeTrip.checkpointList &&
+    activeTrip.routeEtaMinutes
+  ) {
+    const FREE_TEXT_LOC = /\b(?:driving\s+(?:past|through|by)|just\s+pass(?:ed|ing)|passing\s+(?:through\s+)?|approaching)\s+([A-Za-z][A-Za-z\s\-]{2,30})/i;
+    const locMatch = body.match(FREE_TEXT_LOC);
+    if (locMatch) {
+      const reportedLoc = locMatch[1].replace(/\s+$/, "").trim();
+      try {
+        const cps = JSON.parse(activeTrip.checkpointList) as Array<{ label: string; minutesFromStart: number; fraction: number }>;
+        const matched = cps.find(
+          (cp) =>
+            cp.label.toLowerCase().includes(reportedLoc.toLowerCase()) ||
+            reportedLoc.toLowerCase().includes(cp.label.toLowerCase()),
+        );
+        if (matched) {
+          const { newEtaTime, remainingMinutes } = recalcEtaFromFraction(activeTrip.routeEtaMinutes, matched.fraction);
+          const timeStr = formatTimeLeft(remainingMinutes);
+          const tripDest = activeTrip.title.includes(" → ") ? activeTrip.title.split(" → ").pop()! : activeTrip.title;
+          const locTs = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
+          await db.update(tripsTable).set({
+            originalMemberEta: newEtaTime,
+            lastMemberCheckinTime: new Date(),
+            etaDriftMinutes: 0,
+            status: "green",
+            currentRouteConfidence: "green",
+            evidenceNotes: appendNote(activeTrip.evidenceNotes, `[${locTs}] FREE-TEXT: "${reportedLoc}" → ETA recalculated → ${newEtaTime}`),
+            nextAction: `Location update: ${reportedLoc}. Updated ETA: ${newEtaTime}`,
+          }).where(eq(tripsTable.id, activeTrip.id));
+          await resetConvState(from);
+          await sendWhatsApp(from, to, `📍 *${reportedLoc}* noted — ETA updated automatically.\n\nEstimated arrival at *${tripDest}*: *${newEtaTime}* (${timeStr} to go).\n\nWe're still with you. Safe travels! 🛡️`);
+          await saveMessage(from, to, body, messageSid, activeTrip.id);
+          await sendOperatorMirror(to, [
+            `CYBER CHAPERONE — FREE-TEXT LOCATION`,
+            `Member: ${name}`,
+            `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+            `Reported: "${reportedLoc}" (matched checkpoint: ${matched.label}, fraction: ${matched.fraction})`,
+            `Updated ETA: ${newEtaTime} (${timeStr} remaining)`,
+            `Status: GREEN`,
+          ].join("\n"), "checkpoint");
+          return { handled: true };
+        }
+      } catch { /* best-effort */ }
     }
   }
 
