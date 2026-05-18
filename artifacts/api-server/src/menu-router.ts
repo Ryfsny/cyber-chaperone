@@ -162,17 +162,18 @@ const START_FORMAT =
   /^START\s+(.+?)\s+to\s+(.+?)\s+ETA\s+(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)\s*$/i;
 // Natural language trip start: "I'm going to Oyster Box leaving from College Road now"
 // "I am going to The Oyster Box in Durban from College Road"
-// "Going to Pretoria from Home", "Heading to Durban from Sandton"
+// "Going to Pretoria from Home", "Heading towards Durban from Sandton"
 const NATURAL_TRIP_START_PATTERN =
-  /^(?:i(?:'?m|'?m\s+am|\s+am)\s+)?(?:going|heading|travelling|traveling|driving)\s+to\s+(.+?)\s+(?:leaving\s+from|from|departing\s+from|starting\s+(?:from|at))\s+(.+?)(?:\s*,?\s*(?:(?:leaving|departing)?\s*now))?(?:\s*[,.]?\s*(?:eta|arriving(?:\s+at)?)\s*:?\s*(\d{1,2}[:.]\d{2}(?:\s*[aApP][mM])?))?\.?\s*$/i;
+  /^(?:i(?:'?m|'?m\s+am|\s+am)\s+)?(?:going|heading|travelling|traveling|driving)\s+(?:to|towards?)\s+(.+?)\s+(?:leaving\s+from|from|departing\s+from|starting\s+(?:from|at))\s+(.+?)(?:\s*,?\s*(?:(?:leaving|departing)?\s*now))?(?:\s*[,.]?\s*(?:eta|arriving(?:\s+at)?)\s*:?\s*(\d{1,2}[:.]\d{2}(?:\s*[aApP][mM])?))?\.?\s*$/i;
 // "Going from College Road to Skukuza leaving now" — FROM first, DEST second
-// "Driving from Sandton to Airport ETA 15:00"
+// "Driving from Sandton towards Airport ETA 15:00"
+// "Heading towards from Johannesburg to Pittsburg" — voice garble handled by pre-normalisation
 const NATURAL_TRIP_FROM_FIRST_PATTERN =
-  /^(?:i(?:'?m|'?m\s+am|\s+am)\s+)?(?:going|heading|travelling|traveling|driving|leaving)\s+from\s+(.+?)\s+to\s+(.+?)(?:\s*,?\s*(?:leaving\s*)?now)?(?:\s*[,.]?\s*(?:eta|arriving(?:\s+at)?)\s*:?\s*(\d{1,2}[:.]\d{2}(?:\s*[aApP][mM])?))?\.?\s*$/i;
+  /^(?:i(?:'?m|'?m\s+am|\s+am)\s+)?(?:going|heading|travelling|traveling|driving|leaving)\s+(?:towards?\s+)?from\s+(.+?)\s+(?:to|towards?)\s+(.+?)(?:\s*,?\s*(?:leaving\s*)?now)?(?:\s*[,.]?\s*(?:eta|arriving(?:\s+at)?)\s*:?\s*(\d{1,2}[:.]\d{2}(?:\s*[aApP][mM])?))?\.?\s*$/i;
 // "Leaving Fourways now heading to Rosebank Mall. ETA 14:40." — André's natural format
-// Also without comma: "Leaving Sandton heading to Airport ETA 15:00"
+// Also: "Leaving Sandton heading towards Airport ETA 15:00"
 const NATURAL_TRIP_LEAVING_PATTERN =
-  /^Leaving\s+(.+?)\s+(?:now\s+)?(?:heading|going)\s+to\s+(.+?)(?:[.,]?\s*ETA\s+(\d{1,2}:\d{2}(?:\s*[aApP][mM])?))?\.?\s*$/i;
+  /^Leaving\s+(.+?)\s+(?:now\s+)?(?:heading|going)\s+(?:to|towards?)\s+(.+?)(?:[.,]?\s*ETA\s+(\d{1,2}:\d{2}(?:\s*[aApP][mM])?))?\.?\s*$/i;
 // Waze share text: "I'm using Waze to drive to [DEST], arriving at [TIME]."
 const WAZE_SHARE_PATTERN =
   /i'?m\s+using\s+waze\s+to\s+drive\s+to\s+(.+?),\s+arriving\s+at\s+(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)/i;
@@ -5195,8 +5196,16 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   // 4b. Natural language trip start — intercept before menu for known members
   // Fires when not inside an active flow step (TRIP_FLOW etc. are already handled above)
   if (state.currentFlow === FLOW_MAIN_MENU || state.currentFlow === null) {
+    // Pre-normalise voice-recognition garbles:
+    // "heading towards from Johannesburg. Pittsburg" → "heading towards from Johannesburg to Pittsburg"
+    // Periods mid-sentence (not at end) are often garbled "to" separators in voice input
+    const normTrimmed = trimmed
+      .replace(/\.\s+(?!ETA\b)([A-Z][a-zA-Z])/g, " to $1") // "Johannesburg. Pittsburg" → "to Pittsburg" (not ". ETA")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
     // Waze share link: "I'm using Waze to drive to [DEST], arriving at [TIME]"
-    const wazeMatch = trimmed.match(WAZE_SHARE_PATTERN);
+    const wazeMatch = normTrimmed.match(WAZE_SHARE_PATTERN);
     if (wazeMatch) {
       const wazeDest = wazeMatch[1].trim();
       const wazeEta = wazeMatch[2].trim();
@@ -5205,8 +5214,8 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
       log.info({ from }, "Menu router: Waze link — trip auto-started");
       return { handled: true };
     }
-    // "I'm going to [DEST] from [PLACE]" / "Going to [DEST] leaving from [PLACE] now"
-    const natMatch = trimmed.match(NATURAL_TRIP_START_PATTERN);
+    // "I'm going to [DEST] towards/from [PLACE]" / "Heading towards Durban from Sandton"
+    const natMatch = normTrimmed.match(NATURAL_TRIP_START_PATTERN);
     if (natMatch) {
       const natDest = natMatch[1].trim();
       const rawStart = natMatch[2].replace(/\bnow\.?$/i, "").trim();
@@ -5216,8 +5225,8 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
       log.info({ from }, "Menu router: natural trip start (to-from)");
       return { handled: true };
     }
-    // "Going from [START] to [DEST] leaving now" / "Driving from Sandton to Airport ETA 15:00"
-    const fromFirstMatch = trimmed.match(NATURAL_TRIP_FROM_FIRST_PATTERN);
+    // "Going from [START] to [DEST]" / "Heading towards from Johannesburg to Pittsburg"
+    const fromFirstMatch = normTrimmed.match(NATURAL_TRIP_FROM_FIRST_PATTERN);
     if (fromFirstMatch) {
       const ffStart = fromFirstMatch[1].replace(/\s*,?\s*(?:leaving\s+)?now\.?$/i, "").trim() || member?.homeAddress || "Home";
       const ffDest  = fromFirstMatch[2].replace(/\s*,?\s*(?:leaving\s+)?now\.?$/i, "").trim();
@@ -5227,7 +5236,7 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
       return { handled: true };
     }
     // "Leaving Fourways now heading to Rosebank Mall. ETA 14:40." — André's natural format
-    const leavingMatch = trimmed.match(NATURAL_TRIP_LEAVING_PATTERN);
+    const leavingMatch = normTrimmed.match(NATURAL_TRIP_LEAVING_PATTERN);
     if (leavingMatch) {
       const lvStart = leavingMatch[1].trim() || member?.homeAddress || "Home";
       const lvDest  = leavingMatch[2].trim();
