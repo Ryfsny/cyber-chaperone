@@ -1651,7 +1651,7 @@ function membershipOptionsText(name: string, currentTier?: string | null): strin
     `──────────────────`,
     statusLine,
     ``,
-    `Reply 3 to activate or upgrade.`,
+    `Reply *4* from the main menu to activate or upgrade.`,
     `Reply 0 for Main Menu.`,
   ].join("\n");
 }
