@@ -803,16 +803,13 @@ function checkinText(
       `${name} 👋 Cyber Chaperone check-in.`,
       ``,
       `You are ${driftMin} minute${driftMin === 1 ? "" : "s"} past your ETA for ${destination}.`,
-      `No stress — just let us know you are okay and we will update your trip.`,
+      `No stress — just tap what applies:`,
       ``,
-      `Please reply:`,
-      ``,
-      `1. ✅ I am okay`,
-      `2. 🕐 I am delayed`,
-      `3. 🕒 My ETA has changed`,
-      `4. 🛑 I have stopped`,
-      `5. 🆘 I need help`,
-      `6. 📍 Send my location pin`,
+      `🚔 1 — Pulled over`,
+      `⛽ 2 — Fuel / rest stop`,
+      `🚧 3 — Roadblock`,
+      `🚑 4 — Accident / breakdown`,
+      `✅ 5 — All good, still moving`,
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n");
@@ -822,16 +819,13 @@ function checkinText(
   return [
     `${name} 👋 Cyber Chaperone — ${checkpointLabel}.`,
     ``,
-    `You are on your way to ${destination}. We've got your back. Just a quick check-in.`,
+    `On your way to ${destination}. We've got your back. Quick tap:`,
     ``,
-    `Please reply:`,
-    ``,
-    `1. ✅ I am okay`,
-    `2. 🕐 I am delayed`,
-    `3. 🕒 My ETA has changed`,
-    `4. 🛑 I have stopped`,
-    `5. 🆘 I need help`,
-    `6. 📍 Send my location pin`,
+    `🚔 1 — Pulled over`,
+    `⛽ 2 — Fuel / rest stop`,
+    `🚧 3 — Roadblock`,
+    `🚑 4 — Accident / breakdown`,
+    `✅ 5 — All good, still moving`,
     ``,
     `Reply 0 for Main Menu.`,
   ].join("\n");
@@ -971,9 +965,9 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
     return;
   }
 
-  // Regular checkpoint / ETA drift: 1 = okay
-  const isOkay = choice === "1";
-  if (isOkay) {
+  // Stop-reason menu: 1=pulled over, 2=fuel/rest, 3=roadblock, 4=accident, 5=all good
+  if (choice === "5") {
+    // All good — still moving: reset drift, stay GREEN
     if (trip) {
       await db
         .update(tripsTable)
@@ -982,40 +976,57 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
           currentRouteConfidence: "green",
           lastMemberCheckinTime: new Date(),
           etaDriftMinutes: 0,
-          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] CHECK-IN: Member confirmed okay.`),
+          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] CHECK-IN: Member confirmed okay and still moving.`),
           nextAction: "Member checked in okay. Continue monitoring.",
         })
         .where(eq(tripsTable.id, trip.id));
     }
     await resetConvState(from);
-    await sendWhatsApp(from, to, `Received. We are still watching over your journey.\n\nReply 0 for Main Menu.`);
-    log.info({ from, tripId: trip?.id }, "Check-in: member okay");
+    await sendWhatsApp(from, to, `✅ All good — we are still watching over your journey.\n\nSafe travels.\n\nReply 0 for Main Menu.`);
+    log.info({ from, tripId: trip?.id }, "Check-in: member okay and moving");
     if (trip) {
       await sendOperatorMirror(to, [
         `CYBER CHAPERONE — CHECK-IN CONFIRMED`,
         `Member: ${name}`,
         `Trip: ${trip.title} (ID: ${trip.id})`,
-        `Status: GREEN`,
-        `Member confirmed: okay.`,
+        `Status: ✅ GREEN`,
+        `Member confirmed: all good, still moving.`,
       ].join("\n"), "checkpoint");
     }
     return;
   }
 
-  if (choice === "2" || choice === "3") {
+  if (choice === "2") {
+    // Fuel / rest stop — GREEN, ~25 min natural pause before next prompt
     if (trip) {
       await db
         .update(tripsTable)
-        .set({ status: "amber", currentRouteConfidence: "amber" })
+        .set({
+          status: "green",
+          currentRouteConfidence: "green",
+          lastMemberCheckinTime: new Date(),
+          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] STOP: Fuel/rest stop.`),
+          nextAction: "Member on a fuel/rest stop. Continue monitoring.",
+        })
         .where(eq(tripsTable.id, trip.id));
     }
-    await setConvState(from, { currentFlow: FLOW_CHECKIN, currentStep: STEP_WAITING_FOR_NEW_ETA, pendingTripData: pending });
-    const reason = choice === "2" ? "you are delayed" : "your ETA has changed";
-    await sendWhatsApp(from, to, `Understood — ${reason}.\n\nPlease send your new ETA.\n\nExample:\nETA 23:30\n\nReply 0 for Main Menu.`);
+    await resetConvState(from);
+    await sendWhatsApp(from, to, `⛽ Fuel/rest stop noted. Take your time — we will pick up your trip when you are back on the road.\n\nReply 0 for Main Menu.`);
+    log.info({ from, tripId: trip?.id }, "Check-in: fuel/rest stop");
+    if (trip) {
+      await sendOperatorMirror(to, [
+        `CYBER CHAPERONE — FUEL/REST STOP`,
+        `Member: ${name}`,
+        `Trip: ${trip.title} (ID: ${trip.id})`,
+        `Status: ✅ GREEN`,
+        `Member: Fuel/rest stop. Back on road shortly.`,
+      ].join("\n"), "checkpoint");
+    }
     return;
   }
 
-  if (choice === "4") {
+  if (choice === "3") {
+    // Roadblock — AMBER, ~25 min natural pause before next prompt
     if (trip) {
       await db
         .update(tripsTable)
@@ -1023,36 +1034,80 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
           status: "amber",
           currentRouteConfidence: "amber",
           lastMemberCheckinTime: new Date(),
-          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] CHECK-IN: Member has stopped.`),
-          nextAction: "Member has stopped. Monitor closely.",
+          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] STOP: Roadblock encountered.`),
+          nextAction: "Member at roadblock. Monitor for update.",
         })
         .where(eq(tripsTable.id, trip.id));
     }
     await resetConvState(from);
-    await sendWhatsApp(from, to, `Understood. We have noted that you have stopped and will monitor closely.\n\nIf you move again, send your location pin 📍 or a message.\n\nReply 0 for Main Menu.`);
-    log.info({ from, tripId: trip?.id }, "Check-in: member stopped — AMBER");
+    await sendWhatsApp(from, to, `🚧 Roadblock noted. We are watching over you.\n\nWhen you are through, just keep going — we will follow your journey from here.\n\nReply 0 for Main Menu.`);
+    log.info({ from, tripId: trip?.id }, "Check-in: roadblock — AMBER");
     if (trip) {
       await sendOperatorMirror(to, [
-        `CYBER CHAPERONE — AMBER (MEMBER STOPPED)`,
+        `CYBER CHAPERONE — ROADBLOCK`,
         `Member: ${name}`,
         `Trip: ${trip.title} (ID: ${trip.id})`,
         `Status: ⚠️ AMBER`,
-        `Member: I have stopped.`,
-        `Next action: Monitor. Await next update.`,
+        `Member: Encountered a roadblock.`,
+        `Next action: Monitor. Await clearance.`,
       ].join("\n"));
     }
     return;
   }
 
-  if (choice === "5") {
+  if (choice === "1") {
+    // Pulled over by police — AMBER, calm ICE heads-up (NOT RED, NOT emergency)
     if (trip) {
-      await db.update(tripsTable).set({ status: "red", nextAction: "Immediate human review." }).where(eq(tripsTable.id, trip.id));
+      await db
+        .update(tripsTable)
+        .set({
+          status: "amber",
+          currentRouteConfidence: "amber",
+          lastMemberCheckinTime: new Date(),
+          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] STOP: Pulled over by police.`),
+          nextAction: "Member pulled over by police. AMBER — not RED. ICE notified (calm).",
+        })
+        .where(eq(tripsTable.id, trip.id));
+    }
+    await resetConvState(from);
+    await sendWhatsApp(from, to, `🚔 Understood — we have noted you have been pulled over. Stay calm.\n\nWe have quietly let your emergency contact know you are safe.\n\nWhen you are released and back on the road, just continue your trip — we are right here.\n\nReply 0 for Main Menu.`);
+    log.info({ from, tripId: trip?.id }, "Check-in: pulled over — AMBER (calm ICE)");
+    const icePulled = await getMemberIce(from);
+    if (icePulled) {
+      await sendIceContactAlert(
+        to,
+        name,
+        from,
+        icePulled.iceContactName,
+        icePulled.iceContactPhone,
+        trip ?? null,
+        `${name} has been pulled over by police during a trip. They are *safe and unharmed* — this is a precautionary notification only. No immediate action required.`,
+      );
+    }
+    if (trip) {
+      await sendOperatorMirror(to, [
+        `CYBER CHAPERONE — POLICE STOP (AMBER)`,
+        `Member: ${name}`,
+        `Trip: ${trip.title} (ID: ${trip.id})`,
+        `Status: ⚠️ AMBER — NOT RED`,
+        `Member: Pulled over by police. Safe.`,
+        icePulled ? `ICE notified (calm): ${icePulled.iceContactName} (${icePulled.iceContactPhone})` : `ICE contact: not set`,
+        `Next action: Monitor. Do NOT escalate unless new info arrives.`,
+      ].join("\n"));
+    }
+    return;
+  }
+
+  if (choice === "4") {
+    // Accident / breakdown — RED, full ICE alert
+    if (trip) {
+      await db.update(tripsTable).set({ status: "red", nextAction: "Accident/breakdown — immediate human review." }).where(eq(tripsTable.id, trip.id));
     }
     await resetConvState(from);
     await sendWhatsApp(from, to, [
       `${name}, we are on it. 🆘`,
       ``,
-      `Andre has been notified and the Situation Room is on alert. You are not alone.`,
+      `André has been notified and the Situation Room is on alert. You are not alone.`,
       ``,
       `Please reply with one number:`,
       ``,
@@ -1065,46 +1120,35 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
       `Reply 0 for Main Menu.`,
     ].join("\n"));
     await sendEmergencyAlert(to, name, from);
-    // Alert ICE contact directly with last known location
-    const iceCheckin = await getMemberIce(from);
-    if (iceCheckin) {
+    const iceAccident = await getMemberIce(from);
+    if (iceAccident) {
       await sendIceContactAlert(
         to,
         name,
         from,
-        iceCheckin.iceContactName,
-        iceCheckin.iceContactPhone,
+        iceAccident.iceContactName,
+        iceAccident.iceContactPhone,
         trip ?? null,
-        `${name} has requested emergency help during a safety check-in.`,
+        `${name} has reported an accident or breakdown during a trip and needs urgent assistance.`,
       );
     }
     if (trip) {
       await sendOperatorMirror(to, [
-        `🚨 CYBER CHAPERONE — RED`,
+        `🚨 CYBER CHAPERONE — RED (ACCIDENT/BREAKDOWN)`,
         `Member: ${name}`,
         `Trip: ${trip.title} (ID: ${trip.id})`,
-        `Reason: Member requested help from check-in`,
-        iceCheckin ? `ICE contact alerted: ${iceCheckin.iceContactName} (${iceCheckin.iceContactPhone})` : `ICE contact: not set`,
         `Status: RED`,
+        iceAccident ? `ICE contact alerted: ${iceAccident.iceContactName} (${iceAccident.iceContactPhone})` : `ICE contact: not set`,
         `Next action: Immediate human review required.`,
-      ].join("\n"));
+      ].join("\n"), "red-alert");
     }
-    return;
-  }
-
-  if (choice === "6") {
-    if (trip) {
-      await db.update(tripsTable).set({ lastMemberCheckinTime: new Date() }).where(eq(tripsTable.id, trip.id));
-    }
-    await resetConvState(from);
-    await sendWhatsApp(from, to, `Please send your location pin 📍 and we will update your trip.\n\nReply 0 for Main Menu.`);
     return;
   }
 
   if (trip) {
     await sendCheckinPrompt(ctx, trip, trip.etaDriftMinutes ?? 15);
   } else {
-    await sendWhatsApp(from, to, `Please reply with 1–6 or 0 for Main Menu.`);
+    await sendWhatsApp(from, to, `Please reply with 1–5 or 0 for Main Menu.`);
   }
 }
 
@@ -1176,11 +1220,11 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
     return [
       `${name} 👋 Situation Room — you're in.`,
       ``,
-      `1️⃣  What is eblockwatch?`,
-      `2️⃣  Membership options`,
-      `3️⃣  Activate my membership`,
-      `4️⃣  👤 My Account`,
-      `5️⃣  Travel with Cyber Chaperone 🛡️`,
+      `1️⃣  Travel with Cyber Chaperone 🛡️`,
+      `2️⃣  What is eblockwatch?`,
+      `3️⃣  Membership options`,
+      `4️⃣  Activate my membership`,
+      `5️⃣  👤 My Account`,
       `6️⃣  eblockshop`,
       `7️⃣  Speak to a person`,
       `8️⃣  📣 Invite a Friend`,
@@ -1207,11 +1251,11 @@ function mainMenuText(name: string, member: MemberInfo | null): string {
     statusLine,
     ``,
     isUnknown ? `0️⃣  Join eblockwatch — register now (it's free)` : null,
-    `1️⃣  What is eblockwatch?`,
-    `2️⃣  Membership options`,
-    `3️⃣  Activate my membership`,
-    `4️⃣  👤 My Account`,
-    `5️⃣  Travel with Cyber Chaperone`,
+    `1️⃣  Travel with Cyber Chaperone 🛡️`,
+    `2️⃣  What is eblockwatch?`,
+    `3️⃣  Membership options`,
+    `4️⃣  Activate my membership`,
+    `5️⃣  👤 My Account`,
     `6️⃣  eblockshop`,
     `7️⃣  Speak to a person`,
     `8️⃣  📣 Invite a Friend`,
@@ -3520,7 +3564,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   const name = member?.displayName ?? from;
   const choice = body.trim();
 
-  if (choice === "5" || CC_KEYWORDS.test(body)) {
+  if (choice === "1" || CC_KEYWORDS.test(body)) {
     await setConvState(from, { currentFlow: FLOW_CYBER_CHAPERONE, currentStep: null, pendingTripData: null });
     await sendWhatsApp(from, to, ccMenuText(name));
     await saveMessage(from, to, body, messageSid, null);
@@ -3546,7 +3590,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
     return true;
   }
 
-  if (choice === "1") {
+  if (choice === "2") {
     if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_WHAT_IS");
     await saveMessage(from, to, body, messageSid, null);
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
@@ -3565,14 +3609,14 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
     return true;
   }
 
-  if (choice === "2") {
+  if (choice === "3") {
     if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_MEMBERSHIP");
     await saveMessage(from, to, body, messageSid, null);
     await sendWhatsApp(from, to, membershipOptionsText(name, member?.membershipTier));
     return true;
   }
 
-  if (choice === "3") {
+  if (choice === "4") {
     if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_MEMBERSHIP");
     await saveMessage(from, to, body, messageSid, null);
     await setConvState(from, { currentFlow: FLOW_MEMBERSHIP, currentStep: null });
@@ -3580,7 +3624,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
     return true;
   }
 
-  if (choice === "4") {
+  if (choice === "5") {
     if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_PROFILE");
     await saveMessage(from, to, body, messageSid, null);
     await setConvState(from, { currentFlow: FLOW_MY_ACCOUNT, currentStep: null });
