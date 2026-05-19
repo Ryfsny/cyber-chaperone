@@ -5,3 +5,4 @@ export * from "./conversation-states";
 export * from "./responders";
 export * from "./case-participants";
 export * from "./case-logs";
+export * from "./scare-bear-sightings";

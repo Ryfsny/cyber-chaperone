@@ -3,7 +3,7 @@ import {
   Plus, Shield, Bot, Users, BookUser,
   LogOut, Megaphone, MessagesSquare, Menu, X,
   LayoutDashboard, Map, ScrollText, Send, ShieldCheck, Clock, CreditCard, AlertTriangle,
-  Search,
+  Search, Ghost,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
@@ -205,6 +205,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
       label: "Incident Map",
       sub: "Confidential member reports",
       icon: AlertTriangle,
+      show: true,
+    },
+    {
+      href: "/scare-bears",
+      label: "Scare Bear Map",
+      sub: "Live community road alerts",
+      icon: Ghost,
       show: true,
     },
     {

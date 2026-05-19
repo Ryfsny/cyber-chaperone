@@ -1,5 +1,5 @@
-import { db, membersTable, tripsTable, messagesTable, conversationStatesTable, respondersTable, memberIncidentsTable } from "@workspace/db";
-import { and, eq, ne, desc, or, sql } from "drizzle-orm";
+import { db, membersTable, tripsTable, messagesTable, conversationStatesTable, respondersTable, memberIncidentsTable, scareBearSightingsTable } from "@workspace/db";
+import { and, eq, ne, desc, or, sql, gte } from "drizzle-orm";
 import twilio from "twilio";
 import { enrichTripWithRoute, calculateRouteInfo, reverseGeocodeCoords, reverseGeocodeStreetAddress, minutesToSastTime, type RouteInfo } from "./route-service.js";
 import { calculateGoogleMapsRoute } from "./google-maps-service.js";
@@ -139,6 +139,7 @@ const FLOW_SAFETY_PROFILE = "SAFETY_PROFILE";
 const FLOW_SHOP = "SHOP";
 const FLOW_MY_ACCOUNT = "MY_ACCOUNT";
 const FLOW_REPORT_INCIDENT = "REPORT_INCIDENT";
+const FLOW_SCARE_BEAR = "SCARE_BEAR";
 const FLOW_PROFILE_CONFIRM = "PROFILE_CONFIRM";
 const FLOW_SPEAK_TO_PERSON = "SPEAK_TO_PERSON";
 const STEP_SAFETY_MOTHER_NAME = "SAFETY_MOTHER_NAME";
@@ -149,6 +150,7 @@ const STEP_SAFETY_VEHICLE_DESC = "SAFETY_VEHICLE_DESC";
 // ── Keyword detectors ─────────────────────────────────────────────────────────
 
 const MAIN_MENU_TRIGGER = /^(hi|hello|menu|main menu|start|0)$/i;
+const SCARE_BEAR_TRIGGER = /\b(scare\s*bear|scarebear|skaap|scary\s*char(?:acter)?|road\s*alert)\b/i;
 const GLOBAL_MENU_OVERRIDE = /^(hi|hello|hey|hallo|menu|main menu|start|0|join|activate|activate my eblockwatch account|activate my eblockwatch)$/i;
 const JOIN_PREFIX = /^join\s+/i;
 const CC_KEYWORDS = /\b(cyber chaperone|travel|trip|start trip)\b/i;
@@ -4629,6 +4631,170 @@ async function handleReportIncidentFlow(ctx: MenuContext, state: ConvState): Pro
   await sendMainMenuWithNearby(from, to, name, member);
 }
 
+// ── Scare Bear flow ───────────────────────────────────────────────────────────
+
+const SCARE_BEAR_TYPE_LABELS: Record<string, string> = {
+  "1": "traffic_officer_bribe",
+  "2": "scary_character",
+  "3": "suspicious_vehicle",
+  "4": "roadblock",
+  "5": "other",
+};
+
+function scareBearMenuText(name: string): string {
+  return [
+    `🐻 *Scare Bear — Road Safety Alert*`,
+    ``,
+    `${name}, help keep our community safe. Your report is anonymous — no names or plates are stored.`,
+    ``,
+    `What did you encounter?`,
+    ``,
+    `1️⃣  Traffic officer asking for a bribe`,
+    `2️⃣  Scary character / person of concern`,
+    `3️⃣  Suspicious vehicle`,
+    `4️⃣  Illegal roadblock`,
+    `5️⃣  Other road safety concern`,
+    ``,
+    `Reply 0 to cancel.`,
+  ].join("\n");
+}
+
+async function handleScareBearFlow(ctx: MenuContext, state: ConvState): Promise<void> {
+  const { from, to, body, member, messageSid, latitude, longitude, address, label, log } = ctx;
+  const name = member?.displayName ?? from;
+  const choice = body.trim();
+  const step = state.currentStep;
+
+  if (choice === "0") {
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendMainMenuWithNearby(from, to, name, member);
+    return;
+  }
+
+  // ── Step 1: member selects type ──────────────────────────────────────────────
+  if (step === "TYPE") {
+    const typeKey = SCARE_BEAR_TYPE_LABELS[choice];
+    if (!typeKey) {
+      await sendWhatsApp(from, to, `Please reply with a number 1–5.\n\n${scareBearMenuText(name)}`);
+      return;
+    }
+    const pending = { scareBearType: typeKey } as unknown as PendingTripData;
+    await setConvState(from, { currentFlow: FLOW_SCARE_BEAR, currentStep: "DESCRIPTION", pendingTripData: pending });
+    await sendWhatsApp(from, to, [
+      `📝 *${typeKey.replace(/_/g, " ")}*`,
+      ``,
+      `Briefly describe what you saw. You can also send a voice note 🎤`,
+      ``,
+      `Your description is privacy-filtered — no plates or names are stored.`,
+      ``,
+      `Reply *skip* to skip the description, or 0 to cancel.`,
+    ].join("\n"));
+    return;
+  }
+
+  // ── Step 2: description ──────────────────────────────────────────────────────
+  if (step === "DESCRIPTION") {
+    const pending = (state.pendingTripData as Record<string, string> ?? {});
+    const description = (choice.toLowerCase() === "skip") ? null : body.trim();
+    const updatedPending = { ...pending, scareBearDescription: description ?? "" } as unknown as PendingTripData;
+    await setConvState(from, { currentFlow: FLOW_SCARE_BEAR, currentStep: "LOCATION", pendingTripData: updatedPending });
+    await sendWhatsApp(from, to, [
+      `📍 *Where did this happen?*`,
+      ``,
+      `Share your location pin 📍, type an area name (e.g. "Sandton Drive, Sandton"), or reply *skip*.`,
+      ``,
+      `Reply 0 to cancel.`,
+    ].join("\n"));
+    return;
+  }
+
+  // ── Step 3: location → save ──────────────────────────────────────────────────
+  if (step === "LOCATION") {
+    const pending = (state.pendingTripData as Record<string, string> ?? {});
+    const typeKey = pending.scareBearType ?? "other";
+    const description = pending.scareBearDescription || null;
+
+    // Determine location — location pin takes precedence over typed text
+    let lat: string | null = null;
+    let lon: string | null = null;
+    let areaName: string | null = null;
+
+    if (latitude && longitude) {
+      lat = latitude;
+      lon = longitude;
+      areaName = address || label || null;
+      if (!areaName) {
+        try {
+          areaName = await reverseGeocodeCoords(latitude, longitude);
+        } catch { /* best-effort */ }
+      }
+    } else if (choice.toLowerCase() !== "skip" && choice.length > 2) {
+      // Typed area — geocode it
+      areaName = choice.trim();
+      try {
+        const geo = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(choice + ", South Africa")}&format=json&limit=1&countrycodes=za`,
+          { headers: { "User-Agent": "eblockwatch-safety/1.0" } },
+        );
+        const geoData = await geo.json() as Array<{ lat: string; lon: string; display_name: string }>;
+        if (geoData[0]) {
+          lat = geoData[0].lat;
+          lon = geoData[0].lon;
+        }
+      } catch { /* best-effort */ }
+    }
+
+    // Privacy-filter the description (strip SA plates)
+    const SA_PLATE_RE = /\b[A-Z]{1,3}\s*\d{2,4}[\s-]*[A-Z]{0,3}\b/g;
+    const filteredDescription = description ? description.replace(SA_PLATE_RE, "[PLATE REMOVED]").trim() : null;
+
+    // Save to DB
+    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000); // 4 hours
+    try {
+      await db.insert(scareBearSightingsTable).values({
+        reporterPhone: from,
+        lat,
+        lon,
+        areaName,
+        type: typeKey,
+        description: filteredDescription,
+        mediaUrl: null,
+        mediaType: null,
+        expiresAt,
+      });
+
+      // Award loyalty points for community contribution
+      if (member?.memberId) {
+        try {
+          await db.update(membersTable)
+            .set({ loyaltyPoints: sql`${membersTable.loyaltyPoints} + 5`, updatedAt: new Date() })
+            .where(eq(membersTable.id, member.memberId));
+        } catch { /* best-effort */ }
+      }
+    } catch (err) {
+      log.error({ err }, "scare-bear: DB insert failed");
+    }
+
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU, currentStep: null, pendingTripData: null });
+    await saveMessage(from, to, body, messageSid, null);
+    await sendWhatsApp(from, to, [
+      `✅ *Scare Bear alert logged!*`,
+      ``,
+      `Thank you, ${name}. Your report is anonymous and will appear on the eblockwatch map for 4 hours.`,
+      areaName ? `📍 Area: ${areaName}` : null,
+      ``,
+      `You earned *+5 loyalty points* for keeping our community safer. 🐻`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].filter(Boolean).join("\n"));
+    return;
+  }
+
+  // Fallback — restart flow
+  await setConvState(from, { currentFlow: FLOW_SCARE_BEAR, currentStep: "TYPE", pendingTripData: null });
+  await sendWhatsApp(from, to, scareBearMenuText(name));
+}
+
 // ── eblockshop ────────────────────────────────────────────────────────────────
 
 const SHOP_PRODUCTS = [
@@ -5188,6 +5354,15 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     return { handled: true };
   }
 
+  // 3b. Scare Bear global keyword trigger (fires from any idle state)
+  if (SCARE_BEAR_TRIGGER.test(trimmed)) {
+    await saveMessage(from, to, body, messageSid, null);
+    await setConvState(from, { currentFlow: FLOW_SCARE_BEAR, currentStep: "TYPE", pendingTripData: null });
+    await sendWhatsApp(from, to, scareBearMenuText(name));
+    log.info({ from, handler: "SCARE_BEAR_KEYWORD" }, "menu-router: scare bear keyword trigger");
+    return { handled: true };
+  }
+
   // 4. Conversation state routing
   const state = await getConvState(from);
   log.info({ from, currentFlow: state.currentFlow, currentStep: state.currentStep }, "Menu router: conv state");
@@ -5235,6 +5410,11 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
 
   if (state.currentFlow === FLOW_REPORT_INCIDENT) {
     await handleReportIncidentFlow(ctx, state);
+    return { handled: true };
+  }
+
+  if (state.currentFlow === FLOW_SCARE_BEAR) {
+    await handleScareBearFlow(ctx, state);
     return { handled: true };
   }
 

@@ -22,6 +22,7 @@ import broadcastQueueRouter from "./broadcast-queue";
 import incidentsRouter from "./incidents";
 import agentReportRouter from "./agent-report";
 import ttsRouter from "./tts";
+import scareBearsRouter from "./scare-bears";
 import { requireAuth } from "../middleware/require-auth";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -58,6 +59,7 @@ router.use(paystackAdminRouter);  // Paystack sync + status (operator only)
 router.use(operatorAdminsRouter); // Admin management (national only)
 router.use(broadcastQueueRouter); // Broadcast approval queue
 router.use(incidentsRouter);      // Confidential incident map (operator only)
+router.use(scareBearsRouter);    // Scare Bear sightings map (operator only)
 router.use(agentReportRouter);    // Situation Room → Agent reporter
 
 export default router;

@@ -19,6 +19,7 @@ import Conversations from "@/pages/conversations";
 import AdminManagement from "@/pages/admin-management";
 import BroadcastApprovals from "@/pages/broadcast-approvals";
 import IncidentMap from "@/pages/incident-map";
+import ScareBearsPage from "@/pages/scare-bears";
 import { Layout } from "@/components/layout/layout";
 import { AuthGuard } from "@/components/auth-guard";
 
@@ -43,6 +44,7 @@ function Router() {
         <Route path="/admin/admins" component={AdminManagement} />
         <Route path="/admin/approvals" component={BroadcastApprovals} />
         <Route path="/incidents" component={IncidentMap} />
+        <Route path="/scare-bears" component={ScareBearsPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

@@ -161,6 +161,11 @@ const TOOLS: Anthropic.Tool[] = [
       required: ["location"],
     },
   },
+  {
+    name: "get_scare_bears",
+    description: "Get active Scare Bear community road safety sightings — member-reported scary situations on the road. Returns type, area, description, time reported, and time remaining before expiry. Use when asked about scare bears, road alerts, suspicious activity reported by members, or what's happening on the roads right now.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
 ];
 
 // ── Tool handlers — live DB queries ───────────────────────────────────────────
@@ -404,6 +409,47 @@ async function toolGetWeather(location: string): Promise<string> {
   }
 }
 
+async function toolGetScareABears(): Promise<string> {
+  try {
+    const { scareBearSightingsTable } = await import("@workspace/db");
+    const { gte } = await import("drizzle-orm");
+    const rows = await db
+      .select({
+        id: scareBearSightingsTable.id,
+        type: scareBearSightingsTable.type,
+        areaName: scareBearSightingsTable.areaName,
+        description: scareBearSightingsTable.description,
+        expiresAt: scareBearSightingsTable.expiresAt,
+        createdAt: scareBearSightingsTable.createdAt,
+      })
+      .from(scareBearSightingsTable)
+      .where(gte(scareBearSightingsTable.expiresAt, new Date()))
+      .orderBy(desc(scareBearSightingsTable.createdAt))
+      .limit(20);
+
+    if (rows.length === 0) return "No active Scare Bear sightings right now. All clear on the roads.";
+
+    const TYPE_LABELS: Record<string, string> = {
+      traffic_officer_bribe: "Traffic Officer (Bribe)",
+      scary_character: "Scary Character",
+      suspicious_vehicle: "Suspicious Vehicle",
+      roadblock: "Illegal Roadblock",
+      other: "Other",
+    };
+
+    const lines = rows.map(r => {
+      const minsLeft = Math.round((new Date(r.expiresAt).getTime() - Date.now()) / 60_000);
+      const area = r.areaName ?? "unknown area";
+      const label = TYPE_LABELS[r.type] ?? r.type;
+      const desc = r.description ? ` — "${r.description}"` : "";
+      return `• ${label} in ${area}${desc} (${minsLeft}min left)`;
+    });
+    return `${rows.length} active Scare Bear sighting${rows.length === 1 ? "" : "s"}:\n${lines.join("\n")}`;
+  } catch (err) {
+    return `Error fetching scare bear sightings: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
 // ── Tool dispatcher ────────────────────────────────────────────────────────────
 
 async function runTool(name: string, input: Record<string, unknown>): Promise<string> {
@@ -418,6 +464,7 @@ async function runTool(name: string, input: Record<string, unknown>): Promise<st
                                 (input["alternatives"] as boolean) ?? false,
                               );
     case "get_weather":       return toolGetWeather((input["location"] as string) ?? "");
+    case "get_scare_bears":   return toolGetScareABears();
     default:                  return `Unknown tool: ${name}`;
   }
 }

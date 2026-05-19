@@ -8,3 +8,4 @@ export * from "./case-participants";
 export * from "./case-logs";
 export * from "./operator-admins";
 export * from "./broadcast-queue";
+export * from "./scare-bear-sightings";
