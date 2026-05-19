@@ -2109,6 +2109,46 @@ async function sendStartLocationPrompt(from: string, to: string, name: string): 
   }
 }
 
+/**
+ * Start the trip flow with zero extra questions when home is saved.
+ * - Home saved → jump straight to WAITING_FOR_DESTINATION with home pre-filled.
+ * - No home    → ask for a location pin (pin becomes their home).
+ */
+async function startTripFlowDirect(from: string, to: string, name: string): Promise<void> {
+  const [memberRow] = await db
+    .select({ homeLat: membersTable.homeLat, homeLon: membersTable.homeLon, homeAddress: membersTable.homeAddress })
+    .from(membersTable)
+    .where(eq(membersTable.whatsappNumber, from))
+    .limit(1);
+
+  if (memberRow?.homeAddress) {
+    const updatedPending: PendingTripData = {
+      startLocation: "Home 🏠",
+      startLat: memberRow.homeLat ?? undefined,
+      startLon: memberRow.homeLon ?? undefined,
+    };
+    await setConvState(from, {
+      currentFlow: FLOW_TRIP_FLOW,
+      currentStep: STEP_WAITING_FOR_DESTINATION,
+      pendingTripData: updatedPending,
+    });
+    await sendWhatsApp(from, to, [
+      `🛡️ Starting from Home 🏠`,
+      ``,
+      `Where are you heading today?`,
+      ``,
+      `Reply 0 for Main Menu.`,
+    ].join("\n"));
+  } else {
+    await setConvState(from, {
+      currentFlow: FLOW_TRIP_FLOW,
+      currentStep: STEP_WAITING_FOR_START_LOCATION,
+      pendingTripData: {},
+    });
+    await sendWhatsApp(from, to, askForLocationText(name));
+  }
+}
+
 function ccInfoText(name: string): string {
   return [
     `${name}, *Cyber Chaperone* keeps you connected to eblockwatch.`,
@@ -2384,13 +2424,8 @@ async function handleClarificationChoice(ctx: MenuContext, state: ConvState): Pr
   }
 
   if (choice === "1") {
-    // Start new trip — ask for location (home-aware)
-    await setConvState(from, {
-      currentFlow: FLOW_TRIP_FLOW,
-      currentStep: STEP_WAITING_FOR_START_LOCATION,
-      pendingTripData: {},
-    });
-    await sendStartLocationPrompt(from, to, name);
+    // Start new trip — auto-use home if saved, no extra question
+    await startTripFlowDirect(from, to, name);
     log.info({ from }, "Clarification: start new trip flow");
     return;
   }
@@ -2524,42 +2559,17 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
       .limit(1);
     const savedHome = memberRow?.homeAddress ? memberRow : null;
 
-    // ── Has saved home — numbered choice ──────────────────────────────────────
+    // ── Has saved home — auto-use it, no question needed ─────────────────────
     if (savedHome && !hasPin) {
-      if (choice === "1") {
-        const updatedPending: PendingTripData = {
-          ...pending,
-          startLocation: "Home 🏠",
-          startLat: savedHome.homeLat ?? undefined,
-          startLon: savedHome.homeLon ?? undefined,
-        };
-        await setConvState(from, { currentFlow: FLOW_TRIP_FLOW, currentStep: STEP_WAITING_FOR_DESTINATION, pendingTripData: updatedPending });
-        await sendWhatsApp(from, to, `Got it — starting from Home 🏠.\n\nWhere are you heading today?\n\nReply 0 for Main Menu.`);
-        log.info({ from }, "Trip flow: using saved home address");
-        return;
-      }
-      if (choice === "2") {
-        await setConvState(from, { currentFlow: FLOW_TRIP_FLOW, currentStep: STEP_WAITING_FOR_HOME_OVERRIDE, pendingTripData: pending });
-        await sendWhatsApp(from, to, [
-          `No problem — please share your current location pin 📍`,
-          ``,
-          `(Tap the 📎 clip → Location → Send Your Current Location)`,
-          ``,
-          `Reply 0 for Main Menu.`,
-        ].join("\n"));
-        return;
-      }
-      // Unrecognised text — re-show the home menu
-      await sendWhatsApp(from, to, [
-        `${name}, are you starting from Home 🏠?`,
-        ``,
-        `1. Yes — start from Home 🏠`,
-        `2. No — I am somewhere else`,
-        ``,
-        `Or share your location pin 📍 to start from a different place.`,
-        ``,
-        `Reply 0 for Main Menu.`,
-      ].join("\n"));
+      const updatedPending: PendingTripData = {
+        ...pending,
+        startLocation: "Home 🏠",
+        startLat: savedHome.homeLat ?? undefined,
+        startLon: savedHome.homeLon ?? undefined,
+      };
+      await setConvState(from, { currentFlow: FLOW_TRIP_FLOW, currentStep: STEP_WAITING_FOR_DESTINATION, pendingTripData: updatedPending });
+      await sendWhatsApp(from, to, `🛡️ Starting from Home 🏠\n\nWhere are you heading today?\n\nReply 0 for Main Menu.`);
+      log.info({ from }, "Trip flow: auto-using saved home address");
       return;
     }
 
@@ -2763,12 +2773,8 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
   }
 
   if (choice === "1") {
-    await setConvState(from, {
-      currentFlow: FLOW_TRIP_FLOW,
-      currentStep: STEP_WAITING_FOR_START_LOCATION,
-      pendingTripData: {},
-    });
-    await sendStartLocationPrompt(from, to, name);
+    // Auto-use home if saved — no extra question
+    await startTripFlowDirect(from, to, name);
     await saveMessage(from, to, body, messageSid, null);
     log.info({ from }, "CC menu: start trip flow");
     return true;
@@ -5613,7 +5619,24 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     return { handled: true };
   }
 
-  // 4b. Natural language trip start — intercept before menu for known members
+  // 4b. Media placeholder intercept — photos/videos with no active flow context
+  // The webhook synthesises "[Photo]", "[Video]", or "[Sticker]" when media arrives
+  // with no matching active-trip or active-flow handler. Reply contextually here
+  // so the member gets a helpful response rather than silence.
+  if (body === "[Photo]" || body === "[Video]" || body === "[Sticker]") {
+    await saveMessage(from, to, body, messageSid, null);
+    const mediaWord = body === "[Video]" ? "video" : body === "[Sticker]" ? "sticker" : "photo";
+    await sendWhatsApp(from, to, [
+      `📸 Got your ${mediaWord}!`,
+      ``,
+      `To attach it to a monitored trip, start a trip first then send your ${mediaWord}.`,
+      ``,
+      `Reply *1* to start a trip, or *Hi* for the Main Menu.`,
+    ].join("\n"));
+    return { handled: true };
+  }
+
+  // 4c. Natural language trip start — intercept before menu for known members
   // Fires when not inside an active flow step (TRIP_FLOW etc. are already handled above)
   if (state.currentFlow === FLOW_MAIN_MENU || state.currentFlow === null) {
     // Pre-normalise voice-recognition garbles:

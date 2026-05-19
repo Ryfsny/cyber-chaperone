@@ -413,27 +413,46 @@ router.post(
   const address: string = (rb["Address"] ?? rb["address"] ?? "").toString();
   const label: string = (rb["Label"] ?? rb["label"] ?? "").toString();
 
-  // ── Live location update (WhatsApp "Share Live Location") ───────────────
-  // Twilio sends periodic lat/lon updates when a member has shared their live
-  // location. We update the trip silently — no reply, return early.
+  // ── Location pin / Live location update ──────────────────────────────────
+  // Twilio sends lat/lon for both one-time pin drops and periodic live-location
+  // ticks. We silent-ACK live ticks UNLESS the member is in a flow that is
+  // actively waiting for a location pin — in that case we fall through to the
+  // menu router so it can consume the pin.
   if (latitude !== "" && longitude !== "") {
     try {
       const liveTrip = await findActiveTrip(from);
       if (liveTrip) {
-        await db
-          .update(tripsTable)
-          .set({ lastKnownLat: latitude, lastKnownLon: longitude, lastKnownAt: new Date() })
-          .where(eq(tripsTable.id, liveTrip.id));
-        req.log.info({ tripId: liveTrip.id, lat: latitude, lon: longitude }, "Live GPS position updated");
-        // Silent ACK — no reply so the member isn't spammed on every location tick
-        res.set("Content-Type", "text/xml");
-        res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
-        return;
+        // Check if this member is mid-flow waiting for a pin
+        const [convRow] = await db
+          .select({ currentStep: conversationStatesTable.currentStep })
+          .from(conversationStatesTable)
+          .where(eq(conversationStatesTable.whatsappNumber, from))
+          .limit(1)
+          .catch(() => [] as { currentStep: string | null }[]);
+        const PIN_STEPS = new Set([
+          "WAITING_FOR_LOCATION",
+          "WAITING_FOR_HOME_OVERRIDE",
+          "WAITING_FOR_START_LOCATION",
+          "SCARE_BEAR_LOCATION",
+        ]);
+        if (!PIN_STEPS.has(convRow?.currentStep ?? "")) {
+          // Silent live GPS tick — update coords, no reply
+          await db
+            .update(tripsTable)
+            .set({ lastKnownLat: latitude, lastKnownLon: longitude, lastKnownAt: new Date() })
+            .where(eq(tripsTable.id, liveTrip.id));
+          req.log.info({ tripId: liveTrip.id, lat: latitude, lon: longitude }, "Live GPS position updated");
+          res.set("Content-Type", "text/xml");
+          res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+          return;
+        }
+        // Member is waiting for a pin — fall through to menu router
+        req.log.info({ from, step: convRow?.currentStep }, "Location pin in active flow — routing to menu router");
       }
     } catch (err) {
       req.log.warn({ err }, "Live location update failed — falling through");
     }
-    // No active trip — synthesise a body so the menu router can handle it
+    // No active trip OR pin expected — synthesise body (menu router reads lat/lon from ctx directly)
     const locationLabel = [label, address].filter(Boolean).join(", ");
     body = `📍 Location: ${locationLabel || `${latitude},${longitude}`}`;
   }
@@ -496,18 +515,14 @@ router.post(
     // Not a safety profile photo — fall through to the generic media handler below
   }
 
-  // BUG 2 FIX: If body is still empty after transcription attempt and there are media
-  // attachments (images, videos, stickers, documents), respond with a friendly message
-  // and return early — do NOT pass empty content to the AI or menu router.
+  // If body is still empty after all media processing, synthesise a placeholder
+  // so the menu router can respond in context (Scare Bear evidence, active flow, etc.)
+  // rather than passing empty content or giving a confusing "start a trip" message.
   if (body === "" && numMedia > 0) {
-    await sendReply(
-      from,
-      to,
-      "I received your image, but you don't have an active trip right now. Start a trip first, then send photos as checkpoint evidence.",
-    );
-    res.set("Content-Type", "text/xml");
-    res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
-    return;
+    const isVideo = mediaContentType.startsWith("video/");
+    const isSticker = mediaContentType === "image/webp";
+    body = isVideo ? "[Video]" : isSticker ? "[Sticker]" : "[Photo]";
+    req.log.info({ from, mediaContentType, body }, "Media without body — synthesised placeholder for menu router");
   }
 
   req.log.info(
