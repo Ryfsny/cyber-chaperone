@@ -98,9 +98,34 @@ Be conversational, warm and direct. WhatsApp replies must be under 900 character
 - Always be specific: name the road (N3, R103 Midlands Meander), say "via Harrismith" or "via Van Reenen's Pass", mention tolls
 
 ## WHAT IS BUILT AND LIVE
-- Trip safety monitoring: members say "Leaving X to Y ETA Z", operator watches in Situation Room
-- ICE escalation: auto-WhatsApp ICE contact on distress / 45 min ETA drift
-- ~92,000 member registry, Paystack payments, Facebook Messenger menu
+
+**Core safety platform:**
+- Trip monitoring: member says where they're going → Situation Room watches → auto-escalates if silent past ETA
+- Trip start: jumps straight to "where are you heading?" — no extra from-home question if home is saved
+- ICE escalation: auto-WhatsApps emergency contact on distress / ETA drift ≥45 min / member presses 10
+- Location pins: members drop a pin at any time → received correctly, shown on operator map
+- Photos & videos: members send media during a trip → saved as evidence → operator sees it immediately
+- Natural language trips: "heading to Sandton", "going from home to Cape Town ETA 3pm" — all understood
+
+**Member registry & payments:**
+- ~92,000 member registry with verified/active/pending/inactive tiers
+- Paystack integration: Individual (R150/mo) and Family (R250/mo) plans, auto-upgrade on payment
+- Welcome Home campaign: email batches of 50 — bounce recovery via SMS follow-up
+
+**Channels:**
+- WhatsApp (Twilio): full Cyber Chaperone menu for all members
+- Facebook Messenger: full menu mirrored (members can start trips from Messenger)
+- eblockwatch Website: /website/ — registration, login, dashboard, upgrade funnel
+
+**Operator tools (your tools — type these in WhatsApp):**
+- Type anything → Arnie (Claude) answers with live data
+- Type *007* → 007 Field Command: broadcast to responders, voice notes, responder list, emergency, to-do list
+- Type *000* → Member Mode: see the platform exactly as members see it; type *000* again to exit
+- Use get_operator_todos tool to check André's to-do list (saved via 007 → option 6)
+- Situation Room: https://cyber-chaperone-r--ryfsny.replit.app/
+
+## OPERATOR TO-DO LIST
+André saves tasks via 007 → option 6 (type or voice). You can retrieve them via the get_operator_todos tool when he asks "what's on my list?" or "what do I need to do?".
 
 ## CRITICAL — DO NOT FAKE SYSTEM ACTIONS
 NEVER pretend to log a trip or perform any system action. Tell Andre to use "TEST: Leaving [from] to [destination] ETA [time]" to trigger the real member flow.
@@ -164,6 +189,11 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "get_scare_bears",
     description: "Get active Scare Bear community road safety sightings — member-reported scary situations on the road. Returns type, area, description, time reported, and time remaining before expiry. Use when asked about scare bears, road alerts, suspicious activity reported by members, or what's happening on the roads right now.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "get_operator_todos",
+    description: "Get André's operator to-do list — tasks he has dictated via voice or text using the 007 Field Command (option 6). Returns the most recent 15 items with timestamps. Use when André asks about his list, tasks, reminders, or what he needs to do.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
 ];
@@ -450,6 +480,30 @@ async function toolGetScareABears(): Promise<string> {
   }
 }
 
+async function toolGetOperatorTodos(): Promise<string> {
+  try {
+    const ANDRE_WA = "whatsapp:+27825611065";
+    const rows = await db
+      .select({ body: messagesTable.body, receivedAt: messagesTable.receivedAt })
+      .from(messagesTable)
+      .where(and(eq(messagesTable.fromNumber, ANDRE_WA), eq(messagesTable.direction, "operator-todo")))
+      .orderBy(desc(messagesTable.receivedAt))
+      .limit(15);
+
+    if (rows.length === 0) return "André's to-do list is empty. No tasks saved yet.";
+
+    const lines = rows.map((r, i) => {
+      const when = r.receivedAt
+        ? new Date(r.receivedAt).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Johannesburg" })
+        : "";
+      return `${i + 1}. ${r.body}${when ? ` (${when})` : ""}`;
+    });
+    return `André's to-do list (${rows.length} item${rows.length === 1 ? "" : "s"}):\n${lines.join("\n")}`;
+  } catch (err) {
+    return `Error fetching to-do list: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
 // ── Tool dispatcher ────────────────────────────────────────────────────────────
 
 async function runTool(name: string, input: Record<string, unknown>): Promise<string> {
@@ -464,8 +518,9 @@ async function runTool(name: string, input: Record<string, unknown>): Promise<st
                                 (input["alternatives"] as boolean) ?? false,
                               );
     case "get_weather":       return toolGetWeather((input["location"] as string) ?? "");
-    case "get_scare_bears":   return toolGetScareABears();
-    default:                  return `Unknown tool: ${name}`;
+    case "get_scare_bears":     return toolGetScareABears();
+    case "get_operator_todos":  return toolGetOperatorTodos();
+    default:                    return `Unknown tool: ${name}`;
   }
 }
 

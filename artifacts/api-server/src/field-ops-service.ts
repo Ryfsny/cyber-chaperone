@@ -1,13 +1,14 @@
 import twilio from "twilio";
 import { db, respondersTable, messagesTable, conversationStatesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import type { Logger } from "pino";
 
 export const FLOW_FIELD_007 = "FIELD_007";
 const STEP_AWAIT_BROADCAST_LOC = "AWAIT_BROADCAST_LOC";
 const STEP_AWAIT_BROADCAST_MSG = "AWAIT_BROADCAST_MSG";
 const STEP_AWAIT_RESPONDER_LOC = "AWAIT_RESPONDER_LOC";
-const STEP_AWAIT_VOICE       = "AWAIT_VOICE";
+const STEP_AWAIT_VOICE         = "AWAIT_VOICE";
+const STEP_AWAIT_TODO          = "AWAIT_TODO";
 
 const SITUATION_ROOM_URL = "https://cyber-chaperone-r--ryfsny.replit.app/";
 
@@ -58,17 +59,28 @@ async function findNearbyResponders(lat: number, lon: number, radiusKm = 30): Pr
 
 export function fieldMenuText(operatorName: string): string {
   return [
-    `🛡️ *007 — Field Command*`,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `🛡️ *007 — FIELD COMMAND*`,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━`,
     ``,
-    `${operatorName}, you're in field mode. Choose:`,
+    `${operatorName}, you are in Field Command mode.`,
     ``,
-    `1️⃣  🔗 Situation Room — open dashboard`,
-    `2️⃣  📡 Broadcast to nearby — drop your pin next`,
-    `3️⃣  🎤 Log voice note to Situation Room`,
-    `4️⃣  👥 Responder list (30km) — drop your pin next`,
+    `─── 🖥️ Situation Room ───`,
+    `1️⃣  Open Situation Room dashboard`,
+    ``,
+    `─── 📡 Field operations ───`,
+    `2️⃣  Broadcast to nearby responders`,
+    `     (drop your pin next)`,
+    `3️⃣  Log voice note to Situation Room`,
+    `4️⃣  Responder list within 30km`,
+    `     (drop your pin next)`,
     `5️⃣  🚨 Declare field emergency`,
     ``,
-    `Reply 007 to exit field mode.`,
+    `─── ✅ To-do list ───`,
+    `6️⃣  Add a to-do item (type or voice note)`,
+    `7️⃣  View my to-do list`,
+    ``,
+    `Reply *007* to exit field mode.`,
   ].join("\n");
 }
 
@@ -210,6 +222,34 @@ export async function handleFieldState(
     return;
   }
 
+  // ── AWAIT_TODO — save a to-do item (text or transcribed voice) ──────────
+  if (step === STEP_AWAIT_TODO) {
+    const todoText = choice.trim();
+    if (!todoText) {
+      await sendReply(from, to, `Please type your task or send a voice note.\n\nReply 007 to cancel.`);
+      return;
+    }
+    await db.insert(messagesTable).values({
+      fromNumber: from,
+      toNumber: "internal",
+      body: todoText,
+      messageSid: null,
+      tripId: null,
+      direction: "operator-todo",
+    }).catch(() => {});
+    await clearFieldMenuState(from);
+    await sendReply(from, to, [
+      `✅ *To-do saved:*`,
+      ``,
+      `"${todoText}"`,
+      ``,
+      `Reply *7* from the 007 menu to view your full list.`,
+      `Reply *007* for Field Command.`,
+    ].join("\n"));
+    log.info({ from, todoText: todoText.slice(0, 80) }, "field-007: to-do item saved");
+    return;
+  }
+
   // ── AWAIT_VOICE — capture voice note ────────────────────────────────────
   if (step === STEP_AWAIT_VOICE) {
     if (hasMedia && (isAudio || choice)) {
@@ -296,6 +336,56 @@ export async function handleFieldState(
     await clearFieldMenuState(from);
     log.info({ from, operatorName }, "field-007: emergency declared");
     await sendReply(from, to, `🚨 Field emergency declared. All operators have been alerted.\n\nReply 007 for Field Command.`);
+    return;
+  }
+
+  if (choice === "6") {
+    await setFieldMenuState(from, STEP_AWAIT_TODO);
+    await sendReply(from, to, [
+      `✅ *Add a to-do item*`,
+      ``,
+      `Type your task now, or send a voice note — I will save it.`,
+      ``,
+      `Reply 007 to cancel.`,
+    ].join("\n"));
+    return;
+  }
+
+  if (choice === "7") {
+    const todos = await db
+      .select({ body: messagesTable.body, receivedAt: messagesTable.receivedAt })
+      .from(messagesTable)
+      .where(and(eq(messagesTable.fromNumber, from), eq(messagesTable.direction, "operator-todo")))
+      .orderBy(desc(messagesTable.receivedAt))
+      .limit(15)
+      .catch(() => [] as { body: string; receivedAt: Date | null }[]);
+    await clearFieldMenuState(from);
+    if (todos.length === 0) {
+      await sendReply(from, to, [
+        `📋 *TO-DO LIST — ${operatorName}*`,
+        ``,
+        `No items yet. Reply 6 to add your first task.`,
+        ``,
+        `Reply 007 for Field Command.`,
+      ].join("\n"));
+      return;
+    }
+    const lines = [
+      `📋 *TO-DO LIST — ${operatorName}*`,
+      ``,
+      ...todos.map((t, i) => {
+        const when = t.receivedAt
+          ? new Date(t.receivedAt).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Johannesburg" })
+          : "";
+        return `${i + 1}. ${t.body}${when ? `\n   _${when}_` : ""}`;
+      }),
+      ``,
+      `🔗 Situation Room: ${SITUATION_ROOM_URL}`,
+      ``,
+      `Reply *007* for Field Command.`,
+    ];
+    await sendReply(from, to, lines.join("\n"));
+    log.info({ from, count: todos.length }, "field-007: to-do list viewed");
     return;
   }
 

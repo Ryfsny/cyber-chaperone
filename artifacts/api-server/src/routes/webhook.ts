@@ -559,8 +559,49 @@ router.post(
         return;
       }
 
-      // "000" → member mode (real menu flow)
+      // "000" → toggle member mode (enter from Claude mode; exit back to Claude if already in member mode)
       if (/^000$/.test(trimmedBody)) {
+        const opName000 = senderDigits === "27825611065" ? "André" : "Kriszti";
+        const [zeroState] = await db
+          .select({ currentFlow: conversationStatesTable.currentFlow })
+          .from(conversationStatesTable)
+          .where(eq(conversationStatesTable.whatsappNumber, from))
+          .limit(1)
+          .catch(() => [] as { currentFlow: string | null }[]);
+
+        const inMemberMode = zeroState?.currentFlow != null && zeroState.currentFlow !== FLOW_FIELD_007;
+
+        if (inMemberMode) {
+          // EXIT — clear state and return to Claude AI mode
+          await db.delete(conversationStatesTable).where(eq(conversationStatesTable.whatsappNumber, from)).catch(() => {});
+          await sendReply(from, to, [
+            `━━━━━━━━━━━━━━━━━━━━━━━━━`,
+            `⚡ AI COMMAND — ARNIE`,
+            `━━━━━━━━━━━━━━━━━━━━━━━━━`,
+            ``,
+            `${opName000}, member mode exited. You're talking to Claude (Arnie) again. 🛡️`,
+            ``,
+            `Just type or voice note anything.`,
+            `Type *007* for Field Command · *000* to view as a member`,
+          ].join("\n"));
+          req.log.info({ from }, "operator-ai: MEMBER MODE exited — back to Claude");
+          res.set("Content-Type", "text/xml");
+          res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+          return;
+        }
+
+        // ENTER — show banner then feed "Hi" through the member menu
+        await sendReply(from, to, [
+          `━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          `👤 MEMBER MODE — 000`,
+          `━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          ``,
+          `${opName000}, you are now viewing the platform exactly as your members see it.`,
+          ``,
+          `Interact naturally or use the menus.`,
+          `Reply *000* at any time to exit back to AI Command.`,
+          `Reply *007* for Field Command.`,
+        ].join("\n"));
         await db
           .insert(conversationStatesTable)
           .values({ whatsappNumber: from, currentFlow: "MAIN_MENU", currentStep: null, pendingTripData: null })
@@ -569,7 +610,7 @@ router.post(
             set: { currentFlow: "MAIN_MENU", currentStep: null, pendingTripData: null, updatedAt: new Date() },
           })
           .catch(() => {});
-        req.log.info({ from }, "operator-ai: MEMBER MODE activated — routing to member menu");
+        req.log.info({ from }, "operator-ai: MEMBER MODE entered");
         body = "Hi"; // reset so menu router fires global override and shows main menu
       } else {
         // Check if Andre/Kriszti is in an active flow
