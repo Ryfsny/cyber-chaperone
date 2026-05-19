@@ -9,6 +9,7 @@ import { sendOperatorEmail, logMessageToGmail, type EmailCategory } from "../ema
 import { reverseGeocodeStreetAddress } from "../route-service.js";
 import { isVoiceNote, downloadTwilioMedia, transcribeVoiceNote } from "../voice-service.js";
 import { callOperatorClaude } from "../operator-ai-service.js";
+import { generateTTS } from "../tts-service.js";
 import { callMemberClaude } from "../member-ai-service.js";
 import {
   FLOW_FIELD_007,
@@ -613,6 +614,24 @@ router.post(
           }).catch(() => {});
 
           req.log.info({ from, replyLength: claudeReply.length }, "operator-ai: Claude reply sent");
+
+          // ── Voice reply via TTS ─────────────────────────────────────────
+          // If the operator sent a voice note, reply with audio too (Alexa-style).
+          if (voiceTranscribed) {
+            const domains = (process.env.REPLIT_DOMAINS ?? "").split(",").map(d => d.trim()).filter(Boolean);
+            const publicDomain = domains[0];
+            if (publicDomain) {
+              try {
+                const { filename } = await generateTTS(claudeReply);
+                const ttsUrl = `https://${publicDomain}/api/tts/${filename}`;
+                const ttsClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+                await ttsClient.messages.create({ from: to, to: from, mediaUrl: [ttsUrl] });
+                req.log.info({ ttsUrl }, "operator-ai: TTS voice reply sent");
+              } catch (ttsErr) {
+                req.log.warn({ ttsErr }, "operator-ai: TTS reply failed — text reply already sent");
+              }
+            }
+          }
           res.set("Content-Type", "text/xml");
           res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
           return;

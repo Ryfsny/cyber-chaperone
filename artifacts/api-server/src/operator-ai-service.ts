@@ -17,6 +17,48 @@ import Anthropic from "@anthropic-ai/sdk";
 import { db, messagesTable, tripsTable, membersTable } from "@workspace/db";
 import { and, desc, or, eq, ne, ilike, sql } from "drizzle-orm";
 
+// ── Google Maps helpers ───────────────────────────────────────────────────────
+
+interface GMapsLeg {
+  distance?: { text: string; value: number };
+  duration?: { text: string };
+  duration_in_traffic?: { text: string };
+  start_address?: string;
+  end_address?: string;
+}
+
+interface GMapsRoute {
+  summary?: string;
+  warnings?: string[];
+  legs?: GMapsLeg[];
+}
+
+interface GMapsDirectionsResponse {
+  status: string;
+  routes?: GMapsRoute[];
+}
+
+// ── Open-Meteo helpers ────────────────────────────────────────────────────────
+
+interface GeocodingResult {
+  name: string;
+  latitude: number;
+  longitude: number;
+  country: string;
+  admin1?: string;
+}
+
+interface OpenMeteoWeather {
+  current?: {
+    temperature_2m: number;
+    relative_humidity_2m: number;
+    wind_speed_10m: number;
+    precipitation: number;
+    weather_code: number;
+    is_day: number;
+  };
+}
+
 // ── Anthropic client via Replit proxy ─────────────────────────────────────────
 
 const anthropic = new Anthropic({
@@ -32,32 +74,39 @@ const MAX_TOOL_ROUNDS = 5;
 
 // ── System prompt ──────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are the Cyber Chaperone AI assistant, talking directly to Andre Snyman (founder of eblockwatch) via WhatsApp. He is the operator and founder.
+const SYSTEM_PROMPT = `You are the Cyber Chaperone AI — Andre Snyman's personal travel buddy and ops assistant on WhatsApp. Andre is the founder of eblockwatch. He talks to you by voice note or text while driving, in the field, or anywhere.
 
-Be concise, direct, and honest. WhatsApp replies must be under 900 characters. Speak like a knowledgeable colleague, not a chatbot. No corporate language.
+Be conversational, warm and direct. WhatsApp replies must be under 900 characters. You are South African — use SA place names naturally. Speak like a knowledgeable colleague and travel companion, not a chatbot.
 
-You have LIVE access to the Cyber Chaperone database through tools. When Andre asks about trips, members, or operational status, ALWAYS call the relevant tool first — never guess or make up data.
+## YOUR LIVE TOOLS — always call the right tool before answering questions about data
 
-Tools available:
-- get_active_trips: lists all currently open trips (red/amber/green status)
-- find_member: search for a member by name or WhatsApp number
-- get_member_stats: get member counts by status
-- get_stale_trips: list trips that have gone quiet (no update for 12+ hours)
+**Ops tools (real-time database):**
+- get_active_trips: all currently open trips
+- find_member: look up any member by name or number
+- get_member_stats: member counts by status
+- get_stale_trips: trips with no activity for 12+ hours
+
+**Travel tools (live external data):**
+- get_route_info: real driving distance, time, traffic, road name (N1/N3 etc), toll roads, major waypoints between two places — use for any route question
+- get_weather: current weather and conditions at any SA location
+
+## HOW TO ANSWER TRAVEL QUESTIONS
+- Route/distance/time questions → call get_route_info first
+- Weather questions → call get_weather
+- History, geography, SA facts → answer from your own knowledge (you know South African history, towns, roads well)
+- Road conditions / construction / trucks → share what Google Maps reports + your knowledge; note if it's real-time
+- Always be specific: name the road (N3, R103 Midlands Meander), say "via Harrismith" or "via Van Reenen's Pass", mention tolls
 
 ## WHAT IS BUILT AND LIVE
 - Trip safety monitoring: members say "Leaving X to Y ETA Z", operator watches in Situation Room
 - ICE escalation: auto-WhatsApp ICE contact on distress / 45 min ETA drift
-- Member registry: ~92,000 members in DB
-- Paystack payments: R150/mo Individual, R250/mo Family
-- Facebook Messenger: full menu also runs there
-- Route enrichment: OpenStreetMap routing, ETA drift tracking, checkpoint list sent to member
+- ~92,000 member registry, Paystack payments, Facebook Messenger menu
 
 ## CRITICAL — DO NOT FAKE SYSTEM ACTIONS
-NEVER pretend to log a trip or perform any system action. You cannot create trips — only the structured member menu flow can. Tell Andre to use "TEST: Leaving [from] to [destination] ETA [time]" if he wants to test the member flow.
+NEVER pretend to log a trip or perform any system action. Tell Andre to use "TEST: Leaving [from] to [destination] ETA [time]" to trigger the real member flow.
 
 ## ANDRE'S CONTEXT
-WhatsApp: +27825611065. Home: 5 College Road, Bryanston. Pilot member: Kieren Snyman +27833263751.
-Platform: Replit + Express + PostgreSQL + Drizzle ORM + Twilio. Production: https://cyber-chaperone-r--ryfsny.replit.app`;
+WhatsApp: +27825611065. Home: 5 College Road, Bryanston. Pilot member: Kieren Snyman +27833263751.`;
 
 // ── Tool definitions ───────────────────────────────────────────────────────────
 
@@ -65,11 +114,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "get_active_trips",
     description: "Get all currently active (open) trips — any trip that is not completed or cancelled. Returns traveler name, phone, status (green/amber/red), destination, ETA drift, and last check-in time.",
-    input_schema: {
-      type: "object" as const,
-      properties: {},
-      required: [],
-    },
+    input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
     name: "find_member",
@@ -77,10 +122,7 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: "object" as const,
       properties: {
-        query: {
-          type: "string",
-          description: "Name (e.g. 'Kieren' or 'Snyman') or WhatsApp number (e.g. '27833263751' or '0833263751')",
-        },
+        query: { type: "string", description: "Name (e.g. 'Kieren' or 'Snyman') or WhatsApp number (e.g. '27833263751' or '0833263751')" },
       },
       required: ["query"],
     },
@@ -88,19 +130,35 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "get_member_stats",
     description: "Get member counts broken down by status (verified, active, pending, inactive). Also returns total member count.",
-    input_schema: {
-      type: "object" as const,
-      properties: {},
-      required: [],
-    },
+    input_schema: { type: "object" as const, properties: {}, required: [] },
   },
   {
     name: "get_stale_trips",
     description: "Get trips that have status 'stale' or have had no update in more than 12 hours but are still open. These may need operator attention.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "get_route_info",
+    description: "Get real driving route information between two South African locations using Google Maps. Returns distance in km, estimated drive time with and without traffic, the road/route name (N1, N3, R103 etc), toll roads, and major waypoints/towns along the way. Use for ANY question about distance, drive time, best route, or road between two places.",
     input_schema: {
       type: "object" as const,
-      properties: {},
-      required: [],
+      properties: {
+        origin: { type: "string", description: "Starting point, e.g. 'Johannesburg', 'Bryanston, Sandton', 'Cape Town'" },
+        destination: { type: "string", description: "Destination, e.g. 'Durban', 'Nelspruit', 'Harrismith'" },
+        alternatives: { type: "boolean", description: "Set to true to get multiple route options (e.g. N3 vs alternative)" },
+      },
+      required: ["origin", "destination"],
+    },
+  },
+  {
+    name: "get_weather",
+    description: "Get current weather conditions at any South African location. Returns temperature, wind speed, precipitation, and a plain-English description. Use for any weather question.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        location: { type: "string", description: "City or town name, e.g. 'Durban', 'Harrismith', 'Van Reenen'" },
+      },
+      required: ["location"],
     },
   },
 ];
@@ -267,6 +325,85 @@ async function toolGetStaleTrips(): Promise<string> {
   }
 }
 
+// ── Travel tool handlers ───────────────────────────────────────────────────────
+
+const WMO_CODES: Record<number, string> = {
+  0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+  45: "Foggy", 48: "Icy fog",
+  51: "Light drizzle", 53: "Moderate drizzle", 55: "Dense drizzle",
+  61: "Slight rain", 63: "Moderate rain", 65: "Heavy rain",
+  71: "Slight snow", 73: "Moderate snow", 75: "Heavy snow",
+  80: "Slight showers", 81: "Moderate showers", 82: "Violent showers",
+  95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Heavy thunderstorm with hail",
+};
+
+async function toolGetRouteInfo(origin: string, destination: string, alternatives: boolean): Promise<string> {
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key) return "Google Maps API key not configured.";
+  try {
+    const params = new URLSearchParams({
+      origin: `${origin}, South Africa`,
+      destination: `${destination}, South Africa`,
+      region: "za",
+      units: "metric",
+      departure_time: "now",
+      traffic_model: "best_guess",
+      key,
+      ...(alternatives ? { alternatives: "true" } : {}),
+    });
+    const r = await fetch(`https://maps.googleapis.com/maps/api/directions/json?${params}`);
+    const data = (await r.json()) as GMapsDirectionsResponse;
+
+    if (data.status !== "OK" || !data.routes?.length) {
+      return `Google Maps couldn't find a route from ${origin} to ${destination}. Status: ${data.status}`;
+    }
+
+    const lines: string[] = [];
+    for (const [i, route] of data.routes.entries()) {
+      const leg = route.legs?.[0];
+      if (!leg) continue;
+      const label = data.routes.length > 1 ? `Route ${i + 1}: ` : "";
+      const road = route.summary ? `via ${route.summary}` : "";
+      const dist = leg.distance?.text ?? "?";
+      const timeNormal = leg.duration?.text ?? "?";
+      const timeTraffic = leg.duration_in_traffic?.text;
+      const trafficNote = timeTraffic && timeTraffic !== timeNormal
+        ? ` (with traffic: ${timeTraffic})`
+        : "";
+      const warnings = route.warnings?.length ? `\n⚠️ ${route.warnings.join("; ")}` : "";
+      lines.push(`${label}${dist} ${road} — ${timeNormal}${trafficNote}${warnings}`);
+    }
+    return lines.join("\n\n");
+  } catch (err) {
+    return `Route lookup failed: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+async function toolGetWeather(location: string): Promise<string> {
+  try {
+    // Step 1: geocode
+    const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json&countryCode=ZA`;
+    const geoResp = await fetch(geoUrl);
+    const geoData = (await geoResp.json()) as { results?: GeocodingResult[] };
+    const place = geoData.results?.[0];
+    if (!place) return `Couldn't find ${location} for weather data.`;
+
+    // Step 2: weather
+    const wxUrl = `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation,weather_code,is_day&wind_speed_unit=kmh&timezone=Africa/Johannesburg`;
+    const wxResp = await fetch(wxUrl);
+    const wxData = (await wxResp.json()) as OpenMeteoWeather;
+    const c = wxData.current;
+    if (!c) return `Weather data unavailable for ${location}.`;
+
+    const desc = WMO_CODES[c.weather_code] ?? "Unknown conditions";
+    const precip = c.precipitation > 0 ? ` | Rain: ${c.precipitation}mm` : "";
+    const region = place.admin1 ? `, ${place.admin1}` : "";
+    return `${place.name}${region}: ${desc}. ${Math.round(c.temperature_2m)}°C, wind ${Math.round(c.wind_speed_10m)} km/h, humidity ${c.relative_humidity_2m}%${precip}`;
+  } catch (err) {
+    return `Weather lookup failed: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
 // ── Tool dispatcher ────────────────────────────────────────────────────────────
 
 async function runTool(name: string, input: Record<string, unknown>): Promise<string> {
@@ -275,6 +412,12 @@ async function runTool(name: string, input: Record<string, unknown>): Promise<st
     case "find_member":       return toolFindMember((input["query"] as string) ?? "");
     case "get_member_stats":  return toolGetMemberStats();
     case "get_stale_trips":   return toolGetStaleTrips();
+    case "get_route_info":    return toolGetRouteInfo(
+                                (input["origin"] as string) ?? "",
+                                (input["destination"] as string) ?? "",
+                                (input["alternatives"] as boolean) ?? false,
+                              );
+    case "get_weather":       return toolGetWeather((input["location"] as string) ?? "");
     default:                  return `Unknown tool: ${name}`;
   }
 }
