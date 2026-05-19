@@ -225,6 +225,66 @@ function normaliseEta(raw: string): string {
   return raw.replace(/^ETA\s+/i, "").trim();
 }
 
+// Parse free-text ETA into a displayable HH:MM string.
+// Accepts: "7:30", "7.30", "19:30", "7:30 am", "half past 7", "quarter to 8",
+//          "7:30 tomorrow".  Returns raw text unchanged if no format matches.
+function parseEtaText(raw: string): { display: string; isTomorrow: boolean; couldParse: boolean } {
+  const t = normaliseEta(raw);
+  const lc = t.toLowerCase();
+
+  const halfPast = lc.match(/^half\s+past\s+(\d{1,2})$/);
+  if (halfPast) {
+    const h = parseInt(halfPast[1], 10);
+    return { display: `${String(h).padStart(2, "0")}:30`, isTomorrow: false, couldParse: true };
+  }
+
+  const quarterPast = lc.match(/^quarter\s+past\s+(\d{1,2})$/);
+  if (quarterPast) {
+    const h = parseInt(quarterPast[1], 10);
+    return { display: `${String(h).padStart(2, "0")}:15`, isTomorrow: false, couldParse: true };
+  }
+
+  const quarterTo = lc.match(/^quarter\s+to\s+(\d{1,2})$/);
+  if (quarterTo) {
+    const h = (parseInt(quarterTo[1], 10) - 1 + 24) % 24;
+    return { display: `${String(h).padStart(2, "0")}:45`, isTomorrow: false, couldParse: true };
+  }
+
+  const tomorrowM = t.match(/^(\d{1,2})[:.h](\d{2})(?:\s*([AaPp][Mm]))?\s+tomorrow$/i);
+  if (tomorrowM) {
+    let h = parseInt(tomorrowM[1], 10);
+    const m = parseInt(tomorrowM[2], 10);
+    if (tomorrowM[3]) {
+      const ap = tomorrowM[3].toLowerCase();
+      if (ap === "pm" && h < 12) h += 12;
+      if (ap === "am" && h === 12) h = 0;
+    }
+    return {
+      display: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")} (tomorrow)`,
+      isTomorrow: true,
+      couldParse: true,
+    };
+  }
+
+  const timeM = t.match(/^(\d{1,2})[:.h](\d{2})(?:\s*([AaPp][Mm]))?$/i);
+  if (timeM) {
+    let h = parseInt(timeM[1], 10);
+    const m = parseInt(timeM[2], 10);
+    if (timeM[3]) {
+      const ap = timeM[3].toLowerCase();
+      if (ap === "pm" && h < 12) h += 12;
+      if (ap === "am" && h === 12) h = 0;
+    }
+    return {
+      display: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
+      isTomorrow: false,
+      couldParse: true,
+    };
+  }
+
+  return { display: t, isTomorrow: false, couldParse: false };
+}
+
 function calculateEtaDrift(originalMemberEta: string, _tripCreatedAt: Date): number | null {
   const normalised = normaliseEta(originalMemberEta);
   const match = normalised.match(/^(\d{1,2}):(\d{2})(?:\s*([AaPp][Mm]))?$/);
@@ -1061,7 +1121,11 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
   }
 
   if (state.currentStep === STEP_WAITING_FOR_NEW_ETA) {
-    const newEta = normaliseEta(choice);
+    const etaParsed = parseEtaText(choice);
+    const newEta = etaParsed.display;
+    if (!etaParsed.couldParse) {
+      log.info({ from, eta_raw: choice }, "ETA update: could not parse ETA text — storing raw");
+    }
     if (trip) {
       await db
         .update(tripsTable)
@@ -1071,7 +1135,10 @@ async function handleCheckinChoice(ctx: MenuContext, state: ConvState): Promise<
           currentRouteConfidence: "green",
           lastMemberCheckinTime: new Date(),
           etaDriftMinutes: 0,
-          evidenceNotes: appendNote(trip.evidenceNotes, `[${ts}] ETA updated to ${newEta} (was ${trip.originalMemberEta ?? "unknown"})`),
+          evidenceNotes: appendNote(
+            trip.evidenceNotes,
+            `[${ts}] ETA updated to ${newEta}${etaParsed.couldParse ? "" : ` (raw: "${choice}")`} (was ${trip.originalMemberEta ?? "unknown"})`,
+          ),
           nextAction: "ETA updated. Monitoring continues.",
         })
         .where(eq(tripsTable.id, trip.id));
@@ -2608,7 +2675,11 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
 
   // STEP_WAITING_FOR_ETA — legacy fallback for in-flight conversations
   if (step === STEP_WAITING_FOR_ETA) {
-    const eta = body.trim();
+    const etaParsed = parseEtaText(body.trim());
+    if (!etaParsed.couldParse) {
+      log.info({ from, eta_raw: body.trim() }, "Trip flow (legacy ETA step): could not parse ETA text — storing raw");
+    }
+    const eta = etaParsed.display;
     const updatedPending: PendingTripData = { ...pending, eta };
 
     if (!updatedPending.startLocation || !updatedPending.destination) {
@@ -5037,8 +5108,39 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     return { handled: true };
   }
 
-  // 2a. STOP — member ending their trip explicitly
-  if (/^stop$/i.test(trimmed)) {
+  // 2a. CANCEL / STOP — member cancelling their trip
+  if (/^(cancel|stop)$/i.test(trimmed)) {
+    const activeTrip = await findActiveTrip(from);
+    const name = member?.displayName ?? from;
+    const ts = nowUtc();
+    if (activeTrip) {
+      await db
+        .update(tripsTable)
+        .set({
+          status: "cancelled",
+          evidenceNotes: appendNote(activeTrip.evidenceNotes, `[${ts}] CANCELLED: Member sent ${trimmed.toUpperCase()}.`),
+          nextAction: "Trip cancelled by member.",
+        })
+        .where(eq(tripsTable.id, activeTrip.id));
+      await sendWhatsApp(from, to, `Trip cancelled. Stay safe. Text START when you're ready for your next trip.`);
+      await sendOperatorMirror(to, [
+        `🚫 TRIP CANCELLED`,
+        `Member: ${name}`,
+        `Trip: ${activeTrip.title} (ID: ${activeTrip.id})`,
+        `Cancelled at: ${ts}`,
+        `Reason: Member sent ${trimmed.toUpperCase()}.`,
+      ].join("\n"), "operator-mirror");
+    } else {
+      await sendWhatsApp(from, to, `No active trip to cancel.\n\nReply 0 for Main Menu.`);
+    }
+    await saveMessage(from, to, body, messageSid, activeTrip?.id ?? null);
+    await resetConvState(from);
+    log.info({ from, handler: "CANCEL" }, "menu-router: CANCEL handler");
+    return { handled: true };
+  }
+
+  // 2b. ARRIVED / HOME — member explicitly confirming arrival
+  if (/^(arrived|home)$/i.test(trimmed)) {
     const activeTrip = await findActiveTrip(from);
     const name = member?.displayName ?? from;
     const ts = nowUtc();
@@ -5047,31 +5149,28 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
         .update(tripsTable)
         .set({
           status: "completed",
-          evidenceNotes: appendNote(activeTrip.evidenceNotes, `[${ts}] TRIP ENDED: Member sent STOP.`),
-          nextAction: "Trip closed by member.",
+          currentRouteConfidence: "green",
+          lastMemberCheckinTime: new Date(),
+          evidenceNotes: appendNote(activeTrip.evidenceNotes, `[${ts}] ARRIVED: Member sent ${trimmed.toUpperCase()}.`),
+          nextAction: "Trip completed.",
         })
         .where(eq(tripsTable.id, activeTrip.id));
-      await sendWhatsApp(from, to, `✅ Trip complete. You have arrived safely. Stay safe, Andre is here if you need anything.`);
-      await sendMainMenuWithNearby(from, to, name, member);
+      await sendWhatsApp(from, to, `Arrived safely. Trip closed. Well done!`);
       await sendOperatorMirror(to, [
-        `🏁 TRIP COMPLETE`,
-        `Member: ${name}`,
+        `✅ ${name} arrived safely — ${activeTrip.title}`,
         `Trip ID: ${activeTrip.id}`,
-        `Arrived safely at ${ts}`,
-        `Trip: ${activeTrip.title}`,
-        `Status: COMPLETED`,
-        `Reason: Member sent STOP.`,
+        `Closed at: ${ts}`,
       ].join("\n"), "arrived");
     } else {
-      await sendWhatsApp(from, to, `No active trip to end.\n\nReply 0 for Main Menu.`);
+      await sendWhatsApp(from, to, `No active trip found. Stay safe! Reply 0 for Main Menu.`);
     }
     await saveMessage(from, to, body, messageSid, activeTrip?.id ?? null);
     await resetConvState(from);
-    log.info({ from, handler: "STOP" }, "menu-router: STOP handler");
+    log.info({ from, handler: "ARRIVED_EXPLICIT" }, "menu-router: explicit ARRIVED/HOME handler");
     return { handled: true };
   }
 
-  // 2b. PRIORITY: Arrival — always handled second
+  // 2c. Natural-language arrival phrases (isArrival catch-all)
   if (isArrival(trimmed)) {
     const activeTrip = await findActiveTrip(from);
     await handleArrival(ctx, activeTrip);

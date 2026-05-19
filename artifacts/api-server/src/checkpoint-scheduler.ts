@@ -1,6 +1,6 @@
 import twilio from "twilio";
 import { db, tripsTable, conversationStatesTable, membersTable } from "@workspace/db";
-import { ne, eq, and, isNull, lte } from "drizzle-orm";
+import { ne, eq, and, isNull, lte, or, inArray } from "drizzle-orm";
 import type { Logger } from "pino";
 
 const TWILIO_SID = process.env.TWILIO_ACCOUNT_SID ?? "";
@@ -571,11 +571,68 @@ async function clockinTick(log: Logger): Promise<void> {
   }
 }
 
+// ── Stale trip sweeper — runs every hour ──────────────────────────────────────
+// Any trip still "active" (green/amber/red) with no update for 12+ hours is
+// marked "stale" and André gets one notification per trip.
+async function staleTripTick(log: Logger): Promise<void> {
+  try {
+    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+
+    const staleTrips = await db
+      .select()
+      .from(tripsTable)
+      .where(
+        and(
+          inArray(tripsTable.status, ["green", "amber", "red"]),
+          lte(tripsTable.updatedAt, twelveHoursAgo),
+        ),
+      );
+
+    for (const trip of staleTrips) {
+      const hoursOld = Math.floor((Date.now() - trip.updatedAt.getTime()) / 3_600_000);
+      const ts = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
+
+      await db
+        .update(tripsTable)
+        .set({
+          status: "stale",
+          nextAction: `Auto-marked stale at ${ts} — no update for ${hoursOld}h.`,
+        })
+        .where(eq(tripsTable.id, trip.id));
+
+      const phone = trip.travelerPhone.replace(/^whatsapp:\+?/, "");
+      await sendWhatsApp(
+        FOUNDER_WHATSAPP,
+        [
+          `⚠️ Stale trip — ${trip.travelerName} (+${phone})`,
+          `Route: ${trip.title}`,
+          `No update for ${hoursOld}h. Please check.`,
+          `Trip ID: ${trip.id}`,
+        ].join("\n"),
+      );
+
+      log.warn({ tripId: trip.id, hoursOld }, "Stale trip sweep: trip marked stale");
+    }
+
+    if (staleTrips.length > 0) {
+      log.info({ count: staleTrips.length }, "Stale trip sweep complete");
+    }
+  } catch (err) {
+    log.error({ err }, "Stale trip sweeper error");
+  }
+}
+
 export function startCheckpointScheduler(log: Logger): void {
   const INTERVAL_MS = 3 * 60 * 1000; // every 3 minutes
+  const HOUR_MS = 60 * 60 * 1000;    // every hour
+
   void tick(log);
   void clockinTick(log);
+  void staleTripTick(log);
+
   setInterval(() => void tick(log), INTERVAL_MS);
   setInterval(() => void clockinTick(log), INTERVAL_MS);
-  log.info("Checkpoint scheduler started — 3 min interval (trip monitor + clock-in)");
+  setInterval(() => void staleTripTick(log), HOUR_MS);
+
+  log.info("Checkpoint scheduler started — 3 min interval (trip monitor + clock-in) + 1 hr stale sweeper");
 }
