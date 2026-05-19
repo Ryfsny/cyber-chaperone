@@ -3,15 +3,108 @@ import {
   Plus, Shield, Bot, Users, BookUser,
   LogOut, Megaphone, MessagesSquare, Menu, X,
   LayoutDashboard, Map, ScrollText, Send, ShieldCheck, Clock, CreditCard, AlertTriangle,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AiAssistant } from "@/components/ai/AiAssistant";
 import { AgentReporter } from "@/components/agent-reporter/AgentReporter";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 
 interface QueueItem { status: string }
+
+interface MemberSearchResult {
+  id: number;
+  displayName: string;
+  whatsappNumber: string;
+  memberStatus: string;
+  suburb: string | null;
+  city: string | null;
+}
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function MemberQuickSearch() {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const { data: results = [], isFetching } = useQuery<MemberSearchResult[]>({
+    queryKey: ["member-search", q],
+    queryFn: async () => {
+      if (q.trim().length < 2) return [];
+      const r = await fetch(`${BASE}/api/members?search=${encodeURIComponent(q.trim())}&limit=6`, { credentials: "include" });
+      if (!r.ok) return [];
+      const data = await r.json() as { members?: MemberSearchResult[] } | MemberSearchResult[];
+      return Array.isArray(data) ? data : (data.members ?? []);
+    },
+    enabled: q.trim().length >= 2,
+    staleTime: 10_000,
+  });
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const statusDot: Record<string, string> = {
+    verified: "bg-emerald-400",
+    active: "bg-blue-400",
+    pending: "bg-yellow-400",
+    inactive: "bg-zinc-500",
+  };
+
+  return (
+    <div ref={containerRef} className="px-3 py-2 border-b border-border relative">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+        {isFetching && q.length >= 2 && (
+          <div className="absolute right-2.5 top-2 w-3.5 h-3.5 border border-muted-foreground border-t-transparent rounded-full animate-spin" />
+        )}
+        <input
+          ref={inputRef}
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder="Find member…"
+          className="w-full h-8 pl-8 pr-8 text-xs bg-secondary/40 border border-border rounded text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 focus:bg-secondary/60 transition-colors"
+        />
+      </div>
+      {open && q.trim().length >= 2 && (
+        <div className="absolute left-3 right-3 top-full mt-1 z-50 bg-card border border-border rounded shadow-xl overflow-hidden">
+          {results.length === 0 && !isFetching ? (
+            <div className="px-3 py-3 text-[11px] text-muted-foreground text-center">No member found</div>
+          ) : (
+            results.map((m) => (
+              <Link
+                key={m.id}
+                href={`/members/${m.id}`}
+                onClick={() => { setQ(""); setOpen(false); }}
+                className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-secondary/60 transition-colors border-b border-border/40 last:border-0"
+              >
+                <span className={`w-2 h-2 rounded-full shrink-0 ${statusDot[m.memberStatus] ?? statusDot.inactive}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold text-foreground truncate">{m.displayName}</div>
+                  <div className="text-[10px] text-muted-foreground font-mono truncate">
+                    {m.whatsappNumber.replace("whatsapp:", "")}
+                    {(m.suburb || m.city) && ` · ${m.suburb ?? m.city}`}
+                  </div>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function usePendingApprovals(isNational: boolean) {
   return useQuery<QueueItem[]>({
@@ -216,6 +309,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             )}
           </div>
         )}
+
+        {/* Member quicksearch */}
+        <MemberQuickSearch />
 
         {/* Nav */}
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">

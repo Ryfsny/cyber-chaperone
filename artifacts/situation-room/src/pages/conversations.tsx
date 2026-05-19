@@ -2,7 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect, useRef, useMemo } from "react";
 import {
   MessageSquare, Send, Loader2, CheckCircle2, Search, ArrowLeft,
-  Phone, AlertTriangle, Sparkles, ChevronRight,
+  Phone, AlertTriangle, Sparkles, ChevronRight, User, MapPin, Shield,
+  ExternalLink, Heart, Activity,
 } from "lucide-react";
 import { Link } from "wouter";
 import { format, isToday, isYesterday } from "date-fns";
@@ -43,6 +44,12 @@ interface Member {
   membershipTier: string | null;
   iceContactName: string | null;
   iceContactPhone: string | null;
+  email: string | null;
+  mobile: string | null;
+  suburb: string | null;
+  city: string | null;
+  province: string | null;
+  homeAddress: string | null;
 }
 
 interface ThreadResponse {
@@ -66,6 +73,13 @@ const statusColors: Record<string, string> = {
   inactive: "bg-zinc-500/20 text-zinc-400 border-zinc-500/40",
 };
 
+const statusDot: Record<string, string> = {
+  verified: "bg-emerald-400",
+  active: "bg-blue-400",
+  pending: "bg-yellow-400",
+  inactive: "bg-zinc-500",
+};
+
 function msgTime(iso: string) {
   const d = new Date(iso);
   if (isToday(d)) return format(d, "HH:mm");
@@ -75,10 +89,153 @@ function msgTime(iso: string) {
 
 function isOutbound(msg: Message): boolean {
   if (msg.direction) return msg.direction === "outbound";
-  // Fallback for old messages without direction: if toNumber starts with whatsapp: and isn't the from, it's outbound
   return msg.toNumber?.startsWith("whatsapp:") && msg.fromNumber === msg.toNumber ? false : msg.toNumber?.startsWith("whatsapp:+1") ?? false;
 }
 
+// ── Member Card ────────────────────────────────────────────────────────────────
+function MemberCard({ member, number }: { member: Member | null; number: string }) {
+  if (!member) {
+    return (
+      <div className="border-t border-border bg-card p-4 flex items-center gap-3 text-muted-foreground">
+        <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center shrink-0">
+          <User className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-foreground">{number.replace("whatsapp:", "")}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Not in member database</p>
+        </div>
+      </div>
+    );
+  }
+
+  const waNumber = member.whatsappNumber.replace("whatsapp:", "");
+  const location = [member.suburb, member.city, member.province].filter(Boolean).join(", ");
+
+  return (
+    <div className="border-t border-border bg-card shrink-0">
+      {/* Card header */}
+      <div className="px-4 py-3 flex items-center gap-3 border-b border-border/50">
+        <div className="relative shrink-0">
+          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">
+            {member.displayName.charAt(0).toUpperCase()}
+          </div>
+          <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card ${statusDot[member.memberStatus] ?? statusDot.inactive}`} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-foreground truncate">{member.displayName}</span>
+            <Badge variant="outline" className={`text-[9px] shrink-0 ${statusColors[member.memberStatus] ?? statusColors.inactive}`}>
+              {member.memberStatus}
+            </Badge>
+            {member.membershipTier && (
+              <Badge variant="outline" className="text-[9px] shrink-0 border-primary/40 text-primary bg-primary/10">
+                {member.membershipTier}
+              </Badge>
+            )}
+          </div>
+          {location && (
+            <div className="flex items-center gap-1 mt-0.5">
+              <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
+              <span className="text-[11px] text-muted-foreground truncate">{location}</span>
+            </div>
+          )}
+        </div>
+        <Link
+          href={`/members/${member.id}`}
+          className="shrink-0 flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors px-2 py-1.5 rounded hover:bg-primary/10"
+        >
+          Full profile <ExternalLink className="w-3 h-3" />
+        </Link>
+      </div>
+
+      {/* Contact grid */}
+      <div className="grid grid-cols-2 gap-0 divide-x divide-border border-b border-border/50">
+        <a
+          href={`tel:${waNumber}`}
+          className="flex items-center gap-2 px-4 py-2.5 hover:bg-secondary/40 transition-colors group"
+        >
+          <Phone className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+          <div className="min-w-0">
+            <div className="text-[9px] uppercase tracking-widest text-muted-foreground leading-none">WhatsApp</div>
+            <div className="text-[11px] font-mono text-foreground mt-0.5 truncate">{waNumber}</div>
+          </div>
+        </a>
+        {member.iceContactName ? (
+          <a
+            href={member.iceContactPhone ? `tel:${member.iceContactPhone}` : undefined}
+            className="flex items-center gap-2 px-4 py-2.5 hover:bg-amber-500/10 transition-colors group"
+          >
+            <Heart className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-[9px] uppercase tracking-widest text-amber-400/70 leading-none">ICE Contact</div>
+              <div className="text-[11px] font-bold text-amber-400 mt-0.5 truncate">{member.iceContactName}</div>
+              {member.iceContactPhone && (
+                <div className="text-[10px] font-mono text-amber-400/70 truncate">{member.iceContactPhone}</div>
+              )}
+            </div>
+          </a>
+        ) : (
+          <div className="flex items-center gap-2 px-4 py-2.5">
+            <Heart className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
+            <div>
+              <div className="text-[9px] uppercase tracking-widest text-muted-foreground/40 leading-none">ICE Contact</div>
+              <div className="text-[11px] text-muted-foreground/40 mt-0.5">Not set</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Active trip check */}
+      <ActiveTripRow memberId={member.id} />
+    </div>
+  );
+}
+
+function ActiveTripRow({ memberId }: { memberId: number }) {
+  const { data: trips } = useQuery<Array<{ id: number; title: string; status: string; updatedAt: string }>>({
+    queryKey: ["member-trips", memberId],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/trips?limit=5`, { credentials: "include" });
+      if (!r.ok) return [];
+      const all = (await r.json()) as Array<{ id: number; title: string; status: string; travelerPhone: string; updatedAt: string }>;
+      return all.filter((t) => ["green", "amber", "red"].includes(t.status));
+    },
+    refetchInterval: 15_000,
+    staleTime: 10_000,
+  });
+
+  const tripStatusDot: Record<string, string> = {
+    green: "bg-emerald-400",
+    amber: "bg-amber-400",
+    red: "bg-red-400",
+  };
+
+  if (!trips?.length) {
+    return (
+      <div className="px-4 py-2.5 flex items-center gap-2 text-muted-foreground/50">
+        <Activity className="w-3.5 h-3.5 shrink-0" />
+        <span className="text-[11px]">No active trip</span>
+      </div>
+    );
+  }
+
+  const trip = trips[0];
+  return (
+    <Link
+      href={`/trips/${trip.id}`}
+      className="px-4 py-2.5 flex items-center gap-2 hover:bg-secondary/40 transition-colors group"
+    >
+      <span className={`w-2 h-2 rounded-full shrink-0 ${tripStatusDot[trip.status] ?? "bg-zinc-400"} animate-pulse`} />
+      <div className="flex-1 min-w-0">
+        <div className="text-[9px] uppercase tracking-widest text-muted-foreground leading-none">Active Trip</div>
+        <div className="text-[11px] font-bold text-foreground mt-0.5 truncate">{trip.title}</div>
+      </div>
+      <ChevronRight className="w-3 h-3 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+    </Link>
+  );
+}
+
+// ── Main page ──────────────────────────────────────────────────────────────────
 export default function Conversations() {
   const [activeNumber, setActiveNumber] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -165,12 +322,9 @@ export default function Conversations() {
     );
   }, [convos, search]);
 
-  const activeConvo = convos.find((c) => c.number === activeNumber);
-
   return (
     <div className="flex h-full overflow-hidden">
       {/* ── Left: conversation list ─────────────────────────── */}
-      {/* On mobile: full-width list when no chat open, hidden when chat open */}
       <div className={`shrink-0 border-r border-border flex flex-col bg-card ${activeNumber ? "hidden md:flex md:w-72" : "flex w-full md:w-72"}`}>
         <div className="h-14 flex items-center gap-2 px-4 border-b border-border shrink-0">
           <Link
@@ -191,7 +345,7 @@ export default function Conversations() {
           <div className="relative">
             <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
-              placeholder="Search…"
+              placeholder="Search name or number…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-8 text-xs pl-8"
@@ -218,7 +372,6 @@ export default function Conversations() {
                     active ? "bg-primary/15 border-l-2 border-l-primary" : "hover:bg-secondary/40"
                   }`}
                 >
-                  {/* Avatar — Facebook blue or standard green */}
                   <div
                     className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-xs font-bold mt-0.5 ${
                       c.channel === "facebook"
@@ -259,17 +412,16 @@ export default function Conversations() {
         </div>
       </div>
 
-      {/* ── Right: thread view ─────────────────────────────── */}
+      {/* ── Right: thread + member card ────────────────────── */}
       {!activeNumber ? (
         <div className="hidden md:flex flex-1 items-center justify-center text-muted-foreground flex-col gap-3">
           <MessageSquare className="w-10 h-10 opacity-20" />
           <p className="text-sm uppercase tracking-widest opacity-40">Select a conversation</p>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Thread header */}
-          <div className="px-4 py-3 flex items-center gap-2 border-b border-border shrink-0 bg-card">
-            {/* Back to list — mobile only */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Thread header — slim */}
+          <div className="px-4 py-2.5 flex items-center gap-2 border-b border-border shrink-0 bg-card">
             <button
               onClick={() => setActiveNumber(null)}
               className="md:hidden flex items-center justify-center w-9 h-9 -ml-1 text-muted-foreground hover:text-foreground shrink-0"
@@ -277,66 +429,42 @@ export default function Conversations() {
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
               activeNumber.startsWith("fb:") ? "bg-[#1877f2]/20 text-[#1877f2]" : "bg-primary/20 text-primary"
             }`}>
               {activeNumber.startsWith("fb:") ? "f" : (thread?.member?.displayName ?? activeNumber).charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-bold text-foreground leading-none">
-                  {thread?.member?.displayName ?? activeNumber.replace("whatsapp:", "").replace("fb:", "FB User · ")}
-                </div>
-                {activeNumber.startsWith("fb:") && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#1877f2] text-white uppercase tracking-wide">Facebook Messenger</span>
-                )}
+              <div className="text-sm font-bold text-foreground leading-none truncate">
+                {thread?.member?.displayName ?? activeNumber.replace("whatsapp:", "").replace("fb:", "FB · ")}
               </div>
-              <div className="text-[10px] text-muted-foreground mt-0.5 font-mono">
-                {activeNumber.startsWith("fb:") ? `PSID: ${activeNumber.slice(3)}` : activeNumber.replace("whatsapp:", "")}
+              <div className="text-[10px] text-muted-foreground mt-0.5 font-mono truncate">
+                {activeNumber.startsWith("fb:") ? `Messenger · ${activeNumber.slice(3)}` : activeNumber.replace("whatsapp:", "")}
               </div>
-              {/* ICE contact */}
-              {thread?.member?.iceContactName && (
-                <div className="flex items-center gap-1 mt-1">
-                  <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
-                  <span className="text-[10px] text-amber-400">
-                    ICE: {thread.member.iceContactName}
-                    {thread.member.iceContactPhone ? ` · ${thread.member.iceContactPhone}` : ""}
-                  </span>
-                </div>
-              )}
             </div>
-            <div className="flex items-center gap-3 shrink-0">
-              {thread?.member?.memberStatus && (
-                <Badge
-                  variant="outline"
-                  className={`text-[10px] ${statusColors[thread.member.memberStatus] ?? statusColors.inactive}`}
-                >
-                  {thread.member.memberStatus}
-                </Badge>
-              )}
-              {thread?.member?.iceContactPhone && (
-                <a
-                  href={`tel:${thread.member.iceContactPhone}`}
-                  className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 uppercase tracking-wider transition-colors"
-                  title={`Call ICE: ${thread.member.iceContactName}`}
-                >
-                  <Phone className="w-3 h-3" />
-                  ICE
-                </a>
-              )}
-              {thread?.member && (
-                <Link
-                  href={`/members/${thread.member.id}`}
-                  className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 uppercase tracking-wider transition-colors"
-                >
-                  Profile <ChevronRight className="w-3 h-3" />
-                </Link>
-              )}
-            </div>
+            {/* Quick ICE call — desktop */}
+            {thread?.member?.iceContactPhone && (
+              <a
+                href={`tel:${thread.member.iceContactPhone}`}
+                className="hidden md:flex items-center gap-1.5 text-[10px] text-amber-400 hover:text-amber-300 border border-amber-400/30 hover:border-amber-400/60 px-2.5 py-1.5 rounded transition-colors shrink-0"
+                title={`Call ICE: ${thread.member.iceContactName}`}
+              >
+                <Heart className="w-3 h-3" />
+                {thread.member.iceContactName}
+              </a>
+            )}
+            {thread?.member && (
+              <Link
+                href={`/members/${thread.member.id}`}
+                className="hidden md:flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground border border-border hover:border-foreground/30 px-2.5 py-1.5 rounded transition-colors shrink-0"
+              >
+                <Shield className="w-3 h-3" /> Profile
+              </Link>
+            )}
           </div>
 
           {/* Message bubbles */}
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2 bg-[#0b141a]">
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2 bg-[#0b141a] min-h-0">
             {loadingThread ? (
               <div className="flex items-center justify-center h-20">
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
@@ -370,8 +498,8 @@ export default function Conversations() {
             <div ref={bottomRef} />
           </div>
 
-          {/* Quick replies — horizontal scroll on mobile */}
-          <div className="px-4 pt-2.5 pb-0 flex gap-2 overflow-x-auto bg-[#111b21] border-t border-border/30 scrollbar-none" style={{ WebkitOverflowScrolling: "touch" }}>
+          {/* Quick replies */}
+          <div className="px-4 pt-2.5 pb-0 flex gap-2 overflow-x-auto bg-[#111b21] border-t border-border/30 scrollbar-none shrink-0" style={{ WebkitOverflowScrolling: "touch" }}>
             {QUICK_REPLIES.map((qr) => (
               <button
                 key={qr}
@@ -391,9 +519,9 @@ export default function Conversations() {
             </button>
           </div>
 
-          {/* Reply box — safe-area inset for iPhone home bar */}
+          {/* Reply box */}
           <div
-            className="px-4 pt-3 bg-[#111b21] flex gap-3 items-end"
+            className="px-4 pt-3 bg-[#111b21] flex gap-3 items-end shrink-0"
             style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
           >
             <Textarea
@@ -413,6 +541,9 @@ export default function Conversations() {
               {sendMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </Button>
           </div>
+
+          {/* Member card — anchored below reply box, always visible */}
+          <MemberCard member={thread?.member ?? null} number={activeNumber} />
         </div>
       )}
     </div>
