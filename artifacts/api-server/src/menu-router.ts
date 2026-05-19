@@ -2,7 +2,7 @@ import { db, membersTable, tripsTable, messagesTable, conversationStatesTable, r
 import { and, eq, ne, desc, or, sql, gte } from "drizzle-orm";
 import twilio from "twilio";
 import { enrichTripWithRoute, calculateRouteInfo, reverseGeocodeCoords, reverseGeocodeStreetAddress, minutesToSastTime, type RouteInfo } from "./route-service.js";
-import { calculateGoogleMapsRoute } from "./google-maps-service.js";
+import { calculateGoogleMapsRoute, geocodeLandmark } from "./google-maps-service.js";
 import { withMenu } from "./message-utils.js";
 import { sendOperatorEmail, sendMemberWelcomeEmail, type EmailCategory } from "./email-service.js";
 import { issueOtp, normalisePhone } from "./otp-store.js";
@@ -486,6 +486,46 @@ async function sendWhatsApp(from: string, to: string, body: string): Promise<voi
     }).catch(() => { /* best-effort */ });
   } catch {
     // Never break the webhook
+  }
+}
+
+/**
+ * Send a WhatsApp location pin using Twilio persistentAction.
+ * The geo: URI drops a tappable map pin into the WhatsApp conversation.
+ * Falls back to a text-only message if Twilio rejects the persistentAction.
+ */
+async function sendWhatsAppLocationPin(
+  from: string,
+  to: string,
+  lat: string,
+  lon: string,
+  name: string,
+  formattedAddress: string,
+  bodyText: string,
+): Promise<void> {
+  if (from.startsWith("fb:")) {
+    // Facebook Messenger doesn't support geo pins — send text only
+    await sendWhatsApp(from, to, `${bodyText}\n\n📍 ${name}\n${formattedAddress}`);
+    return;
+  }
+  try {
+    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    await client.messages.create({
+      from: to,
+      to: from,
+      body: bodyText,
+      persistentAction: [`geo:${lat},${lon}|${name}`],
+    });
+    void db.insert(messagesTable).values({
+      fromNumber: to,
+      toNumber:   from,
+      body:       bodyText,
+      messageSid: null,
+      direction:  "outbound",
+    }).catch(() => { /* best-effort */ });
+  } catch {
+    // Fallback to plain text if Twilio rejects the geo action
+    await sendWhatsApp(from, to, `${bodyText}\n\n📍 ${name}\n${formattedAddress}`);
   }
 }
 
@@ -4659,6 +4699,69 @@ function scareBearMenuText(name: string): string {
   ].join("\n");
 }
 
+/** Shared save logic — called from LOCATION (pin), LOCATION (skip), and LOCATION_CONFIRM. */
+async function saveScareBear(
+  from: string,
+  to: string,
+  member: MemberInfo | null,
+  pending: Record<string, string>,
+  lat: string | null,
+  lon: string | null,
+  areaName: string | null,
+  body: string,
+  messageSid: string | null,
+  name: string,
+  log: MenuContext["log"],
+): Promise<void> {
+  const typeKey = pending.scareBearType ?? "other";
+  const rawDescription = pending.scareBearDescription || null;
+
+  const SA_PLATE_RE = /\b[A-Z]{1,3}\s*\d{2,4}[\s-]*[A-Z]{0,3}\b/g;
+  const filteredDescription = rawDescription
+    ? rawDescription.replace(SA_PLATE_RE, "[PLATE REMOVED]").trim()
+    : null;
+
+  const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000); // 4 hours
+
+  const twilioNumber = process.env.TWILIO_WHATSAPP_NUMBER ?? to;
+
+  try {
+    await db.insert(scareBearSightingsTable).values({
+      reporterPhone: from,
+      lat,
+      lon,
+      areaName,
+      type: typeKey,
+      description: filteredDescription,
+      mediaUrl: null,
+      mediaType: null,
+      expiresAt,
+    });
+
+    if (member?.memberId) {
+      await db.update(membersTable)
+        .set({ loyaltyPoints: sql`${membersTable.loyaltyPoints} + 5`, updatedAt: new Date() })
+        .where(eq(membersTable.id, member.memberId))
+        .catch(() => { /* best-effort */ });
+    }
+  } catch (err) {
+    log.error({ err }, "scare-bear: DB insert failed");
+  }
+
+  await setConvState(from, { currentFlow: FLOW_MAIN_MENU, currentStep: null, pendingTripData: null });
+  await saveMessage(from, twilioNumber, body, messageSid, null);
+  await sendWhatsApp(from, twilioNumber, [
+    `✅ *Scare Bear alert logged!*`,
+    ``,
+    `Thank you, ${name}. Your report is anonymous and will appear on the eblockwatch safety map for 4 hours.`,
+    areaName ? `📍 Area: ${areaName}` : null,
+    ``,
+    `You earned *+5 loyalty points* for keeping our community safer. 🐻`,
+    ``,
+    `Reply 0 for Main Menu.`,
+  ].filter(Boolean).join("\n"));
+}
+
 async function handleScareBearFlow(ctx: MenuContext, state: ConvState): Promise<void> {
   const { from, to, body, member, messageSid, latitude, longitude, address, label, log } = ctx;
   const name = member?.displayName ?? from;
@@ -4708,85 +4811,123 @@ async function handleScareBearFlow(ctx: MenuContext, state: ConvState): Promise<
     return;
   }
 
-  // ── Step 3: location → save ──────────────────────────────────────────────────
+  // ── Step 3: location ─────────────────────────────────────────────────────────
   if (step === "LOCATION") {
     const pending = (state.pendingTripData as Record<string, string> ?? {});
-    const typeKey = pending.scareBearType ?? "other";
-    const description = pending.scareBearDescription || null;
 
-    // Determine location — location pin takes precedence over typed text
-    let lat: string | null = null;
-    let lon: string | null = null;
-    let areaName: string | null = null;
-
+    // Case A: member dropped a WhatsApp location pin → save immediately, no confirm needed
     if (latitude && longitude) {
-      lat = latitude;
-      lon = longitude;
-      areaName = address || label || null;
+      let areaName: string | null = address || label || null;
       if (!areaName) {
-        try {
-          areaName = await reverseGeocodeCoords(latitude, longitude);
-        } catch { /* best-effort */ }
+        try { areaName = await reverseGeocodeCoords(latitude, longitude); } catch { /* best-effort */ }
       }
-    } else if (choice.toLowerCase() !== "skip" && choice.length > 2) {
-      // Typed area — geocode it
-      areaName = choice.trim();
-      try {
-        const geo = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(choice + ", South Africa")}&format=json&limit=1&countrycodes=za`,
-          { headers: { "User-Agent": "eblockwatch-safety/1.0" } },
-        );
-        const geoData = await geo.json() as Array<{ lat: string; lon: string; display_name: string }>;
-        if (geoData[0]) {
-          lat = geoData[0].lat;
-          lon = geoData[0].lon;
-        }
-      } catch { /* best-effort */ }
+      await saveScareBear(from, to, member, pending, latitude, longitude, areaName, body, messageSid, name, log);
+      return;
     }
 
-    // Privacy-filter the description (strip SA plates)
-    const SA_PLATE_RE = /\b[A-Z]{1,3}\s*\d{2,4}[\s-]*[A-Z]{0,3}\b/g;
-    const filteredDescription = description ? description.replace(SA_PLATE_RE, "[PLATE REMOVED]").trim() : null;
-
-    // Save to DB
-    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000); // 4 hours
-    try {
-      await db.insert(scareBearSightingsTable).values({
-        reporterPhone: from,
-        lat,
-        lon,
-        areaName,
-        type: typeKey,
-        description: filteredDescription,
-        mediaUrl: null,
-        mediaType: null,
-        expiresAt,
-      });
-
-      // Award loyalty points for community contribution
-      if (member?.memberId) {
-        try {
-          await db.update(membersTable)
-            .set({ loyaltyPoints: sql`${membersTable.loyaltyPoints} + 5`, updatedAt: new Date() })
-            .where(eq(membersTable.id, member.memberId));
-        } catch { /* best-effort */ }
+    // Case B: member replied "skip" → save without location
+    if (choice.toLowerCase() === "skip" || choice === "0") {
+      if (choice === "0") {
+        await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+        await sendMainMenuWithNearby(from, to, name, member);
+        return;
       }
-    } catch (err) {
-      log.error({ err }, "scare-bear: DB insert failed");
+      await saveScareBear(from, to, member, pending, null, null, null, body, messageSid, name, log);
+      return;
     }
 
-    await setConvState(from, { currentFlow: FLOW_MAIN_MENU, currentStep: null, pendingTripData: null });
-    await saveMessage(from, to, body, messageSid, null);
+    // Case C: member described a location by voice or text → geocode it
+    const geocoded = await geocodeLandmark(choice.trim());
+
+    if (geocoded) {
+      // Found a place — send the pin back for confirmation
+      const updatedPending = {
+        ...pending,
+        scareBearTentativeLat:     geocoded.lat,
+        scareBearTentativeLon:     geocoded.lon,
+        scareBearTentativeName:    geocoded.name,
+        scareBearTentativeAddress: geocoded.formattedAddress,
+      } as unknown as PendingTripData;
+      await setConvState(from, { currentFlow: FLOW_SCARE_BEAR, currentStep: "LOCATION_CONFIRM", pendingTripData: updatedPending });
+      await saveMessage(from, to, body, messageSid, null);
+      await sendWhatsAppLocationPin(
+        from, to,
+        geocoded.lat, geocoded.lon,
+        geocoded.name, geocoded.formattedAddress,
+        [
+          `🗺️ *Is this the right spot?*`,
+          ``,
+          `I found: *${geocoded.name}*`,
+          `${geocoded.formattedAddress}`,
+          ``,
+          `1️⃣  Yes — that's it ✅`,
+          `2️⃣  No — let me try again`,
+          `0️⃣  Skip location`,
+        ].join("\n"),
+      );
+      return;
+    }
+
+    // Could not geocode — ask them to try again or drop a pin
     await sendWhatsApp(from, to, [
-      `✅ *Scare Bear alert logged!*`,
+      `📍 I couldn't find that spot on the map.`,
       ``,
-      `Thank you, ${name}. Your report is anonymous and will appear on the eblockwatch map for 4 hours.`,
-      areaName ? `📍 Area: ${areaName}` : null,
+      `Try describing it differently — mention a nearby landmark, road name, or suburb.`,
+      `Or drop a location pin 📍 (tap the 📎 clip → Location).`,
       ``,
-      `You earned *+5 loyalty points* for keeping our community safer. 🐻`,
-      ``,
-      `Reply 0 for Main Menu.`,
-    ].filter(Boolean).join("\n"));
+      `Reply *skip* to save the report without a location, or 0 to cancel.`,
+    ].join("\n"));
+    return;
+  }
+
+  // ── Step 4: location confirmation ────────────────────────────────────────────
+  if (step === "LOCATION_CONFIRM") {
+    const pending = (state.pendingTripData as Record<string, string> ?? {});
+    const c = choice.trim().toLowerCase();
+
+    if (c === "1" || c === "yes" || c === "y") {
+      // Confirmed — save with the geocoded location
+      await saveScareBear(
+        from, to, member, pending,
+        pending.scareBearTentativeLat ?? null,
+        pending.scareBearTentativeLon ?? null,
+        pending.scareBearTentativeName ?? null,
+        body, messageSid, name, log,
+      );
+      return;
+    }
+
+    if (c === "2" || c === "no" || c === "n") {
+      // Wrong spot — go back to LOCATION step
+      const cleanPending = { ...pending } as Record<string, string>;
+      delete cleanPending.scareBearTentativeLat;
+      delete cleanPending.scareBearTentativeLon;
+      delete cleanPending.scareBearTentativeName;
+      delete cleanPending.scareBearTentativeAddress;
+      await setConvState(from, { currentFlow: FLOW_SCARE_BEAR, currentStep: "LOCATION", pendingTripData: cleanPending as unknown as PendingTripData });
+      await sendWhatsApp(from, to, [
+        `📍 No problem — try again.`,
+        ``,
+        `Describe the location differently (road, landmark, suburb), or drop a location pin 📍`,
+        ``,
+        `Reply *skip* to save without a location, or 0 to cancel.`,
+      ].join("\n"));
+      return;
+    }
+
+    if (c === "0" || c === "skip") {
+      // Skip location
+      await saveScareBear(from, to, member, pending, null, null, null, body, messageSid, name, log);
+      return;
+    }
+
+    // Unrecognised — re-prompt with the pin
+    await sendWhatsApp(from, to, [
+      `Please reply:`,
+      `1️⃣  Yes — that's the right spot`,
+      `2️⃣  No — let me try again`,
+      `0️⃣  Skip location`,
+    ].join("\n"));
     return;
   }
 

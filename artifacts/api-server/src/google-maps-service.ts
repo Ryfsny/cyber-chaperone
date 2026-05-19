@@ -113,6 +113,74 @@ async function reverseGeocodeTown(lat: number, lng: number): Promise<string | nu
   }
 }
 
+// ── Landmark / Place geocoding (Text Search) ──────────────────────────────────
+
+export interface GeocodedPlace {
+  lat: string;
+  lon: string;
+  name: string;
+  formattedAddress: string;
+}
+
+/**
+ * Geocode a free-text location description to lat/lon using Google Maps Places
+ * Text Search API (handles landmarks, building names, road intersections, shops).
+ * Falls back to Nominatim if the API key is not set.
+ * Biased to South Africa with `region=za`.
+ */
+export async function geocodeLandmark(query: string): Promise<GeocodedPlace | null> {
+  // ── Google Maps Text Search (preferred — handles landmarks) ──────────────────
+  if (GOOGLE_MAPS_API_KEY) {
+    try {
+      const url = new URL("https://maps.googleapis.com/maps/api/place/textsearch/json");
+      url.searchParams.set("query", query + " South Africa");
+      url.searchParams.set("region", "za");
+      url.searchParams.set("key", GOOGLE_MAPS_API_KEY);
+
+      const res = await fetch(url.toString());
+      if (res.ok) {
+        const data = await res.json() as PlacesTextSearchResponse;
+        const place = data.results?.[0];
+        if (place && data.status === "OK") {
+          return {
+            lat:              String(place.geometry.location.lat),
+            lon:              String(place.geometry.location.lng),
+            name:             place.name,
+            formattedAddress: place.formatted_address,
+          };
+        }
+      }
+    } catch { /* fall through to Nominatim */ }
+  }
+
+  // ── Nominatim fallback (no API key required) ─────────────────────────────────
+  try {
+    const url = new URL("https://nominatim.openstreetmap.org/search");
+    url.searchParams.set("q", query + ", South Africa");
+    url.searchParams.set("format", "json");
+    url.searchParams.set("limit", "1");
+    url.searchParams.set("countrycodes", "za");
+
+    const res = await fetch(url.toString(), {
+      headers: { "User-Agent": "eblockwatch-safety/1.0" },
+    });
+    if (res.ok) {
+      const data = await res.json() as Array<{ lat: string; lon: string; display_name: string; name: string }>;
+      const place = data[0];
+      if (place) {
+        return {
+          lat:              place.lat,
+          lon:              place.lon,
+          name:             place.name || query,
+          formattedAddress: place.display_name,
+        };
+      }
+    }
+  } catch { /* best-effort */ }
+
+  return null;
+}
+
 // ── Google Maps API response types ────────────────────────────────────────────
 
 interface DirectionsResponse {
@@ -126,6 +194,17 @@ interface DirectionsResponse {
         end_location: { lat: number; lng: number };
       }>;
     }>;
+  }>;
+}
+
+interface PlacesTextSearchResponse {
+  status: string;
+  results: Array<{
+    name: string;
+    formatted_address: string;
+    geometry: {
+      location: { lat: number; lng: number };
+    };
   }>;
 }
 
