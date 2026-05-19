@@ -427,95 +427,6 @@ async function pickRadiusAndCount(lat: string, lon: string): Promise<{ count: nu
   }
 }
 
-// ── Community distress alert — expanding radius ────────────────────────────────
-// On any RED event, WhatsApps all nearby verified/active members.
-// Expanding ring: 5 → 10 → 20 → 30 km. Stops at first ring with ≥ 3 people.
-// Best-effort — never crashes the main distress flow.
-async function alertNearbyMembers(
-  lat: string,
-  lon: string,
-  distressedName: string,
-  distressedFrom: string,
-  businessTo: string,
-): Promise<{ count: number; radiusKm: number }> {
-  try {
-    const mLat = parseFloat(lat), mLon = parseFloat(lon);
-    if (isNaN(mLat) || isNaN(mLon)) return { count: 0, radiusKm: 0 };
-
-    const delta30 = 30 / 111.0;
-    const rows = await db
-      .select({
-        displayName: membersTable.displayName,
-        firstName: membersTable.firstName,
-        whatsappNumber: membersTable.whatsappNumber,
-        homeLat: membersTable.homeLat,
-        homeLon: membersTable.homeLon,
-      })
-      .from(membersTable)
-      .where(and(
-        or(eq(membersTable.memberStatus, "verified"), eq(membersTable.memberStatus, "active")),
-        sql`home_lat IS NOT NULL AND home_lat != '' AND home_lon IS NOT NULL AND home_lon != ''`,
-        sql`CAST(home_lat AS DOUBLE PRECISION) BETWEEN ${mLat - delta30} AND ${mLat + delta30}`,
-        sql`CAST(home_lon AS DOUBLE PRECISION) BETWEEN ${mLon - delta30} AND ${mLon + delta30}`,
-      ));
-
-    const withDist = rows
-      .map(r => {
-        if (!r.whatsappNumber || r.whatsappNumber === distressedFrom) return null;
-        const rLat = parseFloat(r.homeLat ?? ""), rLon = parseFloat(r.homeLon ?? "");
-        if (isNaN(rLat) || isNaN(rLon)) return null;
-        return { ...r, distKm: haversineKm(mLat, mLon, rLat, rLon) };
-      })
-      .filter((r): r is NonNullable<typeof r> => r !== null)
-      .sort((a, b) => a.distKm - b.distKm);
-
-    let recipients = withDist;
-    let radiusKm = 30;
-    for (const ring of [5, 10, 20, 30]) {
-      const inRing = withDist.filter(r => r.distKm <= ring);
-      if (inRing.length >= 3 || ring === 30) {
-        recipients = inRing;
-        radiusKm = ring;
-        break;
-      }
-    }
-
-    if (recipients.length === 0) return { count: 0, radiusKm };
-
-    const targets = recipients.slice(0, 25);
-    const ts = new Date().toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Johannesburg" });
-    const firstName = distressedName.split(" ")[0];
-    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-
-    await Promise.allSettled(
-      targets.map(async r => {
-        const recipientFirst = r.firstName ?? r.displayName?.split(" ")[0] ?? "Member";
-        const msg = [
-          `🚨 *eblockwatch — Community Alert*`,
-          ``,
-          `Hi ${recipientFirst}, a fellow member near you needs help right now.`,
-          ``,
-          `👤 *${firstName}* — distress signal received`,
-          `📍 ${r.distKm.toFixed(1)} km from your home`,
-          `🕐 ${ts} SAST`,
-          ``,
-          `The Situation Room is activated. André and the team are responding.`,
-          ``,
-          `If you are safe and available to assist, contact the Situation Room:`,
-          `📞 André: +27825611065`,
-          ``,
-          `— eblockwatch Cyber Chaperone 🛡️`,
-        ].join("\n");
-        await client.messages.create({ from: businessTo, to: r.whatsappNumber!, body: msg });
-      }),
-    );
-
-    return { count: targets.length, radiusKm };
-  } catch {
-    return { count: 0, radiusKm: 0 };
-  }
-}
-
 // Looks up a member's registered home coordinates by their WhatsApp number.
 async function getMemberHomeCoords(whatsappNumber: string): Promise<{ lat: string; lon: string } | null> {
   try {
@@ -2379,14 +2290,6 @@ async function handleDistress(ctx: MenuContext, activeTrip: Awaited<ReturnType<t
 
   await sendEmergencyAlert(to, memberLabel, from);
 
-  // Community alert — WhatsApp nearby members (expanding 5→10→20→30 km ring)
-  const communityAlert = await (async () => {
-    const lat = activeTrip?.destLat ?? activeTrip?.startLat ?? (await getMemberHomeCoords(from))?.lat;
-    const lon = activeTrip?.destLon ?? activeTrip?.startLon ?? (await getMemberHomeCoords(from))?.lon;
-    if (lat && lon) return alertNearbyMembers(lat, lon, memberLabel, from, to);
-    return { count: 0, radiusKm: 0 };
-  })();
-
   await sendOperatorMirror(
     to,
     [
@@ -2396,9 +2299,6 @@ async function handleDistress(ctx: MenuContext, activeTrip: Awaited<ReturnType<t
       activeTrip ? `Trip: ${activeTrip.title} (ID: ${activeTrip.id})` : `Trip: No active trip`,
       `Distress message: "${excerpt(body, 100)}"`,
       iceDistress ? `ICE contact alerted: ${iceDistress.iceContactName} (${iceDistress.iceContactPhone})` : `ICE contact: not set`,
-      communityAlert.count > 0
-        ? `Community alerted: ${communityAlert.count} members within ${communityAlert.radiusKm}km`
-        : `Community alert: no members with home coords in range`,
       `Status: RED`,
       `Next action: Immediate human review required.`,
     ].join("\n"),
@@ -5437,14 +5337,7 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
         `${name} has triggered an emergency alert via Cyber Chaperone (code 10).`,
       );
     }
-    // Community alert — WhatsApp nearby members (expanding 5→10→20→30 km ring)
-    const community10 = await (async () => {
-      const lat = activeTrip?.destLat ?? activeTrip?.startLat ?? (await getMemberHomeCoords(from))?.lat;
-      const lon = activeTrip?.destLon ?? activeTrip?.startLon ?? (await getMemberHomeCoords(from))?.lon;
-      if (lat && lon) return alertNearbyMembers(lat, lon, name, from, to);
-      return { count: 0, radiusKm: 0 };
-    })();
-    log.info({ from, handler: "GLOBAL_EMERGENCY_10", iceAlerted: !!ice10, communityAlerted: community10.count, radiusKm: community10.radiusKm }, "menu-router: global emergency 10 triggered");
+    log.info({ from, handler: "GLOBAL_EMERGENCY_10", iceAlerted: !!ice10 }, "menu-router: global emergency 10 triggered");
     return { handled: true };
   }
 
