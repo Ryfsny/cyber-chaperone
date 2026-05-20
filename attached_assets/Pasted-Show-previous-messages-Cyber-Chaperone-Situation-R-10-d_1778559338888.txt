@@ -5809,7 +5809,7 @@ now that the payment has been made can we start off whereb we left off
 3 messages & 6 actions
 What were we working on with the homepage last time?
 
-sk_live_3bba699bb7956af830b63601010f3d10d6a5cbf1
+[REDACTED_STRIPE_KEY]
 9 hours ago
 
 Worked for 53 seconds

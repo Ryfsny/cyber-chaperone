@@ -38,7 +38,7 @@ Hourly briefing	Auto-fires to ryfsny@gmail.com	✅ Firing
 Operator AI channel	35 msgs / 33 replies (24h)	✅ Healthy
 Marketing leads	GAS Marketing — Free + Family Premium	✅ Active
 Paystack webhook	Links live, receiver not built	⏳ B1 — pending
-Google Maps API	Key: AIzaSyA3lCDJ6xLmVWj0hVYwJu5xuHoNoTOjqqI	⏳ B2 — not wired
+Google Maps API	Key: [REDACTED_MAPS_KEY]	⏳ B2 — not wired
 Conversation routing	ETA raw text, trips not closing, 2 stale trips	🔴 B3 — fix in progress
 Pipedream	eozpxtrhpwmk8yp.m.pipedream.net	❌ Abandoned
 🔴 BROKEN — Fix in Order
@@ -71,7 +71,7 @@ Single: paystack.shop/pay/cyber-chaperone
 Family: paystack.shop/pay/family-cyber-chaperone
 Bliksim: paystack.shop/pay/oneeblockwatchbliksemsticker
 APIs
-Google Maps: AIzaSyA3lCDJ6xLmVWj0hVYwJu5xuHoNoTOjqqI — not yet wired
+Google Maps: [REDACTED_MAPS_KEY] — not yet wired
 Paystack — links live, webhook not configured
 OpenAI Whisper — Stage 5, not yet built
 ANTHROPIC_API_KEY + ANTHROPIC_BASE_URL — SET in Replit ✅
