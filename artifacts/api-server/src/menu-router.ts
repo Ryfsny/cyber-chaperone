@@ -836,9 +836,17 @@ async function createTrip(
     })
     .returning();
 
-  // Only run async enrichment if we didn't already calculate the route
+  // Only run async enrichment if we didn't already calculate the route.
+  // Pass sendFollowUp so the member gets a second WhatsApp once the ETA is confirmed.
   if (!routeInfo) {
-    void enrichTripWithRoute(newTrip.id, startLocation, destination, log);
+    void enrichTripWithRoute(
+      newTrip.id,
+      startLocation,
+      destination,
+      log,
+      undefined,
+      (msg) => sendWhatsApp(from, to, msg),
+    );
   }
 
   await saveMessage(from, to, body, messageSid, newTrip.id);

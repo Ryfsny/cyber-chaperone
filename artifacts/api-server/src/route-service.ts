@@ -283,6 +283,7 @@ export async function enrichTripWithRoute(
     error: (obj: unknown, msg?: string) => void;
   },
   startCoordsOverride?: { lat: string; lon: string },
+  sendFollowUp?: (msg: string) => Promise<void>,
 ): Promise<void> {
   try {
     const info = await calculateRouteInfo(startLocation, destination, startCoordsOverride);
@@ -317,6 +318,41 @@ export async function enrichTripWithRoute(
       },
       "Route enrichment: complete",
     );
+
+    // Send follow-up WhatsApp once ETA is confirmed
+    if (sendFollowUp) {
+      try {
+        const hours = Math.floor(info.durationMinutes / 60);
+        const mins = info.durationMinutes % 60;
+        const durationStr = hours > 0
+          ? `${hours}h ${mins}min`
+          : `${mins} min`;
+
+        const GENERIC_LABELS = new Set(["First checkpoint", "Second checkpoint", "PRE_ARRIVAL"]);
+        const towns = info.checkpoints
+          .map((cp) => cp.label)
+          .filter((l) => l && !GENERIC_LABELS.has(l));
+
+        const checkpointLine = towns.length > 0
+          ? `\n\nWe will check in with you at *${towns.join(", ")}* along the way.`
+          : "";
+
+        const msg = [
+          `🛡️ *Route calculated.*`,
+          ``,
+          `Your drive is about *${durationStr}*. Expected arrival: *${info.etaTime}*.${checkpointLine}`,
+          ``,
+          `Road looks clear ahead. If you run into any delays or trouble on the road, let us know — we will update your monitoring.`,
+          ``,
+          `Reply *5* when you arrive safely. Reply *10* for emergency. 🆘`,
+        ].join("\n");
+
+        await sendFollowUp(msg);
+        log.info({ tripId, durationMinutes: info.durationMinutes, etaTime: info.etaTime }, "Route follow-up sent to member");
+      } catch (followUpErr) {
+        log.error({ followUpErr, tripId }, "Route follow-up send failed");
+      }
+    }
   } catch (err) {
     log.error({ err, tripId }, "Route enrichment: unexpected error");
   }
