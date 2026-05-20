@@ -2004,15 +2004,16 @@ async function handleMembershipChoice(ctx: MenuContext): Promise<void> {
     await sendWhatsApp(from, to, [
       `${name}, you are registered at Entry Level — your starting point in eblockwatch.`,
       ``,
-      `Your profile is active. When you are ready to upgrade, reply 3 from the Main Menu.`,
+      `Your profile is active. When you are ready to upgrade, reply *3* from the Main Menu.`,
       ``,
-      `Reply 0 for Main Menu.`,
+      `Reply *0* for Main Menu.`,
     ].join("\n"));
+    sendTip(from, to, "getting_started", sendWhatsApp);
     await sendOperatorMirror(to, [
       `CYBER CHAPERONE — ENTRY LEVEL SELECTED`,
       `Member: ${name}`,
       `Known member: ${member?.isKnown ? "YES" : "NO"}`,
-      `Next action: Confirm entry level registration in member profile.`,
+      `Next action: Member is active at Entry Level. No payment needed — profile is live.`,
     ].join("\n"));
     return;
   }
