@@ -1,9 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import { Feather } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,18 +17,17 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StatusRing } from "@/components/StatusRing";
 import { useMember, type AppMode } from "@/contexts/MemberContext";
 import { useColors } from "@/hooks/useColors";
 
 function formatInterval(seconds: number): string {
   if (seconds >= 3600) return `every ${Math.round(seconds / 3600)}h`;
-  if (seconds >= 60) return `every ${Math.round(seconds / 60)}min`;
+  if (seconds >= 60) return `every ${Math.round(seconds / 60)} min`;
   return `every ${seconds}s`;
 }
 
 function formatTime(date: Date | null): string {
-  if (!date) return "Not yet";
+  if (!date) return "";
   const diff = Math.floor((Date.now() - date.getTime()) / 1000);
   if (diff < 10) return "just now";
   if (diff < 60) return `${diff}s ago`;
@@ -33,16 +35,81 @@ function formatTime(date: Date | null): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function modeLabel(mode: AppMode): string {
-  if (mode === "emergency") return "EMERGENCY";
-  if (mode === "trip") return "ON TRIP";
-  return "STANDING BY";
-}
+function BigButton({
+  mode,
+  loading,
+  onPress,
+}: {
+  mode: AppMode;
+  loading: boolean;
+  onPress: () => void;
+}) {
+  const colors = useColors();
+  const pulse = useRef(new Animated.Value(0)).current;
+  const animRef = useRef<Animated.CompositeAnimation | null>(null);
 
-function modeSubtitle(mode: AppMode, intervalSeconds: number): string {
-  if (mode === "emergency") return `Pinging operator ${formatInterval(intervalSeconds)}`;
-  if (mode === "trip") return `Location shared ${formatInterval(intervalSeconds)}`;
-  return `Monitoring ${formatInterval(intervalSeconds)}`;
+  const btnColor =
+    mode === "emergency"
+      ? "#c0392b"
+      : mode === "trip"
+      ? "#1e6fa8"
+      : "#c0392b";
+
+  useEffect(() => {
+    animRef.current?.stop();
+    const duration = mode === "emergency" ? 700 : mode === "trip" ? 1400 : 2800;
+    animRef.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    animRef.current.start();
+    return () => { animRef.current?.stop(); };
+  }, [mode, pulse]);
+
+  const ringScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.45] });
+  const ringOpacity = pulse.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.5, 0.15, 0] });
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.bigBtnWrapper, { opacity: pressed ? 0.9 : 1 }]}
+      onPress={onPress}
+      disabled={loading}
+    >
+      <Animated.View
+        style={[
+          styles.bigBtnRing,
+          {
+            borderColor: btnColor,
+            transform: [{ scale: ringScale }],
+            opacity: ringOpacity,
+          },
+        ]}
+      />
+      <View style={[styles.bigBtn, { backgroundColor: btnColor }]}>
+        {loading ? (
+          <ActivityIndicator color="#fff" size="large" />
+        ) : (
+          <>
+            <Text style={styles.bigBtnLabel}>BackApp</Text>
+            {mode === "trip" && (
+              <Text style={styles.bigBtnSub}>Tap to end trip</Text>
+            )}
+          </>
+        )}
+      </View>
+    </Pressable>
+  );
 }
 
 function SetupScreen() {
@@ -53,12 +120,11 @@ function SetupScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const webTop = Platform.OS === "web" ? 67 : 0;
+
   async function handleSetup() {
     const cleaned = input.replace(/\s/g, "");
-    if (cleaned.length < 9) {
-      setError("Enter your full WhatsApp number");
-      return;
-    }
+    if (cleaned.length < 9) { setError("Enter your full WhatsApp number"); return; }
     setLoading(true);
     setError("");
     try {
@@ -70,39 +136,32 @@ function SetupScreen() {
     }
   }
 
-  const webTop = Platform.OS === "web" ? 67 : 0;
-
   return (
     <KeyboardAvoidingView
-      style={[styles.flex, { backgroundColor: colors.background }]}
+      style={[styles.flex, { backgroundColor: "#fff" }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
         contentContainerStyle={[
           styles.setupContainer,
-          { paddingTop: insets.top + 40 + webTop, paddingBottom: insets.bottom + 40 },
+          { paddingTop: insets.top + webTop + 32, paddingBottom: insets.bottom + 40 },
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.setupLogoRow}>
-          <View style={[styles.logoBox, { backgroundColor: colors.navy }]}>
-            <Feather name="shield" size={48} color={colors.green} />
-          </View>
-        </View>
+        <Image
+          source={require("../assets/images/eblockwatch-logo.jpeg")}
+          style={styles.logoImg}
+          contentFit="contain"
+        />
+        <Text style={styles.setupAppName}>BackApp</Text>
+        <Text style={styles.setupTagline}>eblockwatch Cyber Shepherd</Text>
 
-        <Text style={[styles.setupTitle, { color: colors.foreground }]}>BackApp</Text>
-        <Text style={[styles.setupSubtitle, { color: colors.mutedForeground }]}>
-          Cyber Shepherd — eblockwatch
-        </Text>
-
-        <View style={[styles.setupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.setupLabel, { color: colors.mutedForeground }]}>
-            YOUR WHATSAPP NUMBER
-          </Text>
+        <View style={styles.setupCard}>
+          <Text style={styles.setupLabel}>YOUR WHATSAPP NUMBER</Text>
           <TextInput
-            style={[styles.setupInput, { color: colors.foreground, borderColor: error ? colors.destructive : colors.border }]}
+            style={[styles.setupInput, error ? { borderColor: "#e74c3c" } : {}]}
             placeholder="+27 82 561 1065"
-            placeholderTextColor={colors.mutedForeground}
+            placeholderTextColor="#aaa"
             value={input}
             onChangeText={(t) => { setInput(t); setError(""); }}
             keyboardType="phone-pad"
@@ -111,127 +170,75 @@ function SetupScreen() {
             autoFocus
           />
           {error ? (
-            <Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text>
+            <Text style={styles.errorText}>{error}</Text>
           ) : (
-            <Text style={[styles.setupHint, { color: colors.mutedForeground }]}>
-              Links you to your eblockwatch membership
-            </Text>
+            <Text style={styles.setupHint}>Links you to your eblockwatch membership</Text>
           )}
         </View>
 
         <Pressable
-          style={({ pressed }) => [
-            styles.setupButton,
-            { backgroundColor: colors.primary, opacity: pressed || loading ? 0.8 : 1 },
-          ]}
+          style={({ pressed }) => [styles.setupButton, { opacity: pressed || loading ? 0.8 : 1 }]}
           onPress={handleSetup}
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color={colors.primaryForeground} />
+            <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={[styles.setupButtonText, { color: colors.primaryForeground }]}>
-              Connect
-            </Text>
+            <Text style={styles.setupButtonText}>Connect</Text>
           )}
         </Pressable>
-
-        <Text style={[styles.setupFooter, { color: colors.mutedForeground }]}>
-          No app store needed. Runs quietly in the background.{"\n"}
-          Your operator can see your location only when you tap Start Trip.
-        </Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-function SettingsSheet({
-  visible,
-  onClose,
-}: {
-  visible: boolean;
-  onClose: () => void;
-}) {
-  const colors = useColors();
+function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const insets = useSafeAreaInsets();
   const { phone, memberName, mode, intervalSeconds, clearPhone } = useMember();
   const [confirming, setConfirming] = useState(false);
+  const webTop = Platform.OS === "web" ? 67 : 0;
 
   if (!visible) return null;
 
-  const webTop = Platform.OS === "web" ? 67 : 0;
-
   return (
-    <View
-      style={[
-        StyleSheet.absoluteFillObject,
-        { backgroundColor: colors.background, zIndex: 100, paddingTop: insets.top + webTop },
-      ]}
-    >
-      <View style={[styles.settingsHeader, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.settingsTitle, { color: colors.foreground }]}>Settings</Text>
+    <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#fff", zIndex: 100, paddingTop: insets.top + webTop }]}>
+      <View style={styles.settingsHeader}>
+        <Text style={styles.settingsTitle}>Setup</Text>
         <Pressable onPress={onClose} hitSlop={20}>
-          <Feather name="x" size={24} color={colors.foreground} />
+          <Feather name="x" size={24} color="#1a1f2e" />
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: insets.bottom + 40 }}>
-        <View style={[styles.settingsRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Feather name="user" size={18} color={colors.mutedForeground} />
-          <View style={styles.settingsRowText}>
-            <Text style={[styles.settingsRowLabel, { color: colors.mutedForeground }]}>MEMBER</Text>
-            <Text style={[styles.settingsRowValue, { color: colors.foreground }]}>
-              {memberName ?? phone ?? "—"}
-            </Text>
-          </View>
+        <View style={styles.settingRow}>
+          <Text style={styles.settingLabel}>MEMBER</Text>
+          <Text style={styles.settingValue}>{memberName ?? phone ?? "—"}</Text>
         </View>
-        <View style={[styles.settingsRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Feather name="phone" size={18} color={colors.mutedForeground} />
-          <View style={styles.settingsRowText}>
-            <Text style={[styles.settingsRowLabel, { color: colors.mutedForeground }]}>WHATSAPP</Text>
-            <Text style={[styles.settingsRowValue, { color: colors.foreground }]}>{phone ?? "—"}</Text>
-          </View>
+        <View style={styles.settingRow}>
+          <Text style={styles.settingLabel}>WHATSAPP NUMBER</Text>
+          <Text style={styles.settingValue}>{phone ?? "—"}</Text>
         </View>
-        <View style={[styles.settingsRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Feather name="radio" size={18} color={colors.mutedForeground} />
-          <View style={styles.settingsRowText}>
-            <Text style={[styles.settingsRowLabel, { color: colors.mutedForeground }]}>PING INTERVAL</Text>
-            <Text style={[styles.settingsRowValue, { color: colors.foreground }]}>
-              {formatInterval(intervalSeconds)} · {mode.toUpperCase()} mode
-            </Text>
-          </View>
+        <View style={styles.settingRow}>
+          <Text style={styles.settingLabel}>CURRENT MODE</Text>
+          <Text style={styles.settingValue}>{mode.toUpperCase()} · {formatInterval(intervalSeconds)}</Text>
         </View>
-        <View style={[styles.settingsRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Feather name="info" size={18} color={colors.mutedForeground} />
-          <View style={styles.settingsRowText}>
-            <Text style={[styles.settingsRowLabel, { color: colors.mutedForeground }]}>HOW IT WORKS</Text>
-            <Text style={[styles.settingsRowValue, { color: colors.foreground }]}>
-              Idle: ping every 2h{"\n"}On Trip: ping every 1min{"\n"}Emergency: ping every 30s
-            </Text>
-          </View>
+        <View style={styles.settingRow}>
+          <Text style={styles.settingLabel}>HOW IT WORKS</Text>
+          <Text style={styles.settingValue}>
+            {"Standing by: ping every 2h\nFollow Me (trip): ping every 1min\nEmergency: ping every 30s"}
+          </Text>
         </View>
 
         {!confirming ? (
-          <Pressable
-            style={[styles.dangerButton, { borderColor: colors.destructive }]}
-            onPress={() => setConfirming(true)}
-          >
-            <Text style={[styles.dangerButtonText, { color: colors.destructive }]}>
-              Unlink this device
-            </Text>
+          <Pressable style={styles.unlinkBtn} onPress={() => setConfirming(true)}>
+            <Text style={styles.unlinkText}>Unlink this device</Text>
           </Pressable>
         ) : (
           <View style={styles.confirmRow}>
-            <Pressable
-              style={[styles.confirmButton, { backgroundColor: colors.destructive }]}
-              onPress={async () => { await clearPhone(); onClose(); }}
-            >
-              <Text style={[styles.confirmButtonText, { color: "#fff" }]}>Yes, unlink</Text>
+            <Pressable style={[styles.confirmBtn, { backgroundColor: "#e74c3c" }]} onPress={async () => { await clearPhone(); onClose(); }}>
+              <Text style={styles.confirmBtnText}>Yes, unlink</Text>
             </Pressable>
-            <Pressable
-              style={[styles.confirmButton, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
-              onPress={() => setConfirming(false)}
-            >
-              <Text style={[styles.confirmButtonText, { color: colors.foreground }]}>Cancel</Text>
+            <Pressable style={[styles.confirmBtn, { backgroundColor: "#f0f0f0" }]} onPress={() => setConfirming(false)}>
+              <Text style={[styles.confirmBtnText, { color: "#333" }]}>Cancel</Text>
             </Pressable>
           </View>
         )}
@@ -241,32 +248,29 @@ function SettingsSheet({
 }
 
 export default function HomeScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { mode, intervalSeconds, lastPingAt, lastLat, lastLon, setupComplete, startTrip, stopTrip, permissionGranted, requestLocationPermission } = useMember();
+  const { mode, intervalSeconds, lastPingAt, isTracking, setupComplete, startTrip, stopTrip, permissionGranted, requestLocationPermission } = useMember();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    const t = setInterval(() => setTick((v) => v + 1), 10000);
+    const t = setInterval(() => setTick((v) => v + 1), 15000);
     return () => clearInterval(t);
   }, []);
 
   if (!setupComplete) return <SetupScreen />;
 
   const webTop = Platform.OS === "web" ? 67 : 0;
-  const modeColor = mode === "emergency" ? colors.emergency : mode === "trip" ? colors.trip : colors.idle;
+  const isActive = mode === "trip" || mode === "emergency";
 
-  async function handleAction() {
+  async function handleBigButton() {
     setActionLoading(true);
     try {
-      if (mode === "trip") {
+      if (isActive) {
         await stopTrip();
       } else {
-        if (!permissionGranted) {
-          await requestLocationPermission();
-        }
+        if (!permissionGranted) await requestLocationPermission();
         await startTrip();
       }
     } finally {
@@ -275,119 +279,74 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={[styles.flex, { backgroundColor: colors.background }]}>
+    <View style={[styles.flex, { backgroundColor: "#fff" }]}>
       <SettingsSheet visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + webTop,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <View style={styles.logoRow}>
-          <Feather name="shield" size={20} color={colors.green} />
-          <Text style={[styles.logoText, { color: colors.foreground }]}>BackApp</Text>
-        </View>
-        <Pressable onPress={() => setSettingsOpen(true)} hitSlop={20}>
-          <Feather name="settings" size={22} color={colors.mutedForeground} />
-        </Pressable>
+      <View style={[styles.topSafe, { paddingTop: insets.top + webTop }]}>
+        <Image
+          source={require("../assets/images/eblockwatch-logo.jpeg")}
+          style={styles.headerLogo}
+          contentFit="contain"
+        />
+        <Text style={styles.headerAppName}>BackApp</Text>
       </View>
 
-      <View style={[styles.body, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) }]}>
-        <View style={styles.ringSection}>
-          <StatusRing mode={mode} size={160} />
+      <Pressable
+        style={[
+          styles.followMeBar,
+          isActive && styles.followMeBarActive,
+        ]}
+        onPress={handleBigButton}
+        disabled={actionLoading}
+      >
+        <View style={styles.followMeLeft}>
+          <Feather
+            name="navigation"
+            size={18}
+            color={isActive ? "#fff" : "#1a3ca8"}
+          />
+          <Text style={[styles.followMeText, isActive && styles.followMeTextActive]}>
+            {mode === "emergency" ? "Emergency Active" : isActive ? "Follow Me — Active" : "Follow Me"}
+          </Text>
         </View>
+        <Pressable onPress={() => setSettingsOpen(true)} hitSlop={16}>
+          <Text style={[styles.setupLink, isActive && { color: "#ddd" }]}>Setup</Text>
+        </Pressable>
+      </Pressable>
 
-        <View style={styles.statusSection}>
-          <Text style={[styles.modeLabel, { color: modeColor }]}>
-            {modeLabel(mode)}
-          </Text>
-          <Text style={[styles.modeSubtitle, { color: colors.mutedForeground }]}>
-            {modeSubtitle(mode, intervalSeconds)}
-          </Text>
+      <View style={styles.body}>
+        <BigButton mode={mode} loading={actionLoading} onPress={handleBigButton} />
 
-          {lastPingAt && (
-            <View style={[styles.pingBadge, { backgroundColor: colors.navyLight }]}>
-              <Feather name="navigation" size={12} color={colors.mutedForeground} />
-              <Text style={[styles.pingText, { color: colors.mutedForeground }]}>
-                Last ping {formatTime(lastPingAt)}
-                {lastLat != null ? ` · ${lastLat.toFixed(4)}, ${lastLon?.toFixed(4)}` : ""}
+        <View style={styles.statusRow}>
+          {lastPingAt ? (
+            <View style={styles.pingRow}>
+              <Feather name="radio" size={13} color="#888" />
+              <Text style={styles.pingText}>
+                Last ping {formatTime(lastPingAt)} · {formatInterval(intervalSeconds)}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.pingRow}>
+              <Feather name="radio" size={13} color="#bbb" />
+              <Text style={[styles.pingText, { color: "#bbb" }]}>
+                {isTracking ? "Acquiring location…" : "Tap BackApp to start tracking"}
               </Text>
             </View>
           )}
         </View>
 
-        {mode !== "emergency" && (
-          <Pressable
-            style={({ pressed }) => [
-              styles.actionButton,
-              {
-                backgroundColor: mode === "trip" ? colors.navyLight : colors.primary,
-                borderColor: mode === "trip" ? colors.destructive : colors.primary,
-                borderWidth: mode === "trip" ? 2 : 0,
-                opacity: pressed || actionLoading ? 0.8 : 1,
-              },
-            ]}
-            onPress={handleAction}
-            disabled={actionLoading}
-          >
-            {actionLoading ? (
-              <ActivityIndicator color={mode === "trip" ? colors.destructive : colors.primaryForeground} />
-            ) : (
-              <>
-                <Feather
-                  name={mode === "trip" ? "square" : "play"}
-                  size={20}
-                  color={mode === "trip" ? colors.destructive : colors.primaryForeground}
-                />
-                <Text
-                  style={[
-                    styles.actionButtonText,
-                    { color: mode === "trip" ? colors.destructive : colors.primaryForeground },
-                  ]}
-                >
-                  {mode === "trip" ? "End Trip" : "Start Trip"}
-                </Text>
-              </>
-            )}
-          </Pressable>
-        )}
-
         {mode === "emergency" && (
-          <View style={[styles.emergencyBanner, { backgroundColor: `${colors.emergency}18`, borderColor: colors.emergency }]}>
-            <Feather name="alert-triangle" size={18} color={colors.emergency} />
-            <Text style={[styles.emergencyText, { color: colors.emergency }]}>
+          <View style={styles.emergencyBanner}>
+            <Feather name="alert-triangle" size={16} color="#c0392b" />
+            <Text style={styles.emergencyText}>
               Emergency mode — your operator is monitoring you
             </Text>
           </View>
         )}
+      </View>
 
-        <View style={styles.statusGrid}>
-          <View style={[styles.statusCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Feather name="radio" size={16} color={colors.green} />
-            <Text style={[styles.statusCardValue, { color: colors.foreground }]}>
-              {formatInterval(intervalSeconds)}
-            </Text>
-            <Text style={[styles.statusCardLabel, { color: colors.mutedForeground }]}>interval</Text>
-          </View>
-          <View style={[styles.statusCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Feather name="navigation" size={16} color={colors.trip} />
-            <Text style={[styles.statusCardValue, { color: colors.foreground }]}>
-              {lastPingAt ? formatTime(lastPingAt) : "—"}
-            </Text>
-            <Text style={[styles.statusCardLabel, { color: colors.mutedForeground }]}>last ping</Text>
-          </View>
-          <View style={[styles.statusCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Feather name={permissionGranted ? "check-circle" : "alert-circle"} size={16} color={permissionGranted ? colors.idle : colors.warning} />
-            <Text style={[styles.statusCardValue, { color: colors.foreground }]}>
-              {permissionGranted ? "On" : "Off"}
-            </Text>
-            <Text style={[styles.statusCardLabel, { color: colors.mutedForeground }]}>location</Text>
-          </View>
-        </View>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) }]}>
+        <Text style={styles.footerText}>eblockwatch · Cyber Shepherd · 24/7 Protection</Text>
       </View>
     </View>
   );
@@ -395,104 +354,170 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  header: {
+
+  topSafe: {
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  headerLogo: {
+    width: 200,
+    height: 64,
+    marginBottom: 2,
+  },
+  headerAppName: {
+    fontSize: 13,
+    color: "#888",
+    fontFamily: "Inter_400Regular",
+    letterSpacing: 1,
+    textAlign: "right",
+    alignSelf: "flex-end",
+    marginRight: 4,
+    marginTop: -6,
+  },
+
+  followMeBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginHorizontal: 20,
+    borderWidth: 2,
+    borderColor: "#1a3ca8",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: "#fff",
+    marginBottom: 4,
   },
-  logoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  logoText: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  body: { flex: 1, paddingHorizontal: 24 },
-  ringSection: { alignItems: "center", paddingVertical: 32 },
-  statusSection: { alignItems: "center", gap: 8, marginBottom: 32 },
-  modeLabel: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: 2 },
-  modeSubtitle: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  pingBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginTop: 4,
+  followMeBarActive: {
+    backgroundColor: "#1a3ca8",
+    borderColor: "#1a3ca8",
   },
-  pingText: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  actionButton: {
-    flexDirection: "row",
+  followMeLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  followMeText: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    color: "#1a3ca8",
+  },
+  followMeTextActive: { color: "#fff" },
+  setupLink: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    color: "#1a3ca8",
+  },
+
+  body: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    paddingVertical: 18,
-    borderRadius: 16,
-    marginBottom: 20,
+    paddingHorizontal: 24,
   },
-  actionButtonText: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+
+  bigBtnWrapper: {
+    width: 260,
+    height: 260,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 32,
+  },
+  bigBtnRing: {
+    position: "absolute",
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    borderWidth: 3,
+  },
+  bigBtn: {
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  bigBtnLabel: {
+    fontSize: 28,
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
+    letterSpacing: 0.5,
+  },
+  bigBtnSub: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: "rgba(255,255,255,0.75)",
+    marginTop: 6,
+  },
+
+  statusRow: { alignItems: "center", minHeight: 28 },
+  pingRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  pingText: { fontSize: 13, fontFamily: "Inter_400Regular", color: "#888" },
+
   emergencyBanner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    padding: 16,
-    borderRadius: 12,
+    gap: 8,
+    marginTop: 20,
+    backgroundColor: "#fdf0f0",
+    borderColor: "#c0392b",
     borderWidth: 1,
-    marginBottom: 20,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  emergencyText: { fontSize: 14, fontFamily: "Inter_500Medium", flex: 1 },
-  statusGrid: { flexDirection: "row", gap: 12 },
-  statusCard: {
+  emergencyText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    color: "#c0392b",
     flex: 1,
-    alignItems: "center",
-    gap: 4,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
   },
-  statusCardValue: { fontSize: 13, fontFamily: "Inter_600SemiBold", textAlign: "center" },
-  statusCardLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
+
+  footer: {
+    paddingVertical: 12,
+    alignItems: "center",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#e5e5e5",
+  },
+  footerText: { fontSize: 11, fontFamily: "Inter_400Regular", color: "#ccc" },
+
   setupContainer: { paddingHorizontal: 24, alignItems: "center" },
-  setupLogoRow: { marginBottom: 24 },
-  logoBox: {
-    width: 96,
-    height: 96,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  setupTitle: { fontSize: 32, fontFamily: "Inter_700Bold", marginBottom: 8 },
-  setupSubtitle: { fontSize: 15, fontFamily: "Inter_400Regular", marginBottom: 40, textAlign: "center" },
+  logoImg: { width: 220, height: 70, marginBottom: 8 },
+  setupAppName: { fontSize: 22, fontFamily: "Inter_700Bold", color: "#1a1f2e", marginBottom: 4 },
+  setupTagline: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#888", marginBottom: 36, textAlign: "center" },
   setupCard: {
     width: "100%",
-    padding: 20,
-    borderRadius: 16,
     borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 12,
+    padding: 20,
     marginBottom: 16,
     gap: 12,
+    backgroundColor: "#fafafa",
   },
-  setupLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 1 },
+  setupLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#999", letterSpacing: 1 },
   setupInput: {
     fontSize: 20,
     fontFamily: "Inter_400Regular",
     borderBottomWidth: 1,
+    borderColor: "#ddd",
     paddingVertical: 10,
+    color: "#1a1f2e",
   },
-  setupHint: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  errorText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  setupHint: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#aaa" },
+  errorText: { fontSize: 12, fontFamily: "Inter_500Medium", color: "#e74c3c" },
   setupButton: {
     width: "100%",
     paddingVertical: 18,
-    borderRadius: 16,
+    borderRadius: 12,
     alignItems: "center",
+    backgroundColor: "#1a3ca8",
     marginBottom: 24,
   },
-  setupButtonText: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  setupFooter: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-    lineHeight: 20,
-  },
+  setupButtonText: { fontSize: 17, fontFamily: "Inter_600SemiBold", color: "#fff" },
+
   settingsHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -500,34 +525,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#e0e0e0",
   },
-  settingsTitle: { fontSize: 20, fontFamily: "Inter_600SemiBold" },
-  settingsRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 14,
+  settingsTitle: { fontSize: 20, fontFamily: "Inter_600SemiBold", color: "#1a1f2e" },
+  settingRow: {
+    borderWidth: 1,
+    borderColor: "#eee",
+    borderRadius: 10,
     padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
     marginBottom: 12,
+    backgroundColor: "#fafafa",
+    gap: 4,
   },
-  settingsRowText: { flex: 1, gap: 4 },
-  settingsRowLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 1 },
-  settingsRowValue: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
-  dangerButton: {
-    marginTop: 24,
-    paddingVertical: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  dangerButtonText: { fontSize: 15, fontFamily: "Inter_500Medium" },
-  confirmRow: { flexDirection: "row", gap: 12, marginTop: 24 },
-  confirmButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  confirmButtonText: { fontSize: 15, fontFamily: "Inter_500Medium" },
+  settingLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#aaa", letterSpacing: 1 },
+  settingValue: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#1a1f2e", lineHeight: 22 },
+  unlinkBtn: { marginTop: 20, padding: 16, borderRadius: 10, borderWidth: 1, borderColor: "#e74c3c", alignItems: "center" },
+  unlinkText: { fontSize: 15, fontFamily: "Inter_500Medium", color: "#e74c3c" },
+  confirmRow: { flexDirection: "row", gap: 12, marginTop: 20 },
+  confirmBtn: { flex: 1, padding: 14, borderRadius: 10, alignItems: "center" },
+  confirmBtnText: { fontSize: 15, fontFamily: "Inter_500Medium", color: "#fff" },
 });
