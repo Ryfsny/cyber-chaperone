@@ -1,4 +1,5 @@
 import { db, membersTable, tripsTable, messagesTable, conversationStatesTable, respondersTable, memberIncidentsTable, scareBearSightingsTable } from "@workspace/db";
+import { getNextTip } from "./tip-engine.js";
 import { and, eq, ne, desc, or, sql, gte } from "drizzle-orm";
 import twilio from "twilio";
 import { enrichTripWithRoute, calculateRouteInfo, reverseGeocodeCoords, reverseGeocodeStreetAddress, minutesToSastTime, type RouteInfo } from "./route-service.js";
@@ -865,50 +866,47 @@ async function createTrip(
     return "";
   })();
 
-  await sendWhatsApp(
-    from,
-    to,
-    (() => {
-      const etaLine = routeInfo
-        ? `Your drive is about ${Math.floor(routeInfo.durationMinutes / 60)}h ${routeInfo.durationMinutes % 60}min. Expected arrival: *${routeInfo.etaTime}*.`
-        : effectiveEta
-          ? `Expected arrival: *${normaliseEta(effectiveEta)}*.`
-          : `No arrival time set yet — we are calculating your route now.`;
+  const _tripStartMsg = (() => {
+    const etaLine = routeInfo
+      ? `Your drive is about ${Math.floor(routeInfo.durationMinutes / 60)}h ${routeInfo.durationMinutes % 60}min. Expected arrival: *${routeInfo.etaTime}*.`
+      : effectiveEta
+        ? `Expected arrival: *${normaliseEta(effectiveEta)}*.`
+        : `No arrival time set yet — we are calculating your route now.`;
 
-      const checkInLine = cpLine
-        ? cpLine.trim()
-        : `We will check in with you along the way.`;
+    const checkInLine = cpLine
+      ? cpLine.trim()
+      : `We will check in with you along the way.`;
 
-      const encStart = encodeURIComponent(startLocation);
-      const encDest = encodeURIComponent(destination);
-      const gmLink = routeInfo
-        ? `https://www.google.com/maps/dir/?api=1&origin=${routeInfo.startCoords.lat},${routeInfo.startCoords.lon}&destination=${routeInfo.destCoords.lat},${routeInfo.destCoords.lon}`
-        : `https://www.google.com/maps/dir/?api=1&origin=${encStart}&destination=${encDest}`;
-      const wazeLink = routeInfo
-        ? `https://waze.com/ul?ll=${routeInfo.destCoords.lat},${routeInfo.destCoords.lon}&navigate=yes`
-        : `https://waze.com/ul?q=${encDest}&navigate=yes`;
+    const encStart = encodeURIComponent(startLocation);
+    const encDest = encodeURIComponent(destination);
+    const gmLink = routeInfo
+      ? `https://www.google.com/maps/dir/?api=1&origin=${routeInfo.startCoords.lat},${routeInfo.startCoords.lon}&destination=${routeInfo.destCoords.lat},${routeInfo.destCoords.lon}`
+      : `https://www.google.com/maps/dir/?api=1&origin=${encStart}&destination=${encDest}`;
+    const wazeLink = routeInfo
+      ? `https://waze.com/ul?ll=${routeInfo.destCoords.lat},${routeInfo.destCoords.lon}&navigate=yes`
+      : `https://waze.com/ul?q=${encDest}&navigate=yes`;
 
-      return [
-        `✅ *Your trip is registered. We are watching.* 🛡️`,
-        ``,
-        `*Route:* ${startLocation} → ${destination}`,
-        etaLine,
-        nearbyLine ? nearbyLine.trim() : null,
-        checkInLine ? `\n${checkInLine}` : null,
-        `We will contact you automatically if you go silent past your ETA.`,
-        `Your emergency contact is on standby if needed.`,
-        ``,
-        `Open your route:`,
-        `📍 Google Maps: ${gmLink}`,
-        `📍 Waze: ${wazeLink}`,
-        ``,
-        `When you arrive safely, reply *5* or type *SAFE*.`,
-        `Need help at any time — reply *10*. 🆘`,
-        ``,
-        `Live monitoring in your Situation Room. 🛡️`,
-      ].filter((l) => l !== null).join("\n");
-    })(),
-  );
+    return [
+      `✅ *Your trip is registered. We are watching.* 🛡️`,
+      ``,
+      `*Route:* ${startLocation} → ${destination}`,
+      etaLine,
+      nearbyLine ? nearbyLine.trim() : null,
+      checkInLine ? `\n${checkInLine}` : null,
+      `We will contact you automatically if you go silent past your ETA.`,
+      `Your emergency contact is on standby if needed.`,
+      ``,
+      `Open your route:`,
+      `📍 Google Maps: ${gmLink}`,
+      `📍 Waze: ${wazeLink}`,
+      ``,
+      `When you arrive safely, reply *5* or type *SAFE*.`,
+      `Need help at any time — reply *10*. 🆘`,
+      ``,
+      `Live monitoring in your Situation Room. 🛡️`,
+    ].filter((l) => l !== null).join("\n");
+  })();
+  await sendWhatsApp(from, to, _tripStartMsg + await getNextTip("trip_started"));
 
   log.info(
     { tripId: newTrip.id, title, startLocation, destination, eta: effectiveEta, isKnownMember: member?.isKnown ?? false },
@@ -2337,6 +2335,7 @@ async function handleArrival(ctx: MenuContext, activeTrip: Awaited<ReturnType<ty
     return "";
   })();
 
+  const _arrivalTip = await getNextTip("trip_closed");
   await sendWhatsApp(from, to, [
     `🏡 *${memberLabel} — welcome home.*`,
     ``,
@@ -2346,7 +2345,7 @@ async function handleArrival(ctx: MenuContext, activeTrip: Awaited<ReturnType<ty
     `This is what eblockwatch is for — we start the journey together and we end it together.`,
     ``,
     `Reply 0 for Main Menu.`,
-  ].join("\n") + nearbyArrival);
+  ].join("\n") + nearbyArrival + _arrivalTip);
 
   log.info({ tripId: activeTrip.id }, "Trip closed — arrival (menu router)");
 
