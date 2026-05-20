@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { locationPingsTable, membersTable, tripsTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { enrichTripWithRoute, reverseGeocodeStreetAddress } from "../route-service.js";
 
 const router = Router();
 
@@ -89,10 +90,11 @@ router.post("/backapp/ping", async (req, res) => {
 
 // POST /api/backapp/start — member starts a trip; creates a Situation Room trip card
 router.post("/backapp/start", async (req, res) => {
-  const { phone, lat, lon, from, dest } = req.body as Record<string, unknown>;
+  const { phone, lat, lon, dest } = req.body as Record<string, unknown>;
   if (typeof phone !== "string") { res.status(400).json({ error: "phone required" }); return; }
 
   const normPhone = normalisePhone(phone);
+  const hasCoords = typeof lat === "number" && typeof lon === "number";
 
   // Look up member name
   const member = await db.query.membersTable.findFirst({
@@ -101,25 +103,34 @@ router.post("/backapp/start", async (req, res) => {
   });
 
   const travelerName = member?.displayName || member?.firstName || normPhone;
-  const fromLabel = typeof from === "string" && from.trim() ? from.trim() : "Unknown location";
-  const destLabel = typeof dest === "string" && dest.trim() ? dest.trim() : "Unspecified";
-  const title = `BackApp — ${travelerName} › ${destLabel}`;
+  const destLabel = typeof dest === "string" && dest.trim() ? dest.trim() : "Unspecified destination";
 
-  // Create a GREEN trip in the Situation Room
+  // Reverse-geocode start coords to a street address (best-effort, non-blocking)
+  let startAddressLabel = "Current location";
+  if (hasCoords) {
+    try {
+      const addr = await reverseGeocodeStreetAddress(String(lat), String(lon));
+      if (addr) startAddressLabel = addr;
+    } catch { /* best-effort */ }
+  }
+
+  const title = `${travelerName} › ${destLabel}`;
+
+  // Create a GREEN trip in the Situation Room immediately
   const [newTrip] = await db.insert(tripsTable).values({
     title,
     travelerName,
     travelerPhone: normPhone,
     status: "GREEN",
     tripType: "backapp",
-    startLat: typeof lat === "number" ? String(lat) : null,
-    startLon: typeof lon === "number" ? String(lon) : null,
-    lastKnownLat: typeof lat === "number" ? String(lat) : null,
-    lastKnownLon: typeof lon === "number" ? String(lon) : null,
-    lastKnownAt: typeof lat === "number" ? new Date() : null,
+    startLat: hasCoords ? String(lat) : null,
+    startLon: hasCoords ? String(lon) : null,
+    lastKnownLat: hasCoords ? String(lat) : null,
+    lastKnownLon: hasCoords ? String(lon) : null,
+    lastKnownAt: hasCoords ? new Date() : null,
     lastLocationSource: "backapp",
-    inferenceNotes: `BackApp GPS tracking active. Pinging every 60 seconds.`,
-    nextAction: "Monitor location pings — no ETA set.",
+    inferenceNotes: `BackApp GPS tracking active — pinging every 60 seconds.\nRoute calculation in progress…`,
+    nextAction: `Calculating route to ${destLabel}…`,
   }).returning({ id: tripsTable.id });
 
   // Switch member to trip mode
@@ -127,7 +138,38 @@ router.post("/backapp/start", async (req, res) => {
     .set({ backappMode: "trip", backappIntervalSeconds: INTERVAL_MAP["trip"] })
     .where(eq(membersTable.whatsappNumber, normPhone));
 
-  res.json({ mode: "trip", intervalSeconds: INTERVAL_MAP["trip"], tripId: newTrip?.id });
+  const tripId = newTrip?.id;
+
+  // Respond immediately — route enrichment runs in background
+  res.json({ mode: "trip", intervalSeconds: INTERVAL_MAP["trip"], tripId, dest: destLabel });
+
+  // ── Background: geocode + OSRM route + checkpoints ──────────────────────────
+  if (tripId && destLabel !== "Unspecified destination") {
+    const silentLog = {
+      info: (_obj: unknown, _msg?: string) => {},
+      error: (_obj: unknown, _msg?: string) => {},
+    };
+    const startCoordsOverride = hasCoords
+      ? { lat: String(lat), lon: String(lon) }
+      : undefined;
+
+    enrichTripWithRoute(
+      tripId,
+      startAddressLabel,
+      destLabel,
+      silentLog,
+      startCoordsOverride,
+    ).then(() => {
+      // Update trip notes once route is enriched
+      db.update(tripsTable)
+        .set({
+          inferenceNotes: `BackApp GPS trip. Route calculated to ${destLabel}.`,
+          nextAction: `Monitor live location — check in at route checkpoints.`,
+        })
+        .where(eq(tripsTable.id, tripId))
+        .catch(() => {});
+    }).catch(() => {});
+  }
 });
 
 // POST /api/backapp/stop — member ends trip; closes the Situation Room trip card

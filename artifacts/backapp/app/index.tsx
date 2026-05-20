@@ -247,10 +247,82 @@ function SettingsSheet({ visible, onClose }: { visible: boolean; onClose: () => 
   );
 }
 
+function DestinationSheet({
+  visible,
+  onClose,
+  onGo,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onGo: (dest: string) => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const [dest, setDest] = useState("");
+  const webTop = Platform.OS === "web" ? 67 : 0;
+
+  function handleGo() {
+    const trimmed = dest.trim();
+    if (!trimmed) return;
+    onGo(trimmed);
+    setDest("");
+  }
+
+  if (!visible) return null;
+
+  return (
+    <KeyboardAvoidingView
+      style={[StyleSheet.absoluteFillObject, { backgroundColor: "#fff", zIndex: 200 }]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <View style={[styles.settingsHeader, { paddingTop: insets.top + webTop + 8 }]}>
+        <Text style={styles.settingsTitle}>Where are you going?</Text>
+        <Pressable onPress={onClose} hitSlop={20}>
+          <Feather name="x" size={24} color="#1a1f2e" />
+        </Pressable>
+      </View>
+
+      <View style={{ padding: 24, flex: 1 }}>
+        <Text style={{ fontSize: 13, color: "#888", marginBottom: 10, fontFamily: "Inter_400Regular" }}>
+          Type the name of your destination — suburb, restaurant, or address.
+        </Text>
+        <TextInput
+          style={[styles.setupInput, { fontSize: 18, borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 14 }]}
+          placeholder="e.g. Sandton City, Latinos Sandton"
+          placeholderTextColor="#bbb"
+          value={dest}
+          onChangeText={setDest}
+          returnKeyType="go"
+          onSubmitEditing={handleGo}
+          autoFocus
+        />
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.setupButton,
+            { marginTop: 20, backgroundColor: dest.trim() ? "#c0392b" : "#ccc", opacity: pressed ? 0.85 : 1 },
+          ]}
+          onPress={handleGo}
+          disabled={!dest.trim()}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Feather name="navigation" size={18} color="#fff" />
+            <Text style={styles.setupButtonText}>Let's Go</Text>
+          </View>
+        </Pressable>
+
+        <Text style={{ fontSize: 12, color: "#bbb", marginTop: 16, textAlign: "center", fontFamily: "Inter_400Regular" }}>
+          The Situation Room will receive your route, ETA, and live location updates.
+        </Text>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { mode, intervalSeconds, lastPingAt, isTracking, setupComplete, startTrip, stopTrip, permissionGranted, requestLocationPermission } = useMember();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [destOpen, setDestOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [tick, setTick] = useState(0);
 
@@ -265,17 +337,20 @@ export default function HomeScreen() {
   const isActive = mode === "trip" || mode === "emergency";
 
   async function handleBigButton() {
-    setActionLoading(true);
-    try {
-      if (isActive) {
-        await stopTrip();
-      } else {
-        if (!permissionGranted) await requestLocationPermission();
-        await startTrip();
-      }
-    } finally {
-      setActionLoading(false);
+    if (isActive) {
+      setActionLoading(true);
+      try { await stopTrip(); } finally { setActionLoading(false); }
+    } else {
+      // Show destination sheet before starting
+      if (!permissionGranted) await requestLocationPermission();
+      setDestOpen(true);
     }
+  }
+
+  async function handleGo(dest: string) {
+    setDestOpen(false);
+    setActionLoading(true);
+    try { await startTrip(dest); } finally { setActionLoading(false); }
   }
 
   return (
