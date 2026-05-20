@@ -2665,18 +2665,15 @@ async function handleTripFlowStep(ctx: MenuContext, state: ConvState): Promise<v
 
   if (step === STEP_WAITING_FOR_DESTINATION) {
     const destination = body.trim();
-    const updatedPending: PendingTripData = { ...pending, destination };
-    await setConvState(from, {
-      currentFlow: FLOW_TRIP_FLOW,
-      currentStep: STEP_WAITING_FOR_DEPARTURE,
-      pendingTripData: updatedPending,
-    });
-    await sendWhatsApp(
-      from,
-      to,
-      `Perfect — heading to ${destination}. 🗺️\n\nAre you leaving now?\n\n1. Leave now\n2. Set a departure time\n\nReply 0 for Main Menu.`,
+    // Waze-style: calculate route + ETA immediately — never ask the member for their ETA
+    await queueTripPreview(
+      from, to, member,
+      pending.startLocation ?? "Home 🏠",
+      destination,
+      null,
+      body, messageSid, log,
     );
-    log.info({ from, destination }, "Trip flow: destination collected");
+    log.info({ from, destination }, "Trip flow: destination collected — preview queued");
     return;
   }
 
@@ -3056,7 +3053,7 @@ function formatMemberDetailsGreeting(
     ``,
     `Are these details correct? Reply *5* to update anything.`,
     ``,
-    `🚗 *Going somewhere?* Just tell us where — e.g. "Leaving Bryanston for Fourways ETA 14:30"`,
+    `🚗 *Going somewhere?* Just tell us where — e.g. "Leaving Bryanston for Fourways"`,
     `📍 Or tap 📎 and drop your location pin.`,
     ``,
     `Reply *0* for all options.`,
