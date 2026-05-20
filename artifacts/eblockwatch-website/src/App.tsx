@@ -7,6 +7,7 @@ import RegisterPage from "@/pages/RegisterPage";
 import JoinPage from "@/pages/JoinPage";
 import NotFound from "@/pages/not-found";
 import TermsAndConditions from "@/pages/TermsAndConditions";
+import BackAppInstall from "@/pages/BackAppInstall";
 
 function Router() {
   return (
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/my-account" component={MemberDashboard} />
       <Route path="/upgrade" component={UpgradePage} />
       <Route path="/terms" component={TermsAndConditions} />
+      <Route path="/backapp" component={BackAppInstall} />
       <Route component={NotFound} />
     </Switch>
   );
