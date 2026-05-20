@@ -1799,28 +1799,6 @@ async function sendProfileConfirmation(from: string, to: string, name: string): 
 }
 
 function mainMenuText(name: string, member: MemberInfo | null): string {
-  const isOperator = member?.role === "operator";
-
-  if (isOperator) {
-    return [
-      `${name} 👋 Situation Room — you're in.`,
-      ``,
-      `1️⃣  Cyber Chaperone 🛡️ — your WhatsApp line to the Situation Room`,
-      `2️⃣  What is eblockwatch?`,
-      `3️⃣  Membership options`,
-      `4️⃣  Activate my membership`,
-      `5️⃣  👤 My Account`,
-      `6️⃣  eblockshop`,
-      `7️⃣  Speak to a person`,
-      `8️⃣  📣 Invite a Friend`,
-      `9️⃣  📖 Getting Started Guide`,
-      ``,
-      `🚨 URGENT? Reply 10 — a real person will be on it immediately.`,
-      ``,
-      `Reply with a number to choose.`,
-    ].join("\n");
-  }
-
   const statusLine = membershipStatusLine(
     member?.memberStatus ?? "unknown",
     member?.membershipTier ?? null,
@@ -3076,7 +3054,9 @@ function formatMemberDetailsGreeting(
     profile.iceContactName ? `🆘 *ICE Contact:* ${profile.iceContactName}` : null,
     `🛡️ *Membership:* ${tier}`,
     ``,
-    `Are these details correct? Reply *4* (My Account) to update anything.`,
+    `Are these details correct? Reply *5* (My Account) to update anything.`,
+    ``,
+    `Reply *1* for Cyber Chaperone · *0* for the full menu.`,
     ``,
     `──────────────────`,
   ].filter((l) => l !== null).join("\n");
