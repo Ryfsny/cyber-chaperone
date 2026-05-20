@@ -5,164 +5,236 @@ const EXPO_DOMAIN =
   "861f57c8-8edb-426d-bcdf-9ec68d1de62b-00-1wbyvfmtwel27.expo.kirk.replit.dev";
 
 const EXPO_URL = `exp://${EXPO_DOMAIN}`;
+const EXPO_HTTPS_URL = `https://${EXPO_DOMAIN}`;
+
+const APP_STORE_URL =
+  "https://apps.apple.com/app/expo-go/id982107779";
+const PLAY_STORE_URL =
+  "https://play.google.com/store/apps/details?id=host.exp.exponent";
 
 export default function BackAppInstall() {
   return (
     <div
       style={{
         minHeight: "100vh",
-        backgroundColor: "#fff",
+        background: "#f5f7fa",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
-        padding: "32px 16px",
+        padding: "32px 16px 48px",
         fontFamily: "'Inter', system-ui, sans-serif",
       }}
     >
-      <img
-        src="/website/eblockwatch-logo.png"
-        alt="eblockwatch"
-        style={{ height: 56, marginBottom: 4, objectFit: "contain" }}
-        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-      />
+      <div style={{ marginBottom: 4, textAlign: "center" }}>
+        <p style={{ fontSize: 11, color: "#aaa", letterSpacing: 1, textTransform: "uppercase", margin: 0 }}>
+          eblockwatch · BackApp
+        </p>
+      </div>
 
-      <p
+      <h1
         style={{
-          fontSize: 13,
-          color: "#888",
-          marginTop: 0,
-          marginBottom: 32,
-          letterSpacing: 1,
-          textTransform: "uppercase",
+          fontSize: 26,
+          fontWeight: 700,
+          color: "#1a1f2e",
+          margin: "8px 0 4px",
+          textAlign: "center",
         }}
       >
-        BackApp — Cyber Shepherd
+        Install BackApp on your phone
+      </h1>
+      <p style={{ color: "#777", fontSize: 15, margin: "0 0 32px", textAlign: "center", maxWidth: 400 }}>
+        Follow the steps below — takes about 2 minutes.
       </p>
 
-      <div
-        style={{
-          background: "#1a1f2e",
-          borderRadius: 24,
-          padding: "40px 48px",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 24,
-          boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
-          maxWidth: 420,
-          width: "100%",
-        }}
+      {/* Step 1 */}
+      <StepCard
+        num="1"
+        title="Install Expo Go on your phone"
+        desc="Expo Go is the free app that runs BackApp. Tap the right button for your phone:"
       >
-        <h1
-          style={{
-            color: "#fff",
-            fontSize: 22,
-            fontWeight: 700,
-            margin: 0,
-            textAlign: "center",
-          }}
-        >
-          Scan to install BackApp
-        </h1>
-        <p
-          style={{
-            color: "#aab",
-            fontSize: 14,
-            margin: 0,
-            textAlign: "center",
-            lineHeight: 1.6,
-          }}
-        >
-          Point your phone camera at this code. It opens in Expo Go automatically.
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+          <a
+            href={APP_STORE_URL}
+            target="_blank"
+            rel="noreferrer"
+            style={badgeStyle("#000")}
+          >
+            <span style={{ fontSize: 18 }}>🍎</span>
+            <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+              <span style={{ fontSize: 10, opacity: 0.7 }}>Download on the</span>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>App Store</span>
+            </span>
+          </a>
+          <a
+            href={PLAY_STORE_URL}
+            target="_blank"
+            rel="noreferrer"
+            style={badgeStyle("#1a73e8")}
+          >
+            <span style={{ fontSize: 18 }}>🤖</span>
+            <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+              <span style={{ fontSize: 10, opacity: 0.7 }}>Get it on</span>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>Google Play</span>
+            </span>
+          </a>
+        </div>
+        <p style={{ margin: "12px 0 0", fontSize: 13, color: "#888", textAlign: "center" }}>
+          Already have Expo Go? Skip to step 2.
         </p>
+      </StepCard>
 
-        <div
-          style={{
-            background: "#fff",
-            padding: 20,
-            borderRadius: 16,
-            display: "inline-flex",
-          }}
-        >
-          <QRCodeSVG
-            value={EXPO_URL}
-            size={240}
-            level="M"
-            includeMargin={false}
-            fgColor="#1a1f2e"
-          />
-        </div>
-
-        <div
-          style={{
-            color: "#22c55e",
-            fontSize: 13,
-            fontWeight: 600,
-            letterSpacing: 0.5,
-            textAlign: "center",
-          }}
-        >
-          eblockwatch · 24/7 Protection
-        </div>
-      </div>
-
-      <div
-        style={{
-          marginTop: 40,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          maxWidth: 400,
-          width: "100%",
-        }}
+      {/* Step 2 */}
+      <StepCard
+        num="2"
+        title="Open Expo Go and tap Scan QR Code"
+        desc={`Open the Expo Go app — you'll see a "Scan QR Code" button. Tap it. Do NOT use your phone camera — use the scanner inside Expo Go.`}
       >
-        {[
-          ["1", "Install Expo Go", "Free from the App Store (iPhone) or Google Play (Android)"],
-          ["2", "Scan the QR code above", "Use your phone camera — it opens BackApp automatically in Expo Go"],
-          ["3", "Enter your WhatsApp number", "Links you to your eblockwatch membership instantly"],
-          ["4", "Done", "BackApp runs quietly in the background, keeping the Situation Room updated"],
-        ].map(([num, title, desc]) => (
-          <div
-            key={num}
+        <div
+          style={{
+            background: "#fff3cd",
+            border: "1px solid #ffc107",
+            borderRadius: 10,
+            padding: "12px 16px",
+            fontSize: 13,
+            color: "#856404",
+            lineHeight: 1.5,
+            width: "100%",
+          }}
+        >
+          ⚠️ <strong>Important:</strong> Use the scanner <em>inside</em> Expo Go — not your phone's camera app. The camera app won't open it correctly.
+        </div>
+      </StepCard>
+
+      {/* Step 3 */}
+      <StepCard
+        num="3"
+        title="Scan this QR code"
+        desc="Point the Expo Go scanner at the code below:"
+      >
+        <div
+          style={{
+            background: "#1a1f2e",
+            borderRadius: 20,
+            padding: "28px 32px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 16,
+          }}
+        >
+          <div style={{ background: "#fff", padding: 16, borderRadius: 12, display: "inline-flex" }}>
+            <QRCodeSVG
+              value={EXPO_URL}
+              size={220}
+              level="M"
+              includeMargin={false}
+              fgColor="#1a1f2e"
+            />
+          </div>
+          <p style={{ color: "#22c55e", fontSize: 13, fontWeight: 600, margin: 0 }}>
+            eblockwatch · 24/7 Protection
+          </p>
+        </div>
+
+        <div style={{ marginTop: 16, width: "100%", textAlign: "center" }}>
+          <p style={{ fontSize: 13, color: "#888", margin: "0 0 8px" }}>
+            Can't scan? Tap this link on your phone instead:
+          </p>
+          <a
+            href={EXPO_URL}
             style={{
-              display: "flex",
-              gap: 16,
-              alignItems: "flex-start",
-              background: "#f8fafb",
-              borderRadius: 12,
-              padding: "14px 18px",
-              border: "1px solid #e8eeee",
+              display: "inline-block",
+              background: "#1a1f2e",
+              color: "#22c55e",
+              padding: "10px 20px",
+              borderRadius: 8,
+              fontSize: 13,
+              fontFamily: "monospace",
+              textDecoration: "none",
+              wordBreak: "break-all",
             }}
           >
-            <div
-              style={{
-                minWidth: 32,
-                height: 32,
-                borderRadius: 16,
-                background: "#1a1f2e",
-                color: "#22c55e",
-                fontWeight: 700,
-                fontSize: 14,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              {num}
-            </div>
-            <div>
-              <div style={{ fontWeight: 600, fontSize: 14, color: "#1a1f2e" }}>{title}</div>
-              <div style={{ fontSize: 13, color: "#777", marginTop: 2, lineHeight: 1.5 }}>{desc}</div>
-            </div>
-          </div>
-        ))}
-      </div>
+            {EXPO_URL}
+          </a>
+        </div>
+      </StepCard>
+
+      {/* Step 4 */}
+      <StepCard
+        num="4"
+        title="Enter your WhatsApp number"
+        desc="BackApp will ask for your WhatsApp number to link to your eblockwatch membership. Type it in and tap Connect. Done!"
+      />
 
       <p style={{ marginTop: 32, fontSize: 12, color: "#bbb", textAlign: "center" }}>
-        eblockwatch BackApp · Cyber Shepherd · No app store needed
+        eblockwatch BackApp · Cyber Shepherd · Powered by Replit
       </p>
     </div>
   );
+}
+
+function StepCard({
+  num,
+  title,
+  desc,
+  children,
+}: {
+  num: string;
+  title: string;
+  desc: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 16,
+        padding: "24px",
+        marginBottom: 16,
+        maxWidth: 520,
+        width: "100%",
+        boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+        border: "1px solid #eee",
+      }}
+    >
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start", marginBottom: children ? 16 : 0 }}>
+        <div
+          style={{
+            minWidth: 36,
+            height: 36,
+            borderRadius: 18,
+            background: "#1a1f2e",
+            color: "#22c55e",
+            fontWeight: 700,
+            fontSize: 16,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          {num}
+        </div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 16, color: "#1a1f2e", marginBottom: 4 }}>{title}</div>
+          <div style={{ fontSize: 14, color: "#666", lineHeight: 1.5 }}>{desc}</div>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function badgeStyle(bg: string): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    background: bg,
+    color: "#fff",
+    padding: "10px 18px",
+    borderRadius: 10,
+    textDecoration: "none",
+    minWidth: 160,
+  };
 }
