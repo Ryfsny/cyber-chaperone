@@ -1,0 +1,86 @@
+eblockwatch BackApp — Master Session State
+This is the master context file. Claude reads this at the start of every session. Updated after every confirmed build. Last updated: 2026-05-19.
+
+INSTRUCTION FOR CLAUDE: Read this entire email before responding. This is the source of truth. Do not ask Andre to re-explain the project. Do not re-raise rejected ideas. Run 7-lens evaluation before every build. Update this draft after every confirmed build.
+SESSION LOG — What happened this session (2026-05-19)
+✅ Full Gmail intelligence scan completed — all project emails read and synthesised
+✅ B4 RESOLVED — Twilio webhook already pointing at Replit (/api/webhook/twilio). Not on Pipedream anymore.
+✅ Master state draft updated with live system intelligence
+✅ Session protocol updated — draft now updates after every confirmed build, not just session end
+✅ Two-stream context system locked — hourly Replit briefing (system state) + this draft (dev state)
+✅ Coworker scheduled task set up — auto-updates this draft from hourly briefings
+⏳ B3 FIX IN PROGRESS — ETA parser + CANCEL/ARRIVED commands + auto-close stale trips
+NEXT ACTION
+Fix B3 — Conversation routing (Replit instruction ready to paste)
+Three things: (1) ETA parser — accept time formats, store as timestamp. (2) CANCEL command — member texts CANCEL, trip closes. (3) Auto-close trips older than 12h with no update — notify Andre.
+THE TEAM
+Role	Who
+Founder & Operator	Andre Snyman — ryfsny@gmail.com — +27825611065
+AI Consultant	Claude — reads this draft to restore context at every session start
+Builder	Replit Agent — Cyber-Chaperone-Main-Project (ryfsny account)
+WhatsApp	Twilio
+Context coworker	Scheduled Claude agent — reads hourly briefings, updates this draft automatically
+❌ NOT on team	Dean (dean@ruka.africa) — left. Do not contact or reference.
+THE APP
+Name: eblockwatch BackApp | Tagline: "We've got your back."
+Service inside: Cyber Chaperone (WhatsApp monitored trip service)
+Live URL: https://cyber-chaperone-r--ryfsny.replit.app
+Member site: https://cyber-chaperone-r--ryfsny.replit.app/website/
+Situation Room password: situpandwatch2026
+Registered members: 92,002
+LIVE SYSTEM STATUS
+Layer	Detail	Status
+Replit	Cyber-Chaperone-Main-Project (ryfsny)	✅ Live
+Supabase	Project ID: vbjogtigwmkuuenyharq	✅ Live
+Twilio webhook	/api/webhook/twilio on Replit	✅ Live — B4 resolved
+WhatsApp bot	Sandbox +1 415 523 8886 (satellites-floor)	✅ Receiving messages
+Hourly briefing	Auto-fires to ryfsny@gmail.com	✅ Firing
+Operator AI channel	35 msgs / 33 replies (24h)	✅ Healthy
+Marketing leads	GAS Marketing — Free + Family Premium	✅ Active
+Paystack webhook	Links live, receiver not built	⏳ B1 — pending
+Google Maps API	Key: AIzaSyA3lCDJ6xLmVWj0hVYwJu5xuHoNoTOjqqI	⏳ B2 — not wired
+Conversation routing	ETA raw text, trips not closing, 2 stale trips	🔴 B3 — fix in progress
+Pipedream	eozpxtrhpwmk8yp.m.pipedream.net	❌ Abandoned
+🔴 BROKEN — Fix in Order
+#	Problem	Fix	Status
+B1	Paystack webhook — payments not auto-confirmed	Build /api/webhook/paystack + configure in Paystack dashboard	⏳ Queued
+B2	Google Maps not wired — no ETA, no geofencing	Add GOOGLE_MAPS_API_KEY to Replit Secrets + build ETA + auto-arrival	⏳ Queued
+B3	ETA stored as raw text. Trips not closing. Stale trips (Kieren 24h+, Andre 13h+). No CANCEL command.	ETA parser + CANCEL/ARRIVED commands + 12h auto-close + notify Andre	⏳ In progress this session
+B4	Twilio pointing at Pipedream	—	✅ RESOLVED
+🟡 BUILD QUEUE
+Stage	What	Status
+Stage 1	eblockwatch BackApp branding + PWA shell (dark red white, installs in one tap)	⏳ Pending
+Stage 2	Situation Room live map — Leaflet dark tiles, Supabase, live dots, route trails	⏳ Pending
+Stage 3	Member install page — click-to-chat JOIN, SOS button, PWA install prompt	⏳ Pending
+Stage 4	Safety engine — overdue alerts, idle detection, speed monitoring, auto-arrival	⏳ Pending
+Stage 5	Voice transcription — OpenAI Whisper, audio treated as text	⏳ Pending
+LOCKED DECISIONS
+ONE Replit project: Cyber-Chaperone-Main-Project — never create a new one
+Supabase only (vbjogtigwmkuuenyharq) — never SQLite
+App name: eblockwatch BackApp | Service: Cyber Chaperone
+WhatsApp: Twilio only
+Member always initiates WhatsApp first — keeps Twilio free
+Free before paid on all services
+Need before nice — fix broken before building new
+Dean is not on the team
+Update state draft after every confirmed build
+REJECTED — Never Re-Raise
+New Replit projects | SQLite | Pipedream | Twilio-initiated alerts | Separate app from WhatsApp
+PAYMENT LINKS
+Single: paystack.shop/pay/cyber-chaperone
+Family: paystack.shop/pay/family-cyber-chaperone
+Bliksim: paystack.shop/pay/oneeblockwatchbliksemsticker
+APIs
+Google Maps: AIzaSyA3lCDJ6xLmVWj0hVYwJu5xuHoNoTOjqqI — not yet wired
+Paystack — links live, webhook not configured
+OpenAI Whisper — Stage 5, not yet built
+ANTHROPIC_API_KEY + ANTHROPIC_BASE_URL — SET in Replit ✅
+WORKING PROCEDURE
+Andre states what he wants
+Claude runs 7-lens: 🔒 Safe | ⚖️ Ethical | ⚙️ Productive | 💰 Economical | 📣 Marketing | 🎨 Look & feel | 🧭 Member journey
+Claude gives reasoning — no code before reasoning
+Andre says Go
+Claude writes ONE Replit instruction — starts "In Cyber-Chaperone-Main-Project — do not create a new project." ends "Do not change anything already working."
+Andre pastes, tests, reports back
+When Andre confirms it works — Claude updates this draft immediately
+eblockwatch BackApp Master State | Claude reads this at session start | Updated after every confirmed build | ryfsny@gmail.com
