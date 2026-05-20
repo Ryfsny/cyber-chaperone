@@ -3,7 +3,7 @@ import { db, messagesTable, tripsTable, membersTable, caseParticipantsTable, cas
 import { and, eq, ne, desc, count } from "drizzle-orm";
 import twilio from "twilio";
 import { assessRisk } from "./ai.js";
-import { handleMenuRouter, handleSafetyVehiclePhoto } from "../menu-router.js";
+import { handleMenuRouter, handleSafetyVehiclePhoto, sendLocationPinMenu } from "../menu-router.js";
 import { withMenu } from "../message-utils.js";
 import { sendOperatorEmail, logMessageToGmail, type EmailCategory } from "../email-service.js";
 import { reverseGeocodeStreetAddress } from "../route-service.js";
@@ -448,16 +448,10 @@ router.post(
           const isFrequentTick = prevLastKnownAt && prevLastKnownAt > twoMinAgo;
           if (!isFrequentTick) {
             try {
-              const humanAddress = await reverseGeocodeStreetAddress(latitude, longitude);
-              const locationDesc = humanAddress ?? `${latitude}, ${longitude}`;
-              await sendReply(
-                from,
-                to,
-                `📍 *Location received.*\n\nYou are at *${locationDesc}* — we have you on the map.\n\nTrip is active and being monitored. 🛡️\n\nReply *0* for Main Menu.`,
-              );
-              req.log.info({ tripId: liveTrip.id, humanAddress }, "Location pin confirmation sent to member");
+              await sendLocationPinMenu(from, to, latitude, longitude, null, true);
+              req.log.info({ tripId: liveTrip.id }, "Location pin menu sent to member (active trip)");
             } catch (replyErr) {
-              req.log.warn({ replyErr }, "Location pin confirmation failed — GPS still updated");
+              req.log.warn({ replyErr }, "Location pin menu failed — GPS still updated");
             }
           }
           res.set("Content-Type", "text/xml");
@@ -1065,17 +1059,14 @@ router.post(
       if (!activeTrip) {
         req.log.info({ from }, "Follow-up received but no active trip found");
 
-        // If the member shared their location or a map link with no active trip,
-        // ask where they are heading — one tap away from starting a trip.
-        const isLocationShareNoTrip = (latitude !== "" && longitude !== "") || GOOGLE_MAPS_PATTERN.test(body) || WAZE_PATTERN.test(body);
-        if (isLocationShareNoTrip) {
-          const locationHint = latitude !== "" && longitude !== ""
-            ? `📍 Got your location (${latitude}, ${longitude}).`
-            : `🗺️ Got your map link.`;
+        // Location-pin follow-ups now handled by menu-router (sendLocationPinMenu → FLOW_INCIDENT_FROM_LOCATION).
+        // Map link follow-ups without native coords still get AI fallback below.
+        const isMapLinkNoCoords = (latitude === "" || longitude === "") && (GOOGLE_MAPS_PATTERN.test(body) || WAZE_PATTERN.test(body));
+        if (isMapLinkNoCoords) {
           await sendReply(
             from,
             to,
-            `${locationHint}\n\nWhere are you heading? Reply with your destination and ETA and I will open a trip for you.\n\nExample:\nHeading to Sandton. ETA 18:30\n\nReply 0 for Main Menu.`,
+            `🗺️ Got your map link.\n\nWhere are you heading? Reply with your destination and ETA and I will open a trip for you.\n\nExample:\nHeading to Sandton. ETA 18:30\n\nReply 0 for Main Menu.`,
           );
         } else {
           const aiReply = await callMemberClaude(body, from, member?.displayName ?? null);

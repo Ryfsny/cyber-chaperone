@@ -141,6 +141,7 @@ const FLOW_SHOP = "SHOP";
 const FLOW_MY_ACCOUNT = "MY_ACCOUNT";
 const FLOW_REPORT_INCIDENT = "REPORT_INCIDENT";
 const FLOW_SCARE_BEAR = "SCARE_BEAR";
+const FLOW_INCIDENT_FROM_LOCATION = "INCIDENT_FROM_LOCATION";
 const FLOW_PROFILE_CONFIRM = "PROFILE_CONFIRM";
 const FLOW_SPEAK_TO_PERSON = "SPEAK_TO_PERSON";
 const STEP_SAFETY_MOTHER_NAME = "SAFETY_MOTHER_NAME";
@@ -5258,6 +5259,164 @@ async function handleShopFlow(ctx: MenuContext): Promise<void> {
 
 // ── Main entry point ──────────────────────────────────────────────────────────
 
+// ── Location pin action menu (shared between menu-router and webhook.ts) ───────
+// Reverse-geocodes the pin, counts nearby members, sends the Chappies-style
+// action menu, and sets conversation state ready to handle the member's choice.
+// hasActiveTrip: true  → GPS was just updated on a live trip (no "start trip" option)
+// hasActiveTrip: false → no trip running (offers trip start)
+export async function sendLocationPinMenu(
+  from: string,
+  to: string,
+  lat: string,
+  lon: string,
+  member: MemberInfo | null,
+  hasActiveTrip: boolean,
+): Promise<void> {
+  let humanAddress: string | null = null;
+  try { humanAddress = await reverseGeocodeStreetAddress(lat, lon); } catch { /* best-effort */ }
+  const locationDesc = humanAddress ?? `${lat}, ${lon}`;
+
+  const { count: nearbyCount, radiusKm } = await pickRadiusAndCount(lat, lon);
+  const coverageLine = nearbyCoverageText(nearbyCount, radiusKm);
+
+  await setConvState(from, {
+    currentFlow: FLOW_INCIDENT_FROM_LOCATION,
+    currentStep: "MENU",
+    pendingTripData: { incidentLat: lat, incidentLon: lon, incidentAddress: locationDesc } as unknown as PendingTripData,
+  });
+
+  const lines: string[] = [
+    `📍 *Location received.*`,
+    ``,
+    `You are at *${locationDesc}*.`,
+  ];
+
+  if (hasActiveTrip) {
+    lines.push(``, `Your trip is active and being monitored. 🛡️`);
+  }
+
+  lines.push(
+    ``,
+    coverageLine,
+    ``,
+    `🍬 *Did you know?*`,
+    `These are real eblockwatch members near you right now. If something happens, your report goes to the blockwatch hub — the right response is activated through André. You are never on your own.`,
+    ``,
+    `*1* — Report an incident here`,
+  );
+
+  if (!hasActiveTrip) {
+    lines.push(`*2* — Start a trip from here`);
+  }
+
+  lines.push(`*0* — Main Menu`);
+
+  await sendWhatsApp(from, to, lines.join("\n"));
+}
+
+// ── Incident from location pin flow ───────────────────────────────────────────
+async function handleIncidentFromLocationFlow(ctx: MenuContext, state: ConvState): Promise<void> {
+  const { from, to, body, member, messageSid, log } = ctx;
+  const name = member?.displayName ?? from.replace("whatsapp:+", "");
+  const pending = (state.pendingTripData as unknown as Record<string, string>) ?? {};
+  const step = state.currentStep;
+  const choice = body.trim();
+
+  if (choice === "0") {
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendMainMenuWithNearby(from, to, name, member);
+    return;
+  }
+
+  if (step === "MENU") {
+    if (choice === "1") {
+      const locationDesc = pending.incidentAddress ?? `${pending.incidentLat ?? ""}, ${pending.incidentLon ?? ""}`;
+      await setConvState(from, {
+        currentFlow: FLOW_INCIDENT_FROM_LOCATION,
+        currentStep: "DESCRIPTION",
+        pendingTripData: state.pendingTripData,
+      });
+      await sendWhatsApp(from, to, [
+        `📝 *Incident Report*`,
+        ``,
+        `What happened at *${locationDesc}*?`,
+        ``,
+        `Describe briefly — e.g. "Armed robbery", "Suspicious vehicle", "Road accident"`,
+        ``,
+        `Reply *0* to cancel.`,
+      ].join("\n"));
+      return;
+    }
+
+    if (choice === "2") {
+      const locationDesc = pending.incidentAddress ?? `${pending.incidentLat ?? ""}, ${pending.incidentLon ?? ""}`;
+      await setConvState(from, { currentFlow: FLOW_MAIN_MENU, currentStep: null, pendingTripData: null });
+      await sendWhatsApp(from, to, [
+        `🛡️ Let's start your trip from *${locationDesc}*.`,
+        ``,
+        `Where are you heading and what's your ETA?`,
+        ``,
+        `Example: _Heading to Sandton. ETA 18:30_`,
+        ``,
+        `Reply *0* for Main Menu.`,
+      ].join("\n"));
+      return;
+    }
+
+    // Invalid choice — re-prompt
+    const locationDesc = pending.incidentAddress ?? `${pending.incidentLat ?? ""}, ${pending.incidentLon ?? ""}`;
+    await sendWhatsApp(from, to, [
+      `Please reply with:`,
+      `*1* — Report an incident at *${locationDesc}*`,
+      `*2* — Start a trip from here`,
+      `*0* — Main Menu`,
+    ].join("\n"));
+    return;
+  }
+
+  if (step === "DESCRIPTION") {
+    const lat = pending.incidentLat ?? null;
+    const lon = pending.incidentLon ?? null;
+    const locationDesc = pending.incidentAddress ?? (lat && lon ? `${lat}, ${lon}` : "unknown location");
+    const mapsLink = lat && lon ? `https://maps.google.com/?q=${lat},${lon}` : null;
+
+    await saveMessage(from, to, body, messageSid, null);
+
+    const alertLines = [
+      `🚨 *INCIDENT REPORT*`,
+      ``,
+      `From: *${name}* (${from.replace("whatsapp:+", "")})`,
+      `Location: *${locationDesc}*`,
+      mapsLink ? `📍 ${mapsLink}` : null,
+      ``,
+      `Description: _${body.trim()}_`,
+    ].filter(Boolean).join("\n");
+
+    try {
+      const twilioNum = process.env["TWILIO_WHATSAPP_NUMBER"] ?? "whatsapp:+27825611065";
+      const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+      await client.messages.create({ from: twilioNum, to: FOUNDER_WHATSAPP, body: alertLines });
+    } catch (err) {
+      log.warn({ err }, "incident-from-location: André alert failed");
+    }
+
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU, currentStep: null, pendingTripData: null });
+
+    await sendWhatsApp(from, to, [
+      `✅ *Incident reported.*`,
+      ``,
+      `André has been notified with your exact location. The blockwatch hub will activate the right response.`,
+      ``,
+      `Stay safe. 🛡️`,
+      ``,
+      `Reply *0* for Main Menu.`,
+    ].join("\n"));
+
+    log.info({ from, lat, lon, locationDesc }, "incident-from-location: report saved and André alerted");
+    return;
+  }
+}
+
 export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
   const { body, from, to, member, messageSid, log, latitude, longitude } = ctx;
   const name = member?.displayName ?? from;
@@ -5281,22 +5440,13 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     "menu-router: inbound",
   );
 
-  // ── LIVE LOCATION PIN — nearby member count ────────────────────────────────
-  // Fires a supplemental coverage message for ANY location pin regardless of
-  // conversation state, then lets normal routing continue.
+  // ── LIVE LOCATION PIN — rich Chappies action menu ─────────────────────────
+  // Sends the full location action menu for any location pin that reaches the
+  // menu router. (Active-trip pins return early in webhook.ts before this runs.)
   if (latitude && longitude) {
-    const { count: nearbyCount, radiusKm: nearbyRadiusKm } = await pickRadiusAndCount(latitude, longitude);
-    const coverageLine = nearbyCoverageText(nearbyCount, nearbyRadiusKm);
-    await sendWhatsApp(from, to, [
-      `📍 *Location received.*`,
-      ``,
-      coverageLine,
-      ``,
-      `These are real eblockwatch members in your area — registered, verified, and part of the same network watching your back.`,
-      ``,
-      `If you need help, type *HELP* — André responds immediately and knows exactly where you are. 🛡️`,
-    ].join("\n"));
-    log.info({ from, latitude, longitude, nearbyCount }, "Nearby member count sent for live location");
+    await sendLocationPinMenu(from, to, latitude, longitude, member, false);
+    log.info({ from, latitude, longitude }, "Location pin menu sent");
+    return { handled: true };
   }
 
   // ── GLOBAL MENU OVERRIDE ──────────────────────────────────────────────────
@@ -5605,6 +5755,11 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
 
   if (state.currentFlow === FLOW_SCARE_BEAR) {
     await handleScareBearFlow(ctx, state);
+    return { handled: true };
+  }
+
+  if (state.currentFlow === FLOW_INCIDENT_FROM_LOCATION) {
+    await handleIncidentFromLocationFlow(ctx, state);
     return { handled: true };
   }
 
