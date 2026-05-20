@@ -1,5 +1,5 @@
 import { db, membersTable, tripsTable, messagesTable, conversationStatesTable, respondersTable, memberIncidentsTable, scareBearSightingsTable } from "@workspace/db";
-import { getNextTip } from "./tip-engine.js";
+import { getNextTip, sendTip } from "./tip-engine.js";
 import { and, eq, ne, desc, or, sql, gte } from "drizzle-orm";
 import twilio from "twilio";
 import { enrichTripWithRoute, calculateRouteInfo, reverseGeocodeCoords, reverseGeocodeStreetAddress, minutesToSastTime, type RouteInfo } from "./route-service.js";
@@ -906,7 +906,8 @@ async function createTrip(
       `Live monitoring in your Situation Room. 🛡️`,
     ].filter((l) => l !== null).join("\n");
   })();
-  await sendWhatsApp(from, to, _tripStartMsg + await getNextTip("trip_started"));
+  await sendWhatsApp(from, to, _tripStartMsg);
+  sendTip(from, to, "trip_started", sendWhatsApp);
 
   log.info(
     { tripId: newTrip.id, title, startLocation, destination, eta: effectiveEta, isKnownMember: member?.isKnown ?? false },
@@ -1842,8 +1843,8 @@ async function sendMainMenuWithNearby(from: string, to: string, name: string, me
     const { count, radiusKm } = await pickRadiusAndCount(coords.lat, coords.lon);
     if (count > 0) nearbyLine = `\n\n${nearbyCoverageText(count, radiusKm)}`;
   }
-  const menuTip = Math.random() < 0.33 ? await getNextTip("main_menu") : "";
-  await sendWhatsApp(from, to, mainMenuText(name, member) + nearbyLine + menuTip);
+  await sendWhatsApp(from, to, mainMenuText(name, member) + nearbyLine);
+  if (Math.random() < 0.33) sendTip(from, to, "main_menu", sendWhatsApp);
 }
 
 // ── Shared membership tier text ───────────────────────────────────────────────
@@ -2336,7 +2337,6 @@ async function handleArrival(ctx: MenuContext, activeTrip: Awaited<ReturnType<ty
     return "";
   })();
 
-  const _arrivalTip = await getNextTip("trip_closed");
   await sendWhatsApp(from, to, [
     `🏡 *${memberLabel} — welcome home.*`,
     ``,
@@ -2346,7 +2346,8 @@ async function handleArrival(ctx: MenuContext, activeTrip: Awaited<ReturnType<ty
     `This is what eblockwatch is for — we start the journey together and we end it together.`,
     ``,
     `Reply 0 for Main Menu.`,
-  ].join("\n") + nearbyArrival + _arrivalTip);
+  ].join("\n") + nearbyArrival);
+  sendTip(from, to, "trip_closed", sendWhatsApp);
 
   log.info({ tripId: activeTrip.id }, "Trip closed — arrival (menu router)");
 
@@ -2830,7 +2831,8 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
       `We will message you then to check you are safe.`,
       ``,
       `Reply 0 to go back.`,
-    ].join("\n") + await getNextTip("clock_in"));
+    ].join("\n"));
+    sendTip(from, to, "clock_in", sendWhatsApp);
     log.info({ from }, "CC menu: clock-in flow started");
     return true;
   }
@@ -4291,7 +4293,8 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   if (choice === "3") {
     if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_MEMBERSHIP");
     await saveMessage(from, to, body, messageSid, null);
-    await sendWhatsApp(from, to, membershipOptionsText(name, member?.membershipTier) + await getNextTip("membership_info"));
+    await sendWhatsApp(from, to, membershipOptionsText(name, member?.membershipTier));
+    sendTip(from, to, "membership_info", sendWhatsApp);
     return true;
   }
 
@@ -4307,7 +4310,8 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
     if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_PROFILE");
     await saveMessage(from, to, body, messageSid, null);
     await setConvState(from, { currentFlow: FLOW_MY_ACCOUNT, currentStep: null });
-    await sendWhatsApp(from, to, myAccountMenuText(name, member) + await getNextTip("my_account"));
+    await sendWhatsApp(from, to, myAccountMenuText(name, member));
+    sendTip(from, to, "my_account", sendWhatsApp);
     return true;
   }
 
@@ -4358,7 +4362,8 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n");
-    await sendWhatsApp(from, to, referralMsg + await getNextTip("invite_sent"));
+    await sendWhatsApp(from, to, referralMsg);
+    sendTip(from, to, "invite_sent", sendWhatsApp);
     return true;
   }
 
@@ -4798,7 +4803,8 @@ async function saveScareBear(
     `You earned *+5 loyalty points* for keeping our community safer. 🐻`,
     ``,
     `Reply 0 for Main Menu.`,
-  ].filter(Boolean).join("\n") + await getNextTip("scare_bear"));
+  ].filter(Boolean).join("\n"));
+  sendTip(from, to, "scare_bear", sendWhatsApp);
 }
 
 async function handleScareBearFlow(ctx: MenuContext, state: ConvState): Promise<void> {
@@ -5419,7 +5425,8 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
       `• Reply *Hi* → Start over`,
       ``,
       `André is watching. You are never alone. 🛡️`,
-    ].join("\n") + await getNextTip("getting_started"));
+    ].join("\n"));
+    sendTip(from, to, "getting_started", sendWhatsApp);
     await sendMainMenuWithNearby(from, to, name, member);
     log.info({ from, handler: "GLOBAL_GETTING_STARTED_9" }, "menu-router: global getting started guide triggered");
     return { handled: true };
