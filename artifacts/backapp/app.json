@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "BackApp",
+    "slug": "backapp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "backapp",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f1117"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.eblockwatch.backapp",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "BackApp shares your location with your eblockwatch operator while you are on a trip, so they can monitor your safety.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "BackApp shares your location with your eblockwatch operator while you are on a trip, so they can monitor your safety."
+      }
+    },
+    "android": {
+      "package": "com.eblockwatch.backapp",
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png",
+      "backgroundColor": "#0f1117"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

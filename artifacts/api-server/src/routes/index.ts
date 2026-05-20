@@ -23,6 +23,7 @@ import incidentsRouter from "./incidents";
 import agentReportRouter from "./agent-report";
 import ttsRouter from "./tts";
 import scareBearsRouter from "./scare-bears";
+import backappRouter from "./backapp";
 import { requireAuth } from "../middleware/require-auth";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -40,6 +41,7 @@ router.use(arnieChatRouter);
 router.use(memberPortalRouter);  // Member portal (JWT-based, self-auth)
 router.use(paystackRouter);      // Paystack webhook + payment-link only
 router.use(ttsRouter);           // TTS audio files for operator voice replies (public — Twilio fetches these)
+router.use(backappRouter);       // BackApp — Cyber Shepherd location pings (member phone auth)
 
 router.get("/flow-diagram", (_req, res) => {
   res.sendFile(path.resolve(__dirname, "flow-diagram.html"));

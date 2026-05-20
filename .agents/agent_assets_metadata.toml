@@ -66,6 +66,12 @@ uri = "file://artifacts/chaperone-video/src/assets/scene-join.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "vte362pnvKGhSXIrFFeta"
+uri = "file://artifacts/backapp/assets/images/icon.png"
+type = "image"
+title = "backapp shield icon"
+
 [[outputs]]
 id = "GZcowUx324_zRD73VmXNW"
 uri = "file://docs/ruka-vs-current-alignment-report.md"

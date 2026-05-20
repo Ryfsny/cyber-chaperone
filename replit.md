@@ -28,6 +28,7 @@ This is the single source of truth. Everything happens here.
 - `artifacts/api-server` — Express API server (all routes)
 - `artifacts/situation-room` — Operator dashboard React app
 - `artifacts/eblockwatch-website` — Public member website React app
+- `artifacts/backapp` — BackApp "Cyber Shepherd" Expo mobile app (member GPS tracking)
 
 ## Production URLs
 
@@ -36,6 +37,34 @@ This is the single source of truth. Everything happens here.
 - **Website**: `https://cyber-chaperone-r--ryfsny.replit.app/website/`
 - **Twilio webhook**: `POST https://cyber-chaperone-r--ryfsny.replit.app/api/webhook/twilio`
 - **Facebook webhook**: `POST https://cyber-chaperone-r--ryfsny.replit.app/api/webhook/facebook`
+
+## BackApp — Cyber Shepherd (live 2026-05-20)
+
+Member installs BackApp → enters their WhatsApp number → app silently tracks location.
+
+**Modes:**
+| Mode | Ping interval | Who sets it |
+|---|---|---|
+| IDLE | Every 2 hours | Default |
+| TRIP | Every 60 seconds | Member taps Start Trip |
+| EMERGENCY | Every 30 seconds | Operator pushes command |
+
+**API routes (public, phone-identified):**
+| Route | Purpose |
+|---|---|
+| `POST /api/backapp/ping` | App sends GPS coordinates → returns current mode + interval |
+| `POST /api/backapp/start` | Member starts trip → switches to 60s pings |
+| `POST /api/backapp/stop` | Member ends trip → switches back to idle |
+| `GET /api/backapp/mode?phone=xxx` | App polls for operator mode override |
+| `POST /api/backapp/command` | Operator pushes mode change (emergency=30s) |
+| `GET /api/backapp/pings/:phone` | Operator reads recent ping history |
+
+**DB tables added:**
+- `location_pings` — memberPhone, lat, lon, accuracy, mode, pingedAt
+- `members.backapp_mode` — idle/trip/emergency
+- `members.backapp_interval_seconds` — current ping interval
+
+**Install (no app store needed):** Scan QR code from Replit preview → opens in Expo Go on phone.
 
 ## Route Security Map
 

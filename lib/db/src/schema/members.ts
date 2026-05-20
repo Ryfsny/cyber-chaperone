@@ -51,6 +51,8 @@ export const membersTable = pgTable("members", {
   // Paying members show a purple star overlay on top of their base tier.
   // founder = original 90 000 import; silver = Gass batch; bronze = new registrations
   loyaltyTier: text("loyalty_tier").notNull().default("bronze"),
+  backappMode: text("backapp_mode").default("idle"),
+  backappIntervalSeconds: integer("backapp_interval_seconds").default(7200),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

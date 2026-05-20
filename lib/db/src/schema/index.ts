@@ -10,3 +10,4 @@ export * from "./operator-admins";
 export * from "./broadcast-queue";
 export * from "./scare-bear-sightings";
 export * from "./tips";
+export * from "./location-pings";
