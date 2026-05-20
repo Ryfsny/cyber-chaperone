@@ -1110,12 +1110,15 @@ async function handleClockinFlowStep(ctx: MenuContext, state: ConvState): Promis
     await saveMessage(from, to, body, messageSid, newTrip?.id ?? null);
 
     await sendWhatsApp(from, to, [
-      `✅ Done, ${name}.`,
+      `✅ Done, ${name}. Clock In is set.`,
       ``,
       `We will message you at *${displayTime}*.`,
-      `When you are home, just reply *SAFE*.`,
+      `When you are home, reply *SAFE* to clear it.`,
       ``,
-      `If we do not hear from you — we will contact someone.`,
+      `If you don't reply — André is alerted first.`,
+      `If still no response after 20 minutes — your ICE contact is notified.`,
+      ``,
+      `Type *CANCEL* at any time to clear your Clock In.`,
       ``,
       `Enjoy your evening 🌙`,
     ].join("\n"));
@@ -1897,7 +1900,7 @@ function membershipOptionsText(name: string, currentTier?: string | null): strin
     `──────────────────`,
     statusLine,
     ``,
-    `Reply *4* from the main menu to activate or upgrade.`,
+    `Reply *4* to activate or upgrade now.`,
     `Reply 0 for Main Menu.`,
   ].join("\n");
 }
@@ -2825,10 +2828,10 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
     await sendWhatsApp(from, to, [
       `${name}, what time will you be home tonight? 🏠`,
       ``,
-      `Just send us the time.`,
-      `For example: *11pm* or *23:00*`,
+      `Just send us the time — for example: *11pm* or *23:00*`,
       ``,
-      `We will message you then to check you are safe.`,
+      `We message you at that time. If you reply *SAFE*, we clear it.`,
+      `If you don't reply — André is alerted. No call, no fuss. Automatic.`,
       ``,
       `Reply 0 to go back.`,
     ].join("\n"));
@@ -4430,6 +4433,7 @@ function myAccountMenuText(name: string, member: MemberInfo | null): string {
     `${tierEmoji}${isPaying ? " 💜" : ""} ${tierName}`,
     ``,
     `1️⃣  Update my profile`,
+    `    ↳ Your name, ICE contact, home address`,
     `2️⃣  My loyalty points & trust status`,
     `3️⃣  My family group`,
     `4️⃣  Report confidentially to André 🔒`,
@@ -5284,14 +5288,13 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
     const { count: nearbyCount, radiusKm: nearbyRadiusKm } = await pickRadiusAndCount(latitude, longitude);
     const coverageLine = nearbyCoverageText(nearbyCount, nearbyRadiusKm);
     await sendWhatsApp(from, to, [
-      `📍 Location received — you are covered.`,
+      `📍 *Location received.*`,
       ``,
       coverageLine,
       ``,
-      `They can be mobilised through Andre and Cyber Chaperone when you need support.`,
-      `Everything goes through eblockwatch — members never contact them directly.`,
+      `These are real eblockwatch members in your area — registered, verified, and part of the same network watching your back.`,
       ``,
-      `Type HELP any time and the Situation Room responds immediately. 🛡️`,
+      `If you need help, type *HELP* — André responds immediately and knows exactly where you are. 🛡️`,
     ].join("\n"));
     log.info({ from, latitude, longitude, nearbyCount }, "Nearby member count sent for live location");
   }
@@ -5772,7 +5775,15 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
       ].join("\n"));
     } else {
       await saveMessage(from, to, body, messageSid, null);
-      await sendWhatsApp(from, to, `You don't have an active trip right now.\n\nReply *1* to start a monitored drive.\nReply *2* to clock in for the evening.\n\nReply 0 for Main Menu.`);
+      await sendWhatsApp(from, to, [
+        `STATUS works during an active monitored trip — André sees your route, your ETA, and your last known position in real time.`,
+        ``,
+        `You don't have a trip running right now.`,
+        ``,
+        `Reply *1* to start a monitored drive.`,
+        `Reply *5* to Clock In for the evening.`,
+        `Reply *0* for Main Menu.`,
+      ].join("\n"));
     }
     return { handled: true };
   }
