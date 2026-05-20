@@ -1842,7 +1842,8 @@ async function sendMainMenuWithNearby(from: string, to: string, name: string, me
     const { count, radiusKm } = await pickRadiusAndCount(coords.lat, coords.lon);
     if (count > 0) nearbyLine = `\n\n${nearbyCoverageText(count, radiusKm)}`;
   }
-  await sendWhatsApp(from, to, mainMenuText(name, member) + nearbyLine);
+  const menuTip = Math.random() < 0.33 ? await getNextTip("main_menu") : "";
+  await sendWhatsApp(from, to, mainMenuText(name, member) + nearbyLine + menuTip);
 }
 
 // ── Shared membership tier text ───────────────────────────────────────────────
@@ -2829,7 +2830,7 @@ async function handleCCChoice(ctx: MenuContext, state: ConvState): Promise<boole
       `We will message you then to check you are safe.`,
       ``,
       `Reply 0 to go back.`,
-    ].join("\n"));
+    ].join("\n") + await getNextTip("clock_in"));
     log.info({ from }, "CC menu: clock-in flow started");
     return true;
   }
@@ -4290,7 +4291,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
   if (choice === "3") {
     if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_MEMBERSHIP");
     await saveMessage(from, to, body, messageSid, null);
-    await sendWhatsApp(from, to, membershipOptionsText(name, member?.membershipTier));
+    await sendWhatsApp(from, to, membershipOptionsText(name, member?.membershipTier) + await getNextTip("membership_info"));
     return true;
   }
 
@@ -4306,7 +4307,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
     if (member?.memberId) void recordDiscSignal(member.memberId, "MENU_PROFILE");
     await saveMessage(from, to, body, messageSid, null);
     await setConvState(from, { currentFlow: FLOW_MY_ACCOUNT, currentStep: null });
-    await sendWhatsApp(from, to, myAccountMenuText(name, member));
+    await sendWhatsApp(from, to, myAccountMenuText(name, member) + await getNextTip("my_account"));
     return true;
   }
 
@@ -4357,7 +4358,7 @@ async function handleMainMenuChoice(ctx: MenuContext, state: ConvState): Promise
       ``,
       `Reply 0 for Main Menu.`,
     ].join("\n");
-    await sendWhatsApp(from, to, referralMsg);
+    await sendWhatsApp(from, to, referralMsg + await getNextTip("invite_sent"));
     return true;
   }
 
@@ -4797,7 +4798,7 @@ async function saveScareBear(
     `You earned *+5 loyalty points* for keeping our community safer. 🐻`,
     ``,
     `Reply 0 for Main Menu.`,
-  ].filter(Boolean).join("\n"));
+  ].filter(Boolean).join("\n") + await getNextTip("scare_bear"));
 }
 
 async function handleScareBearFlow(ctx: MenuContext, state: ConvState): Promise<void> {
@@ -5418,7 +5419,7 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
       `• Reply *Hi* → Start over`,
       ``,
       `André is watching. You are never alone. 🛡️`,
-    ].join("\n"));
+    ].join("\n") + await getNextTip("getting_started"));
     await sendMainMenuWithNearby(from, to, name, member);
     log.info({ from, handler: "GLOBAL_GETTING_STARTED_9" }, "menu-router: global getting started guide triggered");
     return { handled: true };
