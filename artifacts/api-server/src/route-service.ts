@@ -28,12 +28,25 @@ const UA = "CyberChaperone-eblockwatch/1.0 (https://eblockwatch.com)";
 
 async function geocodeAddress(query: string): Promise<Coords | null> {
   try {
-    const url = `${NOMINATIM_BASE}?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=za`;
-    const res = await fetch(url, { headers: { "User-Agent": UA } });
-    if (!res.ok) return null;
-    const data = (await res.json()) as Array<{ lat: string; lon: string }>;
-    if (!data.length) return null;
-    return { lat: data[0].lat, lon: data[0].lon };
+    const attempt = async (q: string): Promise<Coords | null> => {
+      const url = `${NOMINATIM_BASE}?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=za`;
+      const res = await fetch(url, { headers: { "User-Agent": UA } });
+      if (!res.ok) return null;
+      const data = (await res.json()) as Array<{ lat: string; lon: string }>;
+      if (!data.length) return null;
+      return { lat: data[0].lat, lon: data[0].lon };
+    };
+
+    const result = await attempt(query);
+    if (result) return result;
+
+    const strippedQuery = query.replace(/\s*🏠\s*/g, "").trim();
+    const withSuffix = strippedQuery.endsWith(", South Africa")
+      ? strippedQuery
+      : `${strippedQuery}, South Africa`;
+    if (withSuffix !== query) return await attempt(withSuffix);
+
+    return null;
   } catch {
     return null;
   }
