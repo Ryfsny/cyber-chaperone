@@ -223,10 +223,16 @@ export function MemberProvider({ children }: { children: React.ReactNode }) {
     setMode("trip");
     setIntervalSeconds(INTERVALS.trip);
     try {
+      // Get current location to attach to the new trip card
+      const loc = Platform.OS === "web" ? await getLocationWeb() : await getLocationNative();
       await fetch(`${BASE_URL}/api/backapp/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({
+          phone,
+          lat: loc?.lat,
+          lon: loc?.lon,
+        }),
       });
     } catch { /* best-effort */ }
     await doPing();

@@ -7,3 +7,4 @@ export * from "./case-participants";
 export * from "./case-logs";
 export * from "./scare-bear-sightings";
 export * from "./tips";
+export * from "./location-pings";
