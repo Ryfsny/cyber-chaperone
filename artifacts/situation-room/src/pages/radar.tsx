@@ -329,7 +329,7 @@ export default function Radar() {
   const [showBroadcast, setShowBroadcast] = useState(false);
 
   const { data: trips = [] } = useListTrips({
-    query: { queryKey: getListTripsQueryKey(), refetchInterval: 30000 },
+    query: { queryKey: getListTripsQueryKey(), refetchInterval: 8000 },
   });
   const { data: responders = [] } = useListResponders({
     query: { queryKey: getListRespondersQueryKey(), refetchInterval: 60000 },
