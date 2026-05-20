@@ -3,7 +3,7 @@ import { db, messagesTable, tripsTable, membersTable, caseParticipantsTable, cas
 import { and, eq, ne, desc, count } from "drizzle-orm";
 import twilio from "twilio";
 import { assessRisk } from "./ai.js";
-import { handleMenuRouter, handleSafetyVehiclePhoto, sendLocationPinMenu } from "../menu-router.js";
+import { handleMenuRouter, handleSafetyVehiclePhoto, sendLocationPinMenu, queueTripPreview } from "../menu-router.js";
 import { withMenu } from "../message-utils.js";
 import { sendOperatorEmail, logMessageToGmail, type EmailCategory } from "../email-service.js";
 import { reverseGeocodeStreetAddress } from "../route-service.js";
@@ -182,6 +182,7 @@ interface MemberInfo {
   discType?: import("../disc-profiler.js").DiscDimension | null;
   memberId?: number | null;
   email?: string | null;
+  homeAddress?: string | null;
 }
 
 /**
@@ -225,6 +226,7 @@ async function lookupMember(whatsappNumber: string): Promise<MemberInfo | null> 
         discType: (member.discType ?? null) as import("../disc-profiler.js").DiscDimension | null,
         memberId: member.id,
         email: member.email ?? null,
+        homeAddress: member.homeAddress ?? null,
       };
     }
   } catch {
@@ -948,101 +950,20 @@ router.post(
     }
 
     if (parsed) {
-      // ── Trip-start message ──────────────────────────────────────────────────
-      const title = `${parsed.startLocation} → ${parsed.destination}`;
-      const etaNote = parsed.eta ? ` ETA ${parsed.eta}.` : "";
-      const ts = nowUtc();
-
-      const closedTrips = await db
-        .update(tripsTable)
-        .set({ status: "completed" })
-        .where(
-          and(
-            eq(tripsTable.travelerPhone, from),
-            ne(tripsTable.status, "completed"),
-          ),
-        )
-        .returning({ id: tripsTable.id });
-
-      if (closedTrips.length > 0) {
-        req.log.info({ closedTripIds: closedTrips.map((t) => t.id) }, "Closed previous active trips for traveler");
-      }
-
-      const initialNote = [
-        `[${ts}] Trip-start message received from WhatsApp.`,
-        `[${ts}] ${memberNoteLine(member, from)}`,
-        `[${ts}] Route: ${parsed.startLocation} → ${parsed.destination}${etaNote}`,
-      ].join("\n");
-
-      const [newTrip] = await db
-        .insert(tripsTable)
-        .values({
-          title,
-          travelerName: member?.isKnown ? member.displayName : from,
-          travelerPhone: from,
-          status: "green",
-          evidenceNotes: initialNote,
-          inferenceNotes: `Freeform WhatsApp trip-start message detected.${etaNote}`,
-        })
-        .returning();
-
-      await db.insert(messagesTable).values({
-        fromNumber: from,
-        toNumber: to,
-        body,
-        messageSid,
-        tripId: newTrip.id,
-      });
-
-      await sendReply(
-        from,
-        to,
-        `Trip started. We are monitoring: ${parsed.startLocation} → ${parsed.destination}.${etaNote}\n\nPlease send your current WhatsApp location pin now so we can confirm your start point and route.\n\nReply 0 for Main Menu.`,
+      // ── Trip-start: show preview and wait for GO confirmation ───────────────
+      // Trip is NOT created yet. queueTripPreview stores the parsed data in
+      // conv state (FLOW_TRIP_CONFIRM) and sends a preview with map links + ETA.
+      // The member replies "1" to start or "STOP"/"0" to cancel.
+      await queueTripPreview(
+        from, to, member,
+        parsed.startLocation ?? "Home",
+        parsed.destination,
+        parsed.eta ?? null,
+        body, messageSid, req.log,
       );
-
-      if (member?.isKnown) {
-        const history = await getMemberHistory(from);
-        await sendOperatorMirror(
-          to,
-          [
-            `CYBER CHAPERONE — NEW TRIP`,
-            `Member: ${member.displayName}`,
-            `WhatsApp: ${from}`,
-            `Known member: YES`,
-            `Role: ${member.role ?? "—"}`,
-            `Trip: ${parsed.startLocation} → ${parsed.destination}${etaNote}`,
-            `Trip ID: ${newTrip.id}`,
-            `Status: GREEN`,
-            `History: ${history.totalTrips} trip(s) | ${history.totalMessages} message(s) | Last status: ${history.lastTripStatus ?? "none"}`,
-            `Next action: Monitoring — awaiting updates.`,
-            `---`,
-            excerpt(body, 120),
-          ].join("\n"),
-          "trip-start",
-          "trip-started",
-        );
-      } else {
-        await sendOperatorMirror(
-          to,
-          [
-            `CYBER CHAPERONE — NEW TRIP (UNKNOWN MEMBER)`,
-            `WhatsApp: ${from}`,
-            `Known member: NO`,
-            `Trip: ${parsed.startLocation} → ${parsed.destination}${etaNote}`,
-            `Trip ID: ${newTrip.id}`,
-            `Status: GREEN`,
-            `Next action: Trip created. Identify member — ask for name, surname, registered eblockwatch cellphone number.`,
-            `---`,
-            excerpt(body, 120),
-          ].join("\n"),
-          "trip-start",
-          "trip-started",
-        );
-      }
-
       req.log.info(
-        { tripId: newTrip.id, title, startLocation: parsed.startLocation, destination: parsed.destination, eta: parsed.eta, isKnownMember: member?.isKnown ?? false },
-        "New trip created from WhatsApp message",
+        { startLocation: parsed.startLocation, destination: parsed.destination, eta: parsed.eta },
+        "Freeform trip detected — preview sent, awaiting GO confirmation",
       );
     } else {
       // ── Follow-up message ───────────────────────────────────────────────────

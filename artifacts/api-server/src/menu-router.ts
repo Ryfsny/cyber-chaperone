@@ -23,6 +23,7 @@ export interface MemberInfo {
   discType?: DiscDimension | null;
   memberId?: number | null;
   email?: string | null;
+  homeAddress?: string | null;
 }
 
 interface PendingTripData {
@@ -52,6 +53,12 @@ interface PendingTripData {
   wizardChanges?: Record<string, string | null>;
   // Which profile field is being updated in the A-E lettered menu
   profileField?: string;
+  // Trip confirm preview — stored route info
+  destLat?: string;
+  destLon?: string;
+  routePolyline?: string;
+  routeEtaMinutes?: number;
+  routeEtaTime?: string;
 }
 
 interface ConvState {
@@ -84,6 +91,7 @@ export interface MenuResult {
 const FLOW_MAIN_MENU = "MAIN_MENU";
 const FLOW_CYBER_CHAPERONE = "CYBER_CHAPERONE";
 const FLOW_TRIP_FLOW = "TRIP_FLOW";
+const FLOW_TRIP_CONFIRM = "TRIP_CONFIRM";
 const FLOW_CLARIFICATION = "CLARIFICATION";
 
 const STEP_WAITING_FOR_START_LOCATION = "WAITING_FOR_START_LOCATION";
@@ -5406,7 +5414,7 @@ async function handleIncidentFromLocationFlow(ctx: MenuContext, state: ConvState
       const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
       await client.messages.create({ from: twilioNum, to: FOUNDER_WHATSAPP, body: alertLines });
     } catch (err) {
-      log.warn({ err }, "incident-from-location: André alert failed");
+      log.error({ err }, "incident-from-location: André alert failed");
     }
 
     await setConvState(from, { currentFlow: FLOW_MAIN_MENU, currentStep: null, pendingTripData: null });
@@ -5424,6 +5432,149 @@ async function handleIncidentFromLocationFlow(ctx: MenuContext, state: ConvState
     log.info({ from, lat, lon, locationDesc }, "incident-from-location: report saved and André alerted");
     return;
   }
+}
+
+// ── Trip preview / GO button ──────────────────────────────────────────────────
+// Called by both the freeform parser (webhook.ts) and the guided TRIP_FLOW.
+// Shows a route preview and waits for "1" (start) or "STOP"/"0" (cancel).
+
+export async function queueTripPreview(
+  from: string,
+  to: string,
+  member: MemberInfo | null,
+  startLocation: string,
+  destination: string,
+  eta: string | null,
+  body: string,
+  messageSid: string | null,
+  log: MenuContext["log"],
+): Promise<void> {
+  // Resolve "Home" label → actual saved home address if available
+  let resolvedStart = startLocation;
+  let startLat: string | undefined;
+  let startLon: string | undefined;
+
+  if (/home/i.test(startLocation)) {
+    try {
+      const [homeRow] = await db
+        .select({ homeAddress: membersTable.homeAddress, homeLat: membersTable.homeLat, homeLon: membersTable.homeLon })
+        .from(membersTable)
+        .where(eq(membersTable.whatsappNumber, from))
+        .limit(1);
+      if (homeRow?.homeAddress) {
+        resolvedStart = `${homeRow.homeAddress} 🏠`;
+        startLat = homeRow.homeLat ?? undefined;
+        startLon = homeRow.homeLon ?? undefined;
+      }
+    } catch { /* best-effort */ }
+  }
+
+  // Calculate route for preview ETA (awaited — member sees ETA before confirming)
+  let routeInfo: RouteInfo | null = null;
+  try {
+    const startCoordsOverride = startLat && startLon ? { lat: startLat, lon: startLon } : undefined;
+    routeInfo = await calculateRouteInfo(resolvedStart, destination, startCoordsOverride);
+  } catch { /* best-effort */ }
+
+  // Build map links
+  const encStart = encodeURIComponent(resolvedStart.replace("🏠", "").trim());
+  const encDest = encodeURIComponent(destination);
+  const gmLink = routeInfo
+    ? `https://www.google.com/maps/dir/?api=1&origin=${routeInfo.startCoords.lat},${routeInfo.startCoords.lon}&destination=${routeInfo.destCoords.lat},${routeInfo.destCoords.lon}`
+    : `https://www.google.com/maps/dir/?api=1&origin=${encStart}&destination=${encDest}`;
+  const wazeLink = routeInfo
+    ? `https://waze.com/ul?ll=${routeInfo.destCoords.lat},${routeInfo.destCoords.lon}&navigate=yes`
+    : `https://waze.com/ul?q=${encDest}&navigate=yes`;
+
+  // Drive-time line
+  const hours = routeInfo ? Math.floor(routeInfo.durationMinutes / 60) : 0;
+  const mins = routeInfo ? routeInfo.durationMinutes % 60 : 0;
+  const driveLine = routeInfo
+    ? `Drive: ~${hours > 0 ? `${hours}h ` : ""}${mins}min — arriving *${routeInfo.etaTime}*`
+    : eta
+      ? `Your ETA: *${eta}*`
+      : null;
+
+  // Store trip data in conv state for confirmation step
+  const pendingData: PendingTripData = {
+    startLocation: resolvedStart,
+    startLat: routeInfo?.startCoords.lat ?? startLat,
+    startLon: routeInfo?.startCoords.lon ?? startLon,
+    destination,
+    eta: routeInfo?.etaTime ?? eta ?? undefined,
+    destLat: routeInfo?.destCoords.lat,
+    destLon: routeInfo?.destCoords.lon,
+    routePolyline: routeInfo?.polylineGeoJson,
+    routeEtaMinutes: routeInfo?.durationMinutes,
+    routeEtaTime: routeInfo?.etaTime,
+  };
+  await setConvState(from, { currentFlow: FLOW_TRIP_CONFIRM, currentStep: null, pendingTripData: pendingData });
+
+  const lines: string[] = [
+    `🗺️ *Got your trip.*`,
+    ``,
+    `From: *${resolvedStart}*`,
+    `To: *${destination}*`,
+    ...(driveLine ? [driveLine] : []),
+    ``,
+    `📍 Google Maps: ${gmLink}`,
+    `📍 Waze: ${wazeLink}`,
+    ``,
+    `Reply *1* to start  |  *STOP* to cancel`,
+  ];
+
+  await sendWhatsApp(from, to, lines.join("\n"));
+  await saveMessage(from, to, body, messageSid, null);
+  log.info({ from, startLocation: resolvedStart, destination, routeAvailable: !!routeInfo }, "Trip preview queued — awaiting confirmation");
+}
+
+async function handleTripConfirmFlow(ctx: MenuContext, state: ConvState): Promise<void> {
+  const { from, to, body, member, messageSid, log } = ctx;
+  const pending: PendingTripData = state.pendingTripData ?? {};
+  const choice = body.trim().toLowerCase();
+
+  // Reconstruct RouteInfo from stored pending data
+  const hasRoute = !!(pending.startLat && pending.startLon && pending.destLat && pending.destLon && pending.routeEtaMinutes);
+  const routeInfo: RouteInfo | null = hasRoute
+    ? {
+        startCoords: { lat: pending.startLat!, lon: pending.startLon! },
+        destCoords: { lat: pending.destLat!, lon: pending.destLon! },
+        polylineGeoJson: pending.routePolyline ?? "",
+        durationMinutes: pending.routeEtaMinutes!,
+        etaTime: pending.routeEtaTime ?? "",
+        checkpoints: [],
+      }
+    : null;
+
+  if (choice === "1") {
+    if (!pending.destination) {
+      await resetConvState(from);
+      await sendWhatsApp(from, to, `Something went wrong with that trip preview. Please try again.\n\nReply *0* for Main Menu.`);
+      return;
+    }
+    log.info({ from, startLocation: pending.startLocation, destination: pending.destination }, "Trip confirm: GO — creating trip");
+    await createTrip(
+      from, to, member,
+      pending.startLocation ?? "Home",
+      pending.destination,
+      pending.eta ?? null,
+      body, messageSid, log,
+      routeInfo,
+    );
+    return;
+  }
+
+  if (["stop", "0", "cancel", "no"].includes(choice)) {
+    await resetConvState(from);
+    await setConvState(from, { currentFlow: FLOW_MAIN_MENU });
+    await sendWhatsApp(from, to, `Trip cancelled. 🛑\n\nWhen you're ready, just tell me where you're heading.\n\nReply *0* for Main Menu.`);
+    await saveMessage(from, to, body, messageSid, null);
+    log.info({ from }, "Trip confirm: cancelled by member");
+    return;
+  }
+
+  // Unrecognised input — re-prompt
+  await sendWhatsApp(from, to, `Reply *1* to start the journey or *STOP* to cancel.`);
 }
 
 export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
@@ -5799,6 +5950,11 @@ export async function handleMenuRouter(ctx: MenuContext): Promise<MenuResult> {
 
   if (state.currentFlow === FLOW_CLOCKIN) {
     await handleClockinFlowStep(ctx, state);
+    return { handled: true };
+  }
+
+  if (state.currentFlow === FLOW_TRIP_CONFIRM) {
+    await handleTripConfirmFlow(ctx, state);
     return { handled: true };
   }
 
