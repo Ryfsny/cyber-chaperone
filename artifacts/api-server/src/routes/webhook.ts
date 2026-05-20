@@ -436,12 +436,30 @@ router.post(
           "SCARE_BEAR_LOCATION",
         ]);
         if (!PIN_STEPS.has(convRow?.currentStep ?? "")) {
-          // Silent live GPS tick — update coords, no reply
+          // Live GPS tick — update coords
+          const prevLastKnownAt = liveTrip.lastKnownAt;
           await db
             .update(tripsTable)
             .set({ lastKnownLat: latitude, lastKnownLon: longitude, lastKnownAt: new Date() })
             .where(eq(tripsTable.id, liveTrip.id));
           req.log.info({ tripId: liveTrip.id, lat: latitude, lon: longitude }, "Live GPS position updated");
+          // Only reply once per 2-min window so live-location ticks don't spam the member
+          const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+          const isFrequentTick = prevLastKnownAt && prevLastKnownAt > twoMinAgo;
+          if (!isFrequentTick) {
+            try {
+              const humanAddress = await reverseGeocodeStreetAddress(latitude, longitude);
+              const locationDesc = humanAddress ?? `${latitude}, ${longitude}`;
+              await sendReply(
+                from,
+                to,
+                `📍 *Location received.*\n\nYou are at *${locationDesc}* — we have you on the map.\n\nTrip is active and being monitored. 🛡️\n\nReply *0* for Main Menu.`,
+              );
+              req.log.info({ tripId: liveTrip.id, humanAddress }, "Location pin confirmation sent to member");
+            } catch (replyErr) {
+              req.log.warn({ replyErr }, "Location pin confirmation failed — GPS still updated");
+            }
+          }
           res.set("Content-Type", "text/xml");
           res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
           return;
