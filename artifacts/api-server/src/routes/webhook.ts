@@ -89,26 +89,36 @@ interface ParsedTripStart {
 function parseTripStart(body: string): ParsedTripStart | null {
   const norm = normaliseBody(body);
 
+  // Pattern 1: "leaving X heading/going to Y ETA HH:MM"
   const withEta = norm.match(
     /\bleaving\s+(?:from\s+)?(.+?)\s+(?:now\s+)?(?:heading|going)\s+to\s+([^.,]+?)[.,]?\s+eta\s+(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)[.,]?\s*$/i,
   );
   if (withEta) {
-    return {
-      startLocation: withEta[1].trim(),
-      destination: withEta[2].trim(),
-      eta: withEta[3].trim(),
-    };
+    return { startLocation: withEta[1].trim(), destination: withEta[2].trim(), eta: withEta[3].trim() };
   }
 
+  // Pattern 2: "leaving X heading/going to Y" (no ETA)
   const withoutEta = norm.match(
     /\bleaving\s+(?:from\s+)?(.+?)\s+(?:now\s+)?(?:heading|going)\s+to\s+([^.,\n]+?)[.,]?\s*$/i,
   );
   if (withoutEta) {
-    return {
-      startLocation: withoutEta[1].trim(),
-      destination: withoutEta[2].trim(),
-      eta: null,
-    };
+    return { startLocation: withoutEta[1].trim(), destination: withoutEta[2].trim(), eta: null };
+  }
+
+  // Pattern 3: "leaving X for Y ETA HH:MM" — voice note natural format
+  const forWithEta = norm.match(
+    /\bleaving\s+(?:from\s+)?(.+?)\s+(?:now\s+)?for\s+([^.,]+?)[.,]?\s+(?:eta\s+)?(\d{1,2}:\d{2}(?:\s*[aApP][mM])?)[.,]?\s*$/i,
+  );
+  if (forWithEta) {
+    return { startLocation: forWithEta[1].trim(), destination: forWithEta[2].trim(), eta: forWithEta[3].trim() };
+  }
+
+  // Pattern 4: "leaving X for Y" (no ETA)
+  const forWithoutEta = norm.match(
+    /\bleaving\s+(?:from\s+)?(.+?)\s+(?:now\s+)?for\s+([^.,\n]+?)[.,]?\s*$/i,
+  );
+  if (forWithoutEta) {
+    return { startLocation: forWithoutEta[1].trim(), destination: forWithoutEta[2].trim(), eta: null };
   }
 
   return null;
